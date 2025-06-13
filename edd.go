@@ -1061,16 +1061,6 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		remaining[node.ID] = true
 	}
 
-	// Track the order nodes appear as targets in connections
-	targetOrder := make(map[int]int)
-	orderIndex := 0
-	for _, conn := range connections {
-		if _, exists := targetOrder[conn.To]; !exists {
-			targetOrder[conn.To] = orderIndex
-			orderIndex++
-		}
-	}
-
 	for len(remaining) > 0 {
 		// Find nodes with no incoming edges (can be placed in current column)
 		candidates := []int{}
@@ -1088,24 +1078,8 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 			}
 		}
 
-		// Sort candidates by their appearance order in connections
-		// This ensures consistent ordering based on how connections were defined
+		// Sort candidates by ID for consistent ordering
 		sort.Slice(candidates, func(i, j int) bool {
-			orderI, hasI := targetOrder[candidates[i]]
-			orderJ, hasJ := targetOrder[candidates[j]]
-
-			// If both have target order, use that
-			if hasI && hasJ {
-				return orderI < orderJ
-			}
-			// If only one has target order, it comes first
-			if hasI {
-				return true
-			}
-			if hasJ {
-				return false
-			}
-			// Otherwise, sort by ID for consistency
 			return candidates[i] < candidates[j]
 		})
 
@@ -1120,7 +1094,7 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		}
 	}
 
-	// Step 4: Calculate column widths and positions
+	// Step 4: Calculate column widths (maximum width of all nodes in each column)
 	columnWidths := make([]int, len(columns))
 	for colIdx, column := range columns {
 		maxWidth := 0
@@ -1133,9 +1107,9 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		columnWidths[colIdx] = maxWidth
 	}
 
-	// Step 5: Assign X positions based on columns
-	currentX := 0
+	// Step 5: Assign X positions to columns
 	columnStartX := make([]int, len(columns))
+	currentX := 0
 	for colIdx := range columns {
 		columnStartX[colIdx] = currentX
 		currentX += columnWidths[colIdx] + l.NodeSpacing
@@ -1162,7 +1136,6 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 	return result
 }
 
-// SimpleOrthogonalRoute creates clean orthogonal paths
 func SimpleOrthogonalRoute(from, to Node) []Point {
 	// Check if this is a backward connection
 	if to.X+to.Width < from.X {
@@ -1837,6 +1810,33 @@ func (e *Editor) AddNode(text []string) int {
 	return nodeID
 }
 
+// printDebugInfo outputs the current graph structure for debugging
+func (e *Editor) printDebugInfo() {
+	fmt.Println("\n=== GRAPH DEBUG INFO ===")
+	fmt.Printf("Mode: %s\n", e.mode)
+	fmt.Printf("Current Node: %d\n", e.currentNode)
+	fmt.Printf("Next Node ID: %d\n", e.nextNodeID)
+	
+	fmt.Println("\nNodes:")
+	for _, node := range e.diagram.Nodes {
+		fmt.Printf("  Node %d: pos(%d,%d) size(%dx%d) text=%q\n", 
+			node.ID, node.X, node.Y, node.Width, node.Height, 
+			strings.Join(node.Text, " "))
+	}
+	
+	fmt.Println("\nConnections:")
+	for i, conn := range e.diagram.Connections {
+		fmt.Printf("  [%d] %d -> %d", i, conn.From, conn.To)
+		if len(conn.Path) > 0 {
+			fmt.Printf(" (path length: %d)", len(conn.Path))
+		}
+		fmt.Println()
+	}
+	
+	fmt.Println("\n=== END DEBUG INFO ===")
+	fmt.Println("\nCopy the above output when reporting issues!")
+}
+
 // ========================================
 // JUMP SELECTION SYSTEM
 // ========================================
@@ -2265,6 +2265,9 @@ func (e *Editor) handleNormalKey(key rune) bool {
 	switch key {
 	case 'q', 3: // q or Ctrl+C
 		return true // Exit
+	case 'Q': // Debug quit - print graph structure
+		e.printDebugInfo()
+		return true // Exit after debug
 	case 'a':
 		e.SetMode(ModeInsert)
 		nodeID := e.AddNode([]string{""}) // Create empty node for editing
@@ -2445,7 +2448,7 @@ func (e *Editor) Render() {
 	var helpText string
 	switch e.mode {
 	case ModeNormal:
-		helpText = "Normal: 'a' add node, 'c' connect, 'q' quit"
+		helpText = "Normal: 'a' add node, 'c' connect, 'q' quit, 'Q' debug quit"
 	case ModeInsert:
 		helpText = "Insert: Type text, Enter for new node, ESC to finish"
 	case ModeSelectFrom:
