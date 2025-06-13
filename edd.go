@@ -1373,12 +1373,9 @@ func (e *Editor) livingAnimationLoop() {
 	}
 }
 
-// DisplayCharacter shows the current character state
+// DisplayCharacter shows the current character state (disabled in editor mode)
 func (e *Editor) DisplayCharacter() {
-	// Move cursor to a fixed position to show the character
-	fmt.Print("\033[8;1H") // Move to line 8, column 1
-	fmt.Print(e.modeIndicator.String())
-	fmt.Print("\033[15;1H") // Move cursor below character
+	// Don't display here - the main Render() handles it
 }
 
 // UpdateLivingModeIndicator updates the indicator with the living character
@@ -2060,65 +2057,202 @@ func CreateSuccessAnimation() Animation {
 	return Animation{Frames: frames, Loop: false}
 }
 
+// ========================================
+// TERMINAL UI FRAMEWORK
+// ========================================
+
+// enableRawMode switches terminal to raw mode for immediate key handling
+func enableRawMode() {
+	// This would typically use a package like golang.org/x/term
+	// For now, we'll use a simpler approach
+}
+
+// disableRawMode restores normal terminal mode
+func disableRawMode() {
+	// Restore terminal
+}
+
+// clearScreen clears the terminal screen
+func clearScreen() {
+	fmt.Print("\033[2J\033[H")
+}
+
+// moveCursor moves cursor to specified position
+func moveCursor(x, y int) {
+	fmt.Printf("\033[%d;%dH", y, x)
+}
+
+// RunEditor starts the main editor interface
+func (e *Editor) RunEditor() error {
+	// Start living character animation
+	e.StartLivingAnimation()
+	defer e.StopLivingAnimation()
+	
+	// Clear screen and show initial state
+	clearScreen()
+	e.Render()
+	
+	// Main editor loop
+	for {
+		// Get keyboard input (simplified for now)
+		var input string
+		fmt.Print("\033[50;1H> ") // Position input at bottom
+		fmt.Scanln(&input)
+		
+		if len(input) == 0 {
+			continue
+		}
+		
+		// Handle input based on current mode
+		switch e.mode {
+		case ModeNormal:
+			if e.handleNormalInput(input[0]) {
+				return nil // Exit requested
+			}
+		case ModeInsert:
+			if e.handleInsertInput(input) {
+				return nil
+			}
+		case ModeConnect:
+			if e.handleConnectInput(input[0]) {
+				return nil
+			}
+		}
+		
+		// Re-render after input
+		e.Render()
+	}
+}
+
+// handleNormalInput processes keys in Normal mode
+func (e *Editor) handleNormalInput(key byte) bool {
+	switch key {
+	case 'q':
+		return true // Exit
+	case 'a':
+		e.SetMode(ModeInsert)
+		e.startNodeCreation()
+	case 'c':
+		e.SetMode(ModeConnect)
+	case ':':
+		e.SetMode(ModeCommand)
+	}
+	return false
+}
+
+// handleInsertInput processes input in Insert mode
+func (e *Editor) handleInsertInput(input string) bool {
+	if input == "ESC" || input == "esc" {
+		e.SetMode(ModeNormal)
+		return false
+	}
+	
+	// Handle text input for node creation
+	e.addTextToCurrentNode(input)
+	return false
+}
+
+// handleConnectInput processes keys in Connect mode
+func (e *Editor) handleConnectInput(key byte) bool {
+	switch key {
+	case 27: // ESC
+		e.SetMode(ModeNormal)
+	}
+	return false
+}
+
+// Render draws the entire editor interface
+func (e *Editor) Render() {
+	// Clear screen completely
+	clearScreen()
+	
+	// Clear the main canvas
+	e.canvas.Clear()
+	
+	// Render the diagram on the canvas
+	e.canvas.Render(e.diagram)
+	
+	// Display the main canvas
+	moveCursor(1, 1)
+	fmt.Print(e.canvas.String())
+	
+	// Display ed character in bottom-left corner
+	moveCursor(1, 42)
+	fmt.Print(e.modeIndicator.String())
+	
+	// Display status line at bottom
+	e.renderStatusLine()
+}
+
+// renderStatusLine shows current mode and instructions
+func (e *Editor) renderStatusLine() {
+	moveCursor(20, 45)
+	fmt.Printf("Nodes: %d | Connections: %d", 
+		len(e.diagram.Nodes), len(e.diagram.Connections))
+}
+
+// Node creation workflow
+func (e *Editor) startNodeCreation() {
+	// Create a new node at a default position
+	// This will be improved with proper positioning later
+	e.createNewNode()
+}
+
+func (e *Editor) createNewNode() {
+	// Calculate position for new node (simple placement for now)
+	x := 10 + (len(e.diagram.Nodes) * 20) // Space nodes horizontally
+	y := 10
+	
+	// Create the node with placeholder text
+	node := Node{
+		ID:     e.nextNodeID,
+		X:      x,
+		Y:      y,
+		Width:  16, // Default width
+		Height: 3,  // Default height
+		Text:   []string{"New Node"},
+	}
+	
+	e.diagram.Nodes = append(e.diagram.Nodes, node)
+	e.currentNode = e.nextNodeID
+	e.nextNodeID++
+}
+
+func (e *Editor) addTextToCurrentNode(text string) {
+	if e.currentNode >= 0 {
+		// Find the node with the current ID
+		for i := range e.diagram.Nodes {
+			if e.diagram.Nodes[i].ID == e.currentNode {
+				// Update the node's text
+				e.diagram.Nodes[i].Text = []string{text}
+				
+				// Recalculate node size
+				width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
+				e.diagram.Nodes[i].Width = width
+				e.diagram.Nodes[i].Height = height
+				break
+			}
+		}
+	}
+}
+
 func main() {
 	fmt.Println("Starting edd...")
-
+	
 	// Play startup animation
 	startup := CreateStartupAnimation()
 	PlayAnimation(startup)
-
-	fmt.Println("\nPress Enter to meet living edd...")
-	fmt.Scanln()
-
-	fmt.Print("\033[2J\033[H") // Clear screen
-
-	// Demo living character
+	
+	// Start the editor
 	editor := NewEditor()
-
-	fmt.Println("🌟 Meet ed - your living diagram companion!")
-	fmt.Println("Watch him smile, blink, and look around!")
-	fmt.Println()
-	fmt.Println("Press 'i' for Insert Mode, 'c' for Connect Mode")
-	fmt.Println("Press 'q' to quit")
-	fmt.Println()
-
-	editor.StartLivingAnimation()
-
-	// Simple input loop to demo mode changes
-	for {
-		var input string
-		fmt.Print("\n> ")
-		fmt.Scanln(&input)
-
-		switch input {
-		case "i":
-			fmt.Print("\033[2J\033[H")
-			fmt.Println("⚡ INSERT Mode - Focused and ready to type!")
-			fmt.Println("Notice the cursor blinking and focused expression")
-			fmt.Println()
-			fmt.Println("Press 'n' for Normal, 'c' for Connect, 'q' to quit")
-			editor.SetMode(ModeInsert)
-		case "c":
-			fmt.Print("\033[2J\033[H")
-			fmt.Println("🔗 CONNECT Mode - Looking for connections!")
-			fmt.Println("Watch the connection lines extend and retract")
-			fmt.Println()
-			fmt.Println("Press 'n' for Normal, 'i' for Insert, 'q' to quit")
-			editor.SetMode(ModeConnect)
-		case "n":
-			fmt.Print("\033[2J\033[H")
-			fmt.Println("🌟 NORMAL Mode - Happy and patient")
-			fmt.Println("Watch ed smile, blink, and look around!")
-			fmt.Println()
-			fmt.Println("Press 'i' for Insert, 'c' for Connect, 'q' to quit")
-			editor.SetMode(ModeNormal)
-		case "q":
-			editor.StopLivingAnimation()
-			fmt.Println("\nGoodbye from ed! 👋")
-			fmt.Println("Your living companion for diagram creation! 🎭")
-			return
-		default:
-			fmt.Println("Unknown command. Try 'i', 'c', 'n', or 'q'")
-		}
+	
+	fmt.Println("\nStarting editor...")
+	time.Sleep(1 * time.Second)
+	
+	err := editor.RunEditor()
+	if err != nil {
+		fmt.Printf("Editor error: %v\n", err)
 	}
+	
+	fmt.Println("\nGoodbye from ed! 👋")
 }
