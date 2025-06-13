@@ -1005,7 +1005,7 @@ type LayeredLayout struct {
 func NewLayeredLayout() *LayeredLayout {
 	return &LayeredLayout{
 		NodeSpacing:  4, // 4 chars between nodes
-		LayerSpacing: 4, // 4 lines between layers
+		LayerSpacing: 1, // 1 line between layers
 		NodeWidth:    12,
 		NodeHeight:   3,
 	}
@@ -1394,11 +1394,9 @@ func (e *Editor) UpdateLivingModeIndicator() {
 
 	// Add mode label
 	text := e.mode.String()
-	startX := (15 - len(text)) / 2
+	startX := 2
 	for i, ch := range text {
-		if startX+i < 15 {
-			e.modeIndicator.Set(startX+i, 4, ch)
-		}
+		e.modeIndicator.Set(startX+i, 4, ch)
 	}
 }
 
@@ -2078,18 +2076,38 @@ func (e *Editor) RunEditor() error {
 	// Initial render
 	e.Render()
 
-	// Single-key input loop
+	// Animation and input loop
+	ticker := time.NewTicker(200 * time.Millisecond) // 5 FPS for smooth animation
+	defer ticker.Stop()
+
+	inputChan := make(chan rune, 1)
+	errChan := make(chan error, 1)
+
+	// Start non-blocking input reader
+	go func() {
+		for {
+			key, err := e.readKey()
+			if err != nil {
+				errChan <- err
+				return
+			}
+			inputChan <- key
+		}
+	}()
+
 	for {
-		key, err := e.readKey()
-		if err != nil {
+		select {
+		case key := <-inputChan:
+			if e.handleKey(key) {
+				return nil // Exit requested
+			}
+			e.Render()
+		case err := <-errChan:
 			return err
+		case <-ticker.C:
+			// Regular animation refresh
+			e.Render()
 		}
-
-		if e.handleKey(key) {
-			return nil // Exit requested
-		}
-
-		e.Render()
 	}
 }
 
@@ -2228,7 +2246,7 @@ func (e *Editor) addCharToCurrentNode(ch rune) {
 				} else {
 					e.diagram.Nodes[i].Text[0] += string(ch)
 				}
-				
+
 				// Recalculate node size
 				width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
 				e.diagram.Nodes[i].Width = width
@@ -2249,7 +2267,7 @@ func (e *Editor) handleBackspace() {
 				if len(e.diagram.Nodes[i].Text) > 0 && len(e.diagram.Nodes[i].Text[0]) > 0 {
 					text := e.diagram.Nodes[i].Text[0]
 					e.diagram.Nodes[i].Text[0] = text[:len(text)-1]
-					
+
 					// Recalculate node size
 					width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
 					e.diagram.Nodes[i].Width = width
@@ -2283,7 +2301,7 @@ func (e *Editor) Render() {
 	fmt.Print("\n")
 
 	// Status line
-	fmt.Printf("Nodes: %d | Connections: %d\n", 
+	fmt.Printf("Nodes: %d | Connections: %d\n",
 		len(e.diagram.Nodes), len(e.diagram.Connections))
 
 	// Mode-specific help
