@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 )
 
 // Design constants for balanced, aesthetic spacing
@@ -115,47 +117,47 @@ func combineCharacters(existing, new rune) rune {
 	if isSpecialChar(existing) {
 		return existing
 	}
-	
+
 	// Build combination key
 	key := string([]rune{existing, new})
 	// Also check reverse combination
 	reverseKey := string([]rune{new, existing})
-	
+
 	// Combination rules
 	combinations := map[string]rune{
 		// Horizontal meets vertical
 		"─│": '┼', "│─": '┼',
-		
+
 		// Corners meet lines
-		"╰│": '├', "│╰": '├',  // Bottom-left corner + vertical = left T
-		"╮│": '┤', "│╮": '┤',  // Top-right corner + vertical = right T
-		"╭│": '├', "│╭": '├',  // Top-left corner + vertical = left T
-		"╯│": '┤', "│╯": '┤',  // Bottom-right corner + vertical = right T
-		
-		"╰─": '┴', "─╰": '┴',  // Bottom-left corner + horizontal = bottom T
-		"╯─": '┴', "─╯": '┴',  // Bottom-right corner + horizontal = bottom T
-		"╮─": '┬', "─╮": '┬',  // Top-right corner + horizontal = top T
-		"╭─": '┬', "─╭": '┬',  // Top-left corner + horizontal = top T
-		
+		"╰│": '├', "│╰": '├', // Bottom-left corner + vertical = left T
+		"╮│": '┤', "│╮": '┤', // Top-right corner + vertical = right T
+		"╭│": '├', "│╭": '├', // Top-left corner + vertical = left T
+		"╯│": '┤', "│╯": '┤', // Bottom-right corner + vertical = right T
+
+		"╰─": '┴', "─╰": '┴', // Bottom-left corner + horizontal = bottom T
+		"╯─": '┴', "─╯": '┴', // Bottom-right corner + horizontal = bottom T
+		"╮─": '┬', "─╮": '┬', // Top-right corner + horizontal = top T
+		"╭─": '┬', "─╭": '┬', // Top-left corner + horizontal = top T
+
 		// T-junctions meet lines
 		"├─": '┼', "─├": '┼',
 		"┤─": '┼', "─┤": '┼',
 		"┬│": '┼', "│┬": '┼',
 		"┴│": '┼', "│┴": '┼',
-		
+
 		// Same character = keep it
 		"──": '─', "││": '│',
 		"╭╭": '╭', "╮╮": '╮',
 		"╯╯": '╯', "╰╰": '╰',
 	}
-	
+
 	if combined, ok := combinations[key]; ok {
 		return combined
 	}
 	if combined, ok := combinations[reverseKey]; ok {
 		return combined
 	}
-	
+
 	// Default: keep the new character
 	return new
 }
@@ -186,7 +188,7 @@ func (c *Canvas) DrawBox(node Node) {
 	for i := 0; i < node.Height-2; i++ {
 		c.Set(node.X, node.Y+i+1, '│')
 		c.Set(node.X+node.Width-1, node.Y+i+1, '│')
-		
+
 		// Draw text if available, centered
 		if i < len(node.Text) {
 			text := node.Text[i]
@@ -218,29 +220,29 @@ func CalculateNodeSize(text []string) (width, height int) {
 			maxLen = len(line)
 		}
 	}
-	
+
 	// Width: text + padding on both sides + borders
 	width = maxLen + 2*NodePadding + 2
 	if width < NodeMinWidth {
 		width = NodeMinWidth
 	}
-	
+
 	// Height: text lines + top and bottom borders
 	height = len(text) + 2
 	if height < 3 { // Minimum height for a box
 		height = 3
 	}
-	
+
 	return width, height
 }
 
 // ConnectionGroup represents connections that share routing space
 type ConnectionGroup struct {
-	From        int          // Source node ID
-	Targets     []int        // Target node IDs
-	TrunkX      int          // X position of shared vertical trunk
-	ExitY       int          // Y position where connections exit the source
-	ExitSide    Side         // Which side of the source node
+	From     int   // Source node ID
+	Targets  []int // Target node IDs
+	TrunkX   int   // X position of shared vertical trunk
+	ExitY    int   // Y position where connections exit the source
+	ExitSide Side  // Which side of the source node
 }
 
 // Side represents which side of a node a connection attaches to
@@ -264,13 +266,13 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 	plan := RoutingPlan{
 		Connections: make(map[string][]Point),
 	}
-	
+
 	// Group connections by source node
 	sourceGroups := make(map[int][]int)
 	for _, conn := range connections {
 		sourceGroups[conn.From] = append(sourceGroups[conn.From], conn.To)
 	}
-	
+
 	// Create connection groups with trunk positions
 	for sourceID, targets := range sourceGroups {
 		source := findNode(nodes, sourceID)
@@ -278,7 +280,7 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 			From:    sourceID,
 			Targets: targets,
 		}
-		
+
 		// Determine exit side and trunk position based on targets
 		if len(targets) == 1 {
 			// Single connection - route directly
@@ -294,7 +296,7 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 				side := determineExitSide(source, target)
 				sides = append(sides, side)
 			}
-			
+
 			// Check if we have connections going to different sides
 			firstSide := sides[0]
 			for _, side := range sides[1:] {
@@ -303,7 +305,7 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 					break
 				}
 			}
-			
+
 			if isHub {
 				// Hub pattern - each connection routes independently
 				group.ExitSide = -1 // Special value to indicate hub routing
@@ -318,10 +320,10 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 				group.ExitY = source.Y + source.Height/2
 			}
 		}
-		
+
 		plan.Groups = append(plan.Groups, group)
 	}
-	
+
 	// First pass: detect bidirectional connections
 	bidirectional := make(map[string]bool)
 	for i, conn := range connections {
@@ -334,7 +336,7 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 			}
 		}
 	}
-	
+
 	// Route each connection using group information
 	for _, conn := range connections {
 		key := fmt.Sprintf("%d,%d", conn.From, conn.To)
@@ -342,7 +344,7 @@ func PlanRouting(nodes []Node, connections []Connection) RoutingPlan {
 		isBidirectional := bidirectional[key] || bidirectional[reverseKey]
 		plan.Connections[key] = routeConnectionWithGroups(nodes, conn, plan, isBidirectional)
 	}
-	
+
 	return plan
 }
 
@@ -374,47 +376,47 @@ func determineExitSide(from, to Node) Side {
 func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, isBidirectional bool) []Point {
 	from := findNode(nodes, conn.From)
 	to := findNode(nodes, conn.To)
-	
+
 	// Handle self-connections (loops)
 	if conn.From == conn.To {
 		return routeSelfConnection(from)
 	}
-	
+
 	// Handle bidirectional connections
 	if isBidirectional && from.Y == to.Y {
 		// For bidirectional horizontal connections, offset one of them
 		if conn.From < conn.To {
 			// First connection uses the first content line
 			if from.X < to.X {
-				return routeHorizontalAtLine(from, to, from.Y + 1) // First content line
+				return routeHorizontalAtLine(from, to, from.Y+1) // First content line
 			} else {
 				return routeHorizontalLeft(from, to)
 			}
 		} else {
 			// Second connection - going left, use second content line
 			var path []Point
-			
+
 			if from.X > to.X {
 				// Going left - use second content line if box is tall enough
 				if from.Height > 3 {
 					// Multi-line box - use second content line
 					startY := from.Y + from.Height - 2 // Second to last line (second content line)
-					
+
 					// Place │ in the content area (13 spaces from left for a 16-wide box)
 					sourceContentPos := from.X + from.Width - 3
-					
-					// Place ┤ on the target box right border  
+
+					// Place ┤ on the target box right border
 					targetBorderX := to.X + to.Width - 1
-					
+
 					// Draw the path going left
 					path = append(path, Point{X: sourceContentPos, Y: startY, Rune: '│'})
 					path = append(path, Point{X: sourceContentPos - 1, Y: startY, Rune: '◀'})
-					
+
 					// Horizontal line going left from source to target
 					for x := sourceContentPos - 2; x > targetBorderX; x-- {
 						path = append(path, Point{X: x, Y: startY, Rune: '─'})
 					}
-					
+
 					// End junction on target box border
 					path = append(path, Point{X: targetBorderX, Y: startY, Rune: '┤'})
 				} else {
@@ -422,7 +424,7 @@ func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, 
 					startY := from.Y + from.Height - 1
 					startX := from.X
 					endX := to.X + to.Width - 1
-					
+
 					path = append(path, Point{X: startX, Y: startY, Rune: '┤'})
 					path = append(path, Point{X: startX - 1, Y: startY, Rune: '◀'})
 					for x := startX - 2; x > endX; x-- {
@@ -434,7 +436,7 @@ func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, 
 			return path
 		}
 	}
-	
+
 	// Find the group this connection belongs to
 	var group *ConnectionGroup
 	for i := range plan.Groups {
@@ -443,7 +445,7 @@ func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, 
 			break
 		}
 	}
-	
+
 	// If multiple targets, check the routing strategy
 	if group != nil && len(group.Targets) > 1 {
 		if group.ExitSide == -1 {
@@ -455,7 +457,7 @@ func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, 
 			return routeWithSharedTrunk(from, to, group, nodes)
 		}
 	}
-	
+
 	// Simple routing for single connections
 	if from.Y == to.Y && from.X < to.X {
 		// Horizontal
@@ -467,7 +469,7 @@ func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, 
 		// Vertical alignment
 		return routeVerticalSimple(from, to)
 	}
-	
+
 	// Default to diagonal routing
 	return routeDiagonalSimple(from, to)
 }
@@ -475,28 +477,28 @@ func routeConnectionWithGroups(nodes []Node, conn Connection, plan RoutingPlan, 
 // routeWithSharedTrunk routes a connection that shares a trunk with others
 func routeWithSharedTrunk(from, to Node, group *ConnectionGroup, nodes []Node) []Point {
 	var path []Point
-	
+
 	exitX := from.X + from.Width - 1
 	exitY := from.Y + from.Height/2
-	
+
 	// Determine if this is the first connection (needs the junction)
 	isFirst := to.ID == group.Targets[0]
-	
+
 	if isFirst {
 		// First connection draws the exit junction and initial trunk
 		path = append(path, Point{X: exitX, Y: exitY, Rune: '├'})
-		
+
 		// Horizontal to trunk
 		for x := exitX + 1; x < group.TrunkX; x++ {
 			path = append(path, Point{X: x, Y: exitY, Rune: '─'})
 		}
-		
+
 		// Add split junction if there are more connections
 		if len(group.Targets) > 1 {
 			path = append(path, Point{X: group.TrunkX, Y: exitY, Rune: '┬'})
 		}
 	}
-	
+
 	// Now route from trunk to target
 	if to.Y == from.Y {
 		// Same level - continue horizontally
@@ -510,7 +512,7 @@ func routeWithSharedTrunk(from, to Node, group *ConnectionGroup, nodes []Node) [
 		if !isFirst {
 			startY = exitY + 1 // Start below the horizontal line
 		}
-		
+
 		// Vertical segment
 		targetY := to.Y + to.Height/2
 		if targetY > startY {
@@ -528,79 +530,79 @@ func routeWithSharedTrunk(from, to Node, group *ConnectionGroup, nodes []Node) [
 			// Turn towards target
 			path = append(path, Point{X: group.TrunkX, Y: targetY, Rune: '╭'})
 		}
-		
+
 		// Horizontal to target
 		for x := group.TrunkX + 1; x < to.X; x++ {
 			path = append(path, Point{X: x, Y: targetY, Rune: '─'})
 		}
 		path = append(path, Point{X: to.X - 1, Y: targetY, Rune: '▶'})
 	}
-	
+
 	return path
 }
 
 // routeHorizontalSimple creates a simple horizontal path
 func routeHorizontalSimple(from, to Node) []Point {
 	var path []Point
-	
+
 	startX := from.X + from.Width - 1
 	startY := from.Y + from.Height/2
 	endX := to.X
 	endY := to.Y + to.Height/2
-	
+
 	// Exit junction
 	path = append(path, Point{X: startX, Y: startY, Rune: '├'})
-	
+
 	// Horizontal line
 	for x := startX + 1; x < endX; x++ {
 		path = append(path, Point{X: x, Y: startY, Rune: '─'})
 	}
-	
+
 	// Arrow should be just before the target box
 	if endX > 0 {
 		path = append(path, Point{X: endX - 1, Y: endY, Rune: '▶'})
 	}
-	
+
 	return path
 }
 
 // routeHorizontalAtLine creates a horizontal path at a specific Y line
 func routeHorizontalAtLine(from, to Node, lineY int) []Point {
 	var path []Point
-	
+
 	startX := from.X + from.Width - 1
 	endX := to.X
-	
+
 	// Exit junction
 	path = append(path, Point{X: startX, Y: lineY, Rune: '├'})
-	
+
 	// Horizontal line
 	for x := startX + 1; x < endX; x++ {
 		path = append(path, Point{X: x, Y: lineY, Rune: '─'})
 	}
-	
+
 	// Arrow should be just before the target box
 	if endX > 0 {
 		path = append(path, Point{X: endX - 1, Y: lineY, Rune: '▶'})
 	}
-	
+
 	return path
 }
 
 // routeBidirectional handles connections that go both ways between nodes
 func routeBidirectional(from, to Node, isUpper bool) []Point {
 	var path []Point
-	
+
 	// For horizontal bidirectional connections at same Y level
 	if from.Y == to.Y {
 		// Both connections use the same Y line (middle of the box)
 		startY := from.Y + 1
-		
+
 		if from.X < to.X {
 			// Going right
 			startX := from.X + from.Width - 1
 			endX := to.X
-			
+
 			path = append(path, Point{X: startX, Y: startY, Rune: '├'})
 			for x := startX + 1; x < endX; x++ {
 				path = append(path, Point{X: x, Y: startY, Rune: '─'})
@@ -610,7 +612,7 @@ func routeBidirectional(from, to Node, isUpper bool) []Point {
 			// Going left
 			startX := from.X
 			endX := to.X + to.Width - 1
-			
+
 			path = append(path, Point{X: startX, Y: startY, Rune: '┤'})
 			path = append(path, Point{X: startX - 1, Y: startY, Rune: '◀'})
 			for x := startX - 2; x > endX; x-- {
@@ -619,59 +621,148 @@ func routeBidirectional(from, to Node, isUpper bool) []Point {
 			path = append(path, Point{X: endX, Y: startY, Rune: '├'})
 		}
 	}
-	
+
 	return path
 }
 
+// routeBackwardBelow creates a backward path that goes below boxes to avoid collisions
+func routeBackwardBelow(from, to Node) []Point {
+	var path []Point
+
+	// Exit from bottom center of source box
+	startX := from.X + from.Width/2
+	startY := from.Y + from.Height - 1
+
+	// Enter at bottom center of target box
+	endX := to.X + to.Width/2
+	endY := to.Y + to.Height - 1
+
+	// Route below all boxes
+	routeY := from.Y + from.Height + 2 // 2 lines below the source box
+
+	// Exit from bottom
+	path = append(path, Point{X: startX, Y: startY, Rune: '┬'})
+
+	// Go down
+	for y := startY + 1; y < routeY; y++ {
+		path = append(path, Point{X: startX, Y: y, Rune: '│'})
+	}
+
+	// Turn left at the bottom
+	if endX < startX {
+		path = append(path, Point{X: startX, Y: routeY, Rune: '╯'})
+		// Go left
+		for x := startX - 1; x > endX; x-- {
+			path = append(path, Point{X: x, Y: routeY, Rune: '─'})
+		}
+	} else {
+		// Turn right if target is to the right
+		path = append(path, Point{X: startX, Y: routeY, Rune: '╰'})
+		// Go right
+		for x := startX + 1; x < endX; x++ {
+			path = append(path, Point{X: x, Y: routeY, Rune: '─'})
+		}
+	}
+
+	// Turn up towards target
+	path = append(path, Point{X: endX, Y: routeY, Rune: '╰'})
+
+	// Go up to target
+	for y := routeY - 1; y > endY; y-- {
+		path = append(path, Point{X: endX, Y: y, Rune: '│'})
+	}
+
+	// Enter target from bottom
+	path = append(path, Point{X: endX, Y: endY, Rune: '▲'})
+
+	return path
+}
 
 // routeHorizontalLeft creates a horizontal path going left
 func routeHorizontalLeft(from, to Node) []Point {
 	var path []Point
-	
+
 	startX := from.X
 	startY := from.Y + from.Height/2
 	endX := to.X + to.Width - 1
 	endY := to.Y + to.Height/2
-	
-	// Exit junction on left
-	path = append(path, Point{X: startX, Y: startY, Rune: '┤'})
-	
-	// Horizontal line
-	for x := startX - 1; x > endX + 1; x-- {
-		path = append(path, Point{X: x, Y: startY, Rune: '─'})
+
+	// For backward connections, we need to route around boxes
+	// If nodes are on the same line and close together, do simple routing
+	if startY == endY && startX-endX < 20 {
+		// Exit junction on left
+		path = append(path, Point{X: startX, Y: startY, Rune: '┤'})
+
+		// Horizontal line
+		for x := startX - 1; x > endX+1; x-- {
+			path = append(path, Point{X: x, Y: startY, Rune: '─'})
+		}
+
+		// Arrow pointing left at the target
+		path = append(path, Point{X: endX + 1, Y: endY, Rune: '◀'})
+	} else {
+		// Multi-hop backward connection - route below the boxes
+		// Start by going down from left side
+		path = append(path, Point{X: startX, Y: startY, Rune: '┤'})
+		path = append(path, Point{X: startX - 1, Y: startY, Rune: '─'})
+		path = append(path, Point{X: startX - 2, Y: startY, Rune: '╮'})
+
+		// Go down below the boxes
+		routeY := from.Y + from.Height + 2 // 2 lines below the box
+		for y := startY + 1; y < routeY; y++ {
+			path = append(path, Point{X: startX - 2, Y: y, Rune: '│'})
+		}
+
+		// Turn left at the bottom
+		path = append(path, Point{X: startX - 2, Y: routeY, Rune: '╯'})
+
+		// Go left below all boxes
+		targetX := to.X + to.Width/2
+		for x := startX - 3; x > targetX; x-- {
+			path = append(path, Point{X: x, Y: routeY, Rune: '─'})
+		}
+
+		// Turn up towards target
+		path = append(path, Point{X: targetX, Y: routeY, Rune: '╰'})
+
+		// Go up to target
+		targetY := to.Y + to.Height - 1
+		for y := routeY - 1; y > targetY; y-- {
+			path = append(path, Point{X: targetX, Y: y, Rune: '│'})
+		}
+
+		// Enter target from bottom
+		path = append(path, Point{X: targetX, Y: targetY, Rune: '▲'})
 	}
-	
-	// Arrow pointing left at the target
-	path = append(path, Point{X: endX + 1, Y: endY, Rune: '◀'})
-	
+
 	return path
 }
 
 // routeDiagonalSimple creates a simple L-shaped path
 func routeDiagonalSimple(from, to Node) []Point {
 	var path []Point
-	
+
 	// Debug - uncomment to trace routing
-	// fmt.Printf("DIAGONAL: from=(%d,%d,%dx%d) to=(%d,%d,%dx%d)\n", 
+	// fmt.Printf("DIAGONAL: from=(%d,%d,%dx%d) to=(%d,%d,%dx%d)\n",
 	//     from.X, from.Y, from.Width, from.Height, to.X, to.Y, to.Width, to.Height)
-	
+
 	// Exit from the side closest to target
-	if to.X > from.X + from.Width {
+	if to.X > from.X+from.Width {
 		// Target is to the right - exit right, go right then up/down
 		startX := from.X + from.Width - 1
 		startY := from.Y + from.Height/2
 		targetX := to.X
 		targetY := to.Y + to.Height/2
-		
+
 		// Exit junction
 		path = append(path, Point{X: startX, Y: startY, Rune: '├'})
-		
+
 		// Go right to a point between nodes
 		trunkX := from.X + from.Width + TrunkOffset
 		for x := startX + 1; x <= trunkX; x++ {
 			path = append(path, Point{X: x, Y: startY, Rune: '─'})
 		}
-		
+
 		// Turn up or down
 		if targetY < startY {
 			// Going up
@@ -688,36 +779,36 @@ func routeDiagonalSimple(from, to Node) []Point {
 			}
 			path = append(path, Point{X: trunkX, Y: targetY, Rune: '╰'})
 		}
-		
-		// Go to target 
-		for x := trunkX + 1; x < targetX - 1; x++ {
+
+		// Go to target
+		for x := trunkX + 1; x < targetX-1; x++ {
 			path = append(path, Point{X: x, Y: targetY, Rune: '─'})
 		}
-		// Arrow should be just before the target box  
-		if targetX - 1 > trunkX {
+		// Arrow should be just before the target box
+		if targetX-1 > trunkX {
 			// There's space between corner and target - place arrow just before target
 			path = append(path, Point{X: targetX - 1, Y: targetY, Rune: '▶'})
 		} else {
 			// Corner is adjacent to target - replace corner with arrow
 			path[len(path)-1] = Point{X: trunkX, Y: targetY, Rune: '▶'}
 		}
-		
-	} else if to.X + to.Width < from.X {
+
+	} else if to.X+to.Width < from.X {
 		// Target is to the left - exit left
 		startX := from.X
 		startY := from.Y + from.Height/2
 		targetX := to.X + to.Width - 1
 		targetY := to.Y + to.Height/2
-		
+
 		// Exit junction
 		path = append(path, Point{X: startX, Y: startY, Rune: '┤'})
-		
+
 		// Go left to trunk position
 		trunkX := from.X - TrunkOffset
 		for x := startX - 1; x >= trunkX; x-- {
 			path = append(path, Point{X: x, Y: startY, Rune: '─'})
 		}
-		
+
 		// Turn up or down
 		if targetY < startY {
 			// Going up
@@ -727,41 +818,41 @@ func routeDiagonalSimple(from, to Node) []Point {
 			}
 			path = append(path, Point{X: trunkX, Y: targetY, Rune: '╮'})
 		} else if targetY > startY {
-			// Going down  
+			// Going down
 			path = append(path, Point{X: trunkX, Y: startY, Rune: '╮'})
 			for y := startY + 1; y < targetY; y++ {
 				path = append(path, Point{X: trunkX, Y: y, Rune: '│'})
 			}
 			path = append(path, Point{X: trunkX, Y: targetY, Rune: '╯'})
 		}
-		
+
 		// Go to target
-		for x := trunkX - 1; x > targetX + to.Width; x-- {
+		for x := trunkX - 1; x > targetX+to.Width; x-- {
 			path = append(path, Point{X: x, Y: targetY, Rune: '─'})
 		}
 		// Arrow should be just after the target box (at the right border)
-		if targetX + to.Width < trunkX {
+		if targetX+to.Width < trunkX {
 			// There's space between corner and target - place arrow just after target
 			path = append(path, Point{X: to.X + to.Width, Y: targetY, Rune: '◀'})
 		} else {
-			// Corner is adjacent to target - replace corner with arrow  
+			// Corner is adjacent to target - replace corner with arrow
 			path[len(path)-1] = Point{X: trunkX, Y: targetY, Rune: '◀'}
 		}
-		
+
 	} else {
 		// Target is above or below - exit from top or bottom
 		if to.Y < from.Y {
 			// Exit top
 			startX := from.X + from.Width/2
 			startY := from.Y
-			
+
 			path = append(path, Point{X: startX, Y: startY, Rune: '┴'})
 			// TODO: Implement vertical routing
 		} else {
 			// Exit bottom
 			startX := from.X + from.Width/2
 			startY := from.Y + from.Height - 1
-			
+
 			path = append(path, Point{X: startX, Y: startY, Rune: '┬'})
 			// TODO: Implement vertical routing
 			// For now, just exit from the side for self-connections
@@ -771,7 +862,7 @@ func routeDiagonalSimple(from, to Node) []Point {
 			}
 		}
 	}
-	
+
 	return path
 }
 
@@ -787,18 +878,18 @@ func (c *Canvas) Render(diagram Diagram) {
 	// Use new layered layout system
 	layout := NewLayeredLayout()
 	positioned := layout.CalculateLayout(diagram.Nodes, diagram.Connections)
-	
+
 	// Draw all nodes in their calculated positions
 	for _, node := range positioned {
 		c.DrawBox(node)
 	}
-	
+
 	// Draw connections using simple orthogonal routing
 	nodeMap := make(map[int]Node)
 	for _, node := range positioned {
 		nodeMap[node.ID] = node
 	}
-	
+
 	for _, conn := range diagram.Connections {
 		from := nodeMap[conn.From]
 		to := nodeMap[conn.To]
@@ -810,82 +901,82 @@ func (c *Canvas) Render(diagram Diagram) {
 // routeSelfConnection creates a loop from a node back to itself
 func routeSelfConnection(node Node) []Point {
 	var path []Point
-	
+
 	// Exit from the right side at content line
 	exitX := node.X + node.Width - 1
-	exitY := node.Y + 1  // Content line (Y=1 for height=3 box)
-	
+	exitY := node.Y + 1 // Content line (Y=1 for height=3 box)
+
 	// Loop coordinates based on expected output
-	rightX := exitX + 2     // Two spaces to the right
-	bottomY := node.Y + 4   // Two lines below the box
-	leftX := node.X + 2     // Two spaces from left edge
-	upY := node.Y + 3       // One line below the box
-	
+	rightX := exitX + 2   // Two spaces to the right
+	bottomY := node.Y + 4 // Two lines below the box
+	leftX := node.X + 2   // Two spaces from left edge
+	upY := node.Y + 3     // One line below the box
+
 	// Exit junction
 	path = append(path, Point{X: exitX, Y: exitY, Rune: '├'})
-	
+
 	// Go right
 	path = append(path, Point{X: exitX + 1, Y: exitY, Rune: '─'})
 	path = append(path, Point{X: rightX, Y: exitY, Rune: '╮'})
-	
+
 	// Go down
 	for y := exitY + 1; y < bottomY; y++ {
 		path = append(path, Point{X: rightX, Y: y, Rune: '│'})
 	}
-	
-	// Go left (bottom of loop) 
+
+	// Go left (bottom of loop)
 	path = append(path, Point{X: rightX, Y: bottomY, Rune: '╯'})
 	for x := rightX - 1; x > leftX; x-- {
 		path = append(path, Point{X: x, Y: bottomY, Rune: '─'})
 	}
-	
+
 	// Go up to complete loop
 	path = append(path, Point{X: leftX, Y: bottomY, Rune: '╰'})
 	path = append(path, Point{X: leftX, Y: upY, Rune: '▲'})
-	
+
 	return path
 }
 
 // routeVerticalSimple creates a vertical path between aligned nodes
 func routeVerticalSimple(from, to Node) []Point {
 	var path []Point
-	
+
 	// Both nodes have same X alignment (from.X == to.X)
 	centerX := from.X + from.Width/2
-	
+
 	if from.Y < to.Y {
 		// Going down
-		startY := from.Y + from.Height - 1  // Bottom edge
-		endY := to.Y  // Top edge of target
-		
+		startY := from.Y + from.Height - 1 // Bottom edge
+		endY := to.Y                       // Top edge of target
+
 		// Exit from bottom
 		path = append(path, Point{X: centerX, Y: startY, Rune: '┬'})
-		
+
 		// Vertical line down
 		for y := startY + 1; y < endY; y++ {
 			path = append(path, Point{X: centerX, Y: y, Rune: '│'})
 		}
-		
+
 		// Arrow pointing down to target
 		path = append(path, Point{X: centerX, Y: endY - 1, Rune: '▼'})
-		
+
 	} else {
-		// Going up  
-		startY := from.Y  // Top edge
-		endY := to.Y + to.Height - 1  // Bottom edge of target
-		
+		// Going up
+		startY := from.Y             // Top edge
+		endY := to.Y + to.Height - 1 // Bottom edge of target
+
 		// Exit from top
 		path = append(path, Point{X: centerX, Y: startY, Rune: '┴'})
-		
+
 		// Vertical line up
 		for y := startY - 1; y > endY; y-- {
 			path = append(path, Point{X: centerX, Y: y, Rune: '│'})
 		}
-		
+
 		// Arrow pointing up to target
 		path = append(path, Point{X: centerX, Y: endY + 1, Rune: '▲'})
 	}
-	
+
 	return path
 }
 
@@ -901,18 +992,18 @@ type Layer struct {
 
 // LayeredLayout performs automatic layout using layered approach
 type LayeredLayout struct {
-	Layers    []Layer
-	NodeSpacing int // Horizontal space between nodes
+	Layers       []Layer
+	NodeSpacing  int // Horizontal space between nodes
 	LayerSpacing int // Vertical space between layers
-	NodeWidth int   // Standard node width
-	NodeHeight int  // Standard node height
+	NodeWidth    int // Standard node width
+	NodeHeight   int // Standard node height
 }
 
 // NewLayeredLayout creates a layout with reasonable defaults
 func NewLayeredLayout() *LayeredLayout {
 	return &LayeredLayout{
 		NodeSpacing:  4, // 4 chars between nodes
-		LayerSpacing: 4, // 4 lines between layers  
+		LayerSpacing: 4, // 4 lines between layers
 		NodeWidth:    12,
 		NodeHeight:   3,
 	}
@@ -931,56 +1022,102 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		result[i].Width = width
 		result[i].Height = height
 	}
-	
+
 	// Step 2: Build adjacency list for topological sort
 	graph := make(map[int][]int)
 	inDegree := make(map[int]int)
-	
+	backwardEdges := make(map[string]bool) // Track backward edges
+
 	for _, node := range nodes {
 		graph[node.ID] = []int{}
 		inDegree[node.ID] = 0
 	}
-	
+
+	// First pass: identify backward edges (edges that create cycles)
+	// A simple heuristic: if To < From, it's likely a backward edge
 	for _, conn := range connections {
-		graph[conn.From] = append(graph[conn.From], conn.To)
-		inDegree[conn.To]++
+		if conn.To < conn.From {
+			// This is likely a feedback/backward connection
+			key := fmt.Sprintf("%d->%d", conn.From, conn.To)
+			backwardEdges[key] = true
+		}
 	}
-	
+
+	// Second pass: build graph excluding backward edges for topological sort
+	for _, conn := range connections {
+		key := fmt.Sprintf("%d->%d", conn.From, conn.To)
+		if !backwardEdges[key] {
+			graph[conn.From] = append(graph[conn.From], conn.To)
+			inDegree[conn.To]++
+		}
+	}
+
 	// Step 3: Topological sort to determine columns (left-to-right dependency levels)
 	columns := [][]int{}
 	remaining := make(map[int]bool)
 	for _, node := range nodes {
 		remaining[node.ID] = true
 	}
-	
+
+	// Track the order nodes appear as targets in connections
+	targetOrder := make(map[int]int)
+	orderIndex := 0
+	for _, conn := range connections {
+		if _, exists := targetOrder[conn.To]; !exists {
+			targetOrder[conn.To] = orderIndex
+			orderIndex++
+		}
+	}
+
 	for len(remaining) > 0 {
 		// Find nodes with no incoming edges (can be placed in current column)
-		currentColumn := []int{}
+		candidates := []int{}
 		for nodeID := range remaining {
 			if inDegree[nodeID] == 0 {
-				currentColumn = append(currentColumn, nodeID)
+				candidates = append(candidates, nodeID)
 			}
 		}
-		
-		if len(currentColumn) == 0 {
+
+		if len(candidates) == 0 {
 			// Cycle detected - break it by taking any remaining node
 			for nodeID := range remaining {
-				currentColumn = append(currentColumn, nodeID)
+				candidates = append(candidates, nodeID)
 				break
 			}
 		}
-		
-		columns = append(columns, currentColumn)
-		
+
+		// Sort candidates by their appearance order in connections
+		// This ensures consistent ordering based on how connections were defined
+		sort.Slice(candidates, func(i, j int) bool {
+			orderI, hasI := targetOrder[candidates[i]]
+			orderJ, hasJ := targetOrder[candidates[j]]
+
+			// If both have target order, use that
+			if hasI && hasJ {
+				return orderI < orderJ
+			}
+			// If only one has target order, it comes first
+			if hasI {
+				return true
+			}
+			if hasJ {
+				return false
+			}
+			// Otherwise, sort by ID for consistency
+			return candidates[i] < candidates[j]
+		})
+
+		columns = append(columns, candidates)
+
 		// Remove these nodes and update in-degrees
-		for _, nodeID := range currentColumn {
+		for _, nodeID := range candidates {
 			delete(remaining, nodeID)
 			for _, neighbor := range graph[nodeID] {
 				inDegree[neighbor]--
 			}
 		}
 	}
-	
+
 	// Step 4: Calculate column widths and positions
 	columnWidths := make([]int, len(columns))
 	for colIdx, column := range columns {
@@ -993,7 +1130,7 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		}
 		columnWidths[colIdx] = maxWidth
 	}
-	
+
 	// Step 5: Assign X positions based on columns
 	currentX := 0
 	columnStartX := make([]int, len(columns))
@@ -1001,7 +1138,7 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		columnStartX[colIdx] = currentX
 		currentX += columnWidths[colIdx] + l.NodeSpacing
 	}
-	
+
 	// Step 6: Assign Y positions within each column (center-aligned, evenly distributed)
 	for colIdx, column := range columns {
 		if len(column) == 1 {
@@ -1019,22 +1156,33 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 			}
 		}
 	}
-	
+
 	return result
 }
 
 // SimpleOrthogonalRoute creates clean orthogonal paths
 func SimpleOrthogonalRoute(from, to Node) []Point {
+	// Check if this is a backward connection
+	if to.X+to.Width < from.X {
+		// Target is to the left of source
+		// If it's a multi-hop backward connection, route from bottom
+		if from.X-(to.X+to.Width) > 20 {
+			return routeBackwardBelow(from, to)
+		}
+		// Otherwise use simple left routing
+		return routeHorizontalLeft(from, to)
+	}
+
 	var path []Point
-	
+
 	// Exit from center-right of source box border
-	startX := from.X + from.Width - 1  // On the border, not past it
+	startX := from.X + from.Width - 1 // On the border, not past it
 	startY := from.Y + from.Height/2
-	
-	// Enter at center-left of target  
+
+	// Enter at center-left of target
 	endX := to.X - 1
 	endY := to.Y + to.Height/2
-	
+
 	// Simple L-shaped route
 	if startY == endY {
 		// Same level - straight horizontal
@@ -1046,11 +1194,11 @@ func SimpleOrthogonalRoute(from, to Node) []Point {
 	} else {
 		// Different levels - L shape
 		midX := startX + 2 // Small horizontal segment
-		
+
 		// Exit horizontally
 		path = append(path, Point{X: startX, Y: startY, Rune: '├'})
 		path = append(path, Point{X: startX + 1, Y: startY, Rune: '─'})
-		
+
 		// Turn down/up
 		if endY > startY {
 			// Going down
@@ -1067,17 +1215,910 @@ func SimpleOrthogonalRoute(from, to Node) []Point {
 			}
 			path = append(path, Point{X: midX, Y: endY, Rune: '╮'})
 		}
-		
+
 		// Horizontal to target
 		for x := midX + 1; x < endX; x++ {
 			path = append(path, Point{X: x, Y: endY, Rune: '─'})
 		}
 		path = append(path, Point{X: endX, Y: endY, Rune: '▶'})
 	}
-	
+
 	return path
 }
 
+// ========================================
+// MODAL EDITING SYSTEM
+// ========================================
+
+// Mode represents the current editing mode
+type Mode int
+
+const (
+	ModeNormal Mode = iota
+	ModeInsert
+	ModeConnect
+	ModeCommand
+)
+
+// String returns the mode name for display
+func (m Mode) String() string {
+	switch m {
+	case ModeNormal:
+		return "NORMAL"
+	case ModeInsert:
+		return "INSERT"
+	case ModeConnect:
+		return "CONNECT"
+	case ModeCommand:
+		return "COMMAND"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// Editor represents the interactive diagram editor
+type Editor struct {
+	diagram          Diagram
+	mode             Mode
+	currentNode      int // ID of currently selected node
+	nextNodeID       int // Next available node ID
+	canvas           *Canvas
+	modeIndicator    *Canvas       // Small canvas for mode animation
+	eddCharacter     *EddCharacter // The living edd character
+	animationRunning bool          // Whether the living animation is active
+}
+
+// EddCharacter represents the living animated character
+type EddCharacter struct {
+	currentFrame    int
+	frameCount      int
+	idleAnimations  map[Mode][]string // Idle animation frames per mode
+	transitionAnim  []string          // Current transition animation
+	isTransitioning bool
+	blinkTimer      int
+	lookTimer       int
+	lookDirection   int // -1 left, 0 center, 1 right
+}
+
+// NewEddCharacter creates a new living ed character
+func NewEddCharacter() *EddCharacter {
+	ed := &EddCharacter{
+		currentFrame:    0,
+		frameCount:      0,
+		idleAnimations:  make(map[Mode][]string),
+		isTransitioning: false,
+		blinkTimer:      0,
+		lookTimer:       0,
+		lookDirection:   0,
+	}
+
+	// Define idle animations for each mode - meet "ed"!
+	ed.idleAnimations[ModeNormal] = []string{
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "-‿ -", "◉‿ ◉", // Occasional blink with smile
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉",
+		"◉‿ ◉", "◉‿ ◉", "⊙‿ ⊙", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Occasional look around
+	}
+
+	ed.idleAnimations[ModeInsert] = []string{
+		"○‿ ○", "○‿ ○", "○‿ ○", "○‿ ○", "○‿ ○", "○‿ ○", // Wide alert eyes
+		"-‿ ○", "-‿ -", "○‿ -", "○‿ ○", "○‿ ○", "-‿ ○", // Out-of-sync blinks
+		"○‿ ○", "-‿ -", "○‿ ○", "○‿ ○", "◉‿ ◉", "○‿ ○", // Full blink and focus burst
+	}
+
+	ed.idleAnimations[ModeConnect] = []string{
+		"⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "◉‿ ◉", "⊙‿ ⊙", // Eye scanning with happiness
+		"⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙",
+	}
+
+	ed.idleAnimations[ModeCommand] = []string{
+		":_", ":_", ":|", ":|", ":_", ":_", ":_", ":_", // Cursor blink
+		":_", ":_", ":_", ":?", ":_", ":_", ":_", ":_", // Occasional thinking
+	}
+
+	return ed
+}
+
+// NewEditor creates a new editor instance
+func NewEditor() *Editor {
+	return &Editor{
+		diagram: Diagram{
+			Nodes:       []Node{},
+			Connections: []Connection{},
+		},
+		mode:             ModeNormal,
+		currentNode:      -1, // No node selected initially
+		nextNodeID:       0,
+		canvas:           NewCanvas(120, 40), // Default size
+		modeIndicator:    NewCanvas(15, 5),   // Small indicator box
+		eddCharacter:     NewEddCharacter(),  // Meet ed!
+		animationRunning: false,
+	}
+}
+
+// SetMode changes the current editing mode
+func (e *Editor) SetMode(mode Mode) {
+	oldMode := e.mode
+	e.mode = mode
+
+	// Handle living character transition
+	if oldMode != mode {
+		e.eddCharacter.TransitionToMode(mode)
+	}
+
+	e.UpdateLivingModeIndicator()
+}
+
+// StartLivingAnimation begins the continuous character animation
+func (e *Editor) StartLivingAnimation() {
+	if e.animationRunning {
+		return // Already running
+	}
+
+	e.animationRunning = true
+	go e.livingAnimationLoop()
+}
+
+// StopLivingAnimation stops the continuous character animation
+func (e *Editor) StopLivingAnimation() {
+	e.animationRunning = false
+}
+
+// livingAnimationLoop runs the continuous character animation
+func (e *Editor) livingAnimationLoop() {
+	for e.animationRunning {
+		e.eddCharacter.NextFrame(e.mode)
+		e.UpdateLivingModeIndicator()
+		e.DisplayCharacter()               // Show the character
+		time.Sleep(400 * time.Millisecond) // ~2.5 FPS for subtle animation
+	}
+}
+
+// DisplayCharacter shows the current character state
+func (e *Editor) DisplayCharacter() {
+	// Move cursor to a fixed position to show the character
+	fmt.Print("\033[8;1H") // Move to line 8, column 1
+	fmt.Print(e.modeIndicator.String())
+	fmt.Print("\033[15;1H") // Move cursor below character
+}
+
+// UpdateLivingModeIndicator updates the indicator with the living character
+func (e *Editor) UpdateLivingModeIndicator() {
+	e.modeIndicator.Clear()
+
+	// Get current living frame
+	face := e.eddCharacter.GetCurrentFrame(e.mode)
+	cursor := ""
+	connections := e.eddCharacter.GetConnections(e.mode)
+
+	// Draw the living edd character
+	e.drawLivingEdd(face, cursor, connections)
+
+	// Add mode label
+	text := e.mode.String()
+	startX := (15 - len(text)) / 2
+	for i, ch := range text {
+		if startX+i < 15 {
+			e.modeIndicator.Set(startX+i, 4, ch)
+		}
+	}
+}
+
+// drawLivingEdd draws the living character with current expression
+func (e *Editor) drawLivingEdd(face, cursor string, connections map[string]rune) {
+	// Draw box
+	e.modeIndicator.Set(2, 1, '╭')
+	e.modeIndicator.Set(7, 1, '╮')
+	e.modeIndicator.Set(2, 3, '╰')
+	e.modeIndicator.Set(7, 3, '╯')
+	for x := 3; x < 7; x++ {
+		e.modeIndicator.Set(x, 1, '─')
+		e.modeIndicator.Set(x, 3, '─')
+	}
+	e.modeIndicator.Set(2, 2, '│')
+	e.modeIndicator.Set(7, 2, '│')
+
+	// Handle different face formats
+	faceRunes := []rune(face)
+
+	if len(face) >= 2 && face[0] == ':' {
+		// Command mode format ":_", ":|", ":?"
+		e.modeIndicator.Set(3, 2, ':')
+		if len(faceRunes) > 1 {
+			e.modeIndicator.Set(4, 2, faceRunes[1])
+		}
+		// Add eyes for command mode
+		e.modeIndicator.Set(2, 2, '◉')
+		e.modeIndicator.Set(6, 2, '◉')
+	} else {
+		// Regular face format "◉‿◉", "◉▿◉|", etc.
+		// Split by cursor character if present
+		mainFace := face
+		cursorChar := ""
+
+		if strings.Contains(face, "|") {
+			parts := strings.Split(face, "|")
+			mainFace = parts[0]
+			if len(parts) > 1 {
+				cursorChar = "|" + parts[1]
+			} else {
+				cursorChar = "|"
+			}
+		} else if strings.Contains(face, " ") && len(face) > 3 {
+			// Handle space-separated cursor
+			if len(faceRunes) > 3 && faceRunes[3] == ' ' {
+				mainFace = string(faceRunes[:3])
+				cursorChar = string(faceRunes[3:])
+			}
+		}
+
+		// Draw the main face (up to 4 characters to accommodate "◉‿ ◉")
+		mainFaceRunes := []rune(mainFace)
+		for i, ch := range mainFaceRunes {
+			if i < 4 { // Allow 4 characters for the face
+				e.modeIndicator.Set(3+i, 2, ch)
+			}
+		}
+
+		// Draw cursor if present
+		if cursorChar != "" {
+			cursorRunes := []rune(cursorChar)
+			for i, ch := range cursorRunes {
+				e.modeIndicator.Set(6+i, 2, ch)
+			}
+		}
+	}
+
+	// Add connections if any
+	for pos, char := range connections {
+		switch pos {
+		case "left":
+			e.modeIndicator.Set(1, 2, char)
+		case "right":
+			e.modeIndicator.Set(8, 2, char)
+		case "up":
+			e.modeIndicator.Set(4, 0, char)
+		case "down":
+			e.modeIndicator.Set(4, 4, char)
+		case "cursor":
+			e.modeIndicator.Set(9, 2, char) // Cursor right of the box
+		}
+	}
+}
+
+// EddCharacter methods for living animation
+
+// NextFrame advances to the next frame in the current mode's animation
+func (edd *EddCharacter) NextFrame(mode Mode) {
+	if edd.isTransitioning {
+		return // Don't advance during transitions
+	}
+
+	frames := edd.idleAnimations[mode]
+	if len(frames) > 0 {
+		edd.currentFrame = (edd.currentFrame + 1) % len(frames)
+	}
+}
+
+// GetCurrentFrame returns the current animation frame for the given mode
+func (edd *EddCharacter) GetCurrentFrame(mode Mode) string {
+	frames := edd.idleAnimations[mode]
+	if len(frames) == 0 {
+		return "◉_◉" // Default
+	}
+	return frames[edd.currentFrame]
+}
+
+// GetConnections returns connection indicators for the current mode
+func (edd *EddCharacter) GetConnections(mode Mode) map[string]rune {
+	connections := make(map[string]rune)
+
+	if mode == ModeConnect {
+		// Animate connection lines extending/retracting
+		intensity := edd.currentFrame % 4
+		if intensity >= 1 {
+			connections["left"] = '◀'
+		}
+		if intensity >= 2 {
+			connections["right"] = '▶'
+		}
+		if intensity >= 3 {
+			connections["up"] = '▲'
+		}
+	} else if mode == ModeInsert {
+		// Blinking cursor outside the box
+		if edd.currentFrame%4 < 2 {
+			connections["cursor"] = '|'
+		}
+	}
+
+	return connections
+}
+
+// TransitionToMode handles smooth transitions between mode states
+func (edd *EddCharacter) TransitionToMode(newMode Mode) {
+	// Reset frame counter for new mode
+	edd.currentFrame = 0
+	edd.isTransitioning = false // Simple transition for now
+}
+
+// UpdateModeIndicator updates the mode indicator with current mode animation
+func (e *Editor) UpdateModeIndicator() {
+	e.modeIndicator.Clear()
+
+	switch e.mode {
+	case ModeNormal:
+		e.DrawNormalModeIndicator()
+	case ModeInsert:
+		e.DrawInsertModeIndicator()
+	case ModeConnect:
+		e.DrawConnectModeIndicator()
+	case ModeCommand:
+		e.DrawCommandModeIndicator()
+	}
+}
+
+// DrawNormalModeIndicator shows a calm, centered box
+func (e *Editor) DrawNormalModeIndicator() {
+	// Centered, composed face
+	e.modeIndicator.Set(2, 1, '╭')
+	e.modeIndicator.Set(7, 1, '╮')
+	e.modeIndicator.Set(2, 3, '╰')
+	e.modeIndicator.Set(7, 3, '╯')
+	for x := 3; x < 7; x++ {
+		e.modeIndicator.Set(x, 1, '─')
+		e.modeIndicator.Set(x, 3, '─')
+	}
+	e.modeIndicator.Set(2, 2, '│')
+	e.modeIndicator.Set(7, 2, '│')
+
+	// Calm eyes and expression: ◉_◉
+	e.modeIndicator.Set(3, 2, '◉')
+	e.modeIndicator.Set(4, 2, '_')
+	e.modeIndicator.Set(6, 2, '◉')
+
+	// Mode label
+	text := "NORMAL"
+	for i, ch := range text {
+		e.modeIndicator.Set(1+i, 4, ch)
+	}
+}
+
+// DrawInsertModeIndicator shows an active, typing box
+func (e *Editor) DrawInsertModeIndicator() {
+	// Same box but more energetic expression
+	e.modeIndicator.Set(2, 1, '╭')
+	e.modeIndicator.Set(7, 1, '╮')
+	e.modeIndicator.Set(2, 3, '╰')
+	e.modeIndicator.Set(7, 3, '╯')
+	for x := 3; x < 7; x++ {
+		e.modeIndicator.Set(x, 1, '─')
+		e.modeIndicator.Set(x, 3, '─')
+	}
+	e.modeIndicator.Set(2, 2, '│')
+	e.modeIndicator.Set(7, 2, '│')
+
+	// Focused typing expression: ◉▿◉
+	e.modeIndicator.Set(3, 2, '◉')
+	e.modeIndicator.Set(4, 2, '▿')
+	e.modeIndicator.Set(6, 2, '◉')
+
+	// Blinking cursor effect
+	e.modeIndicator.Set(8, 2, '|')
+
+	// Mode label
+	text := "INSERT"
+	for i, ch := range text {
+		e.modeIndicator.Set(1+i, 4, ch)
+	}
+}
+
+// DrawConnectModeIndicator shows a box with connection lines
+func (e *Editor) DrawConnectModeIndicator() {
+	// Box with connection arms extending
+	e.modeIndicator.Set(2, 1, '╭')
+	e.modeIndicator.Set(7, 1, '╮')
+	e.modeIndicator.Set(2, 3, '╰')
+	e.modeIndicator.Set(7, 3, '╯')
+	for x := 3; x < 7; x++ {
+		e.modeIndicator.Set(x, 1, '─')
+		e.modeIndicator.Set(x, 3, '─')
+	}
+	e.modeIndicator.Set(2, 2, '│')
+	e.modeIndicator.Set(7, 2, '│')
+
+	// Searching/connecting expression: ⊙‿⊙
+	e.modeIndicator.Set(3, 2, '⊙')
+	e.modeIndicator.Set(4, 2, '‿')
+	e.modeIndicator.Set(6, 2, '⊙')
+
+	// Connection lines extending outward
+	e.modeIndicator.Set(1, 2, '◀') // Left connection
+	e.modeIndicator.Set(8, 2, '▶') // Right connection
+	e.modeIndicator.Set(4, 0, '▲') // Up connection
+
+	// Mode label
+	text := "CONNECT"
+	for i, ch := range text {
+		e.modeIndicator.Set(0+i, 4, ch)
+	}
+}
+
+// DrawCommandModeIndicator shows a command prompt style
+func (e *Editor) DrawCommandModeIndicator() {
+	// Command line style box
+	e.modeIndicator.Set(1, 1, '╭')
+	e.modeIndicator.Set(8, 1, '╮')
+	e.modeIndicator.Set(1, 3, '╰')
+	e.modeIndicator.Set(8, 3, '╯')
+	for x := 2; x < 8; x++ {
+		e.modeIndicator.Set(x, 1, '─')
+		e.modeIndicator.Set(x, 3, '─')
+	}
+	e.modeIndicator.Set(1, 2, '│')
+	e.modeIndicator.Set(8, 2, '│')
+
+	// Command prompt: :
+	e.modeIndicator.Set(2, 2, ':')
+	e.modeIndicator.Set(3, 2, '_')
+
+	// Thinking expression
+	e.modeIndicator.Set(5, 2, '◉')
+	e.modeIndicator.Set(7, 2, '◉')
+
+	// Mode label
+	text := "COMMAND"
+	for i, ch := range text {
+		e.modeIndicator.Set(0+i, 4, ch)
+	}
+}
+
+// PlayModeTransition creates a smooth animation between modes
+func (e *Editor) PlayModeTransition(fromMode, toMode Mode) {
+	frames := []AnimationFrame{}
+
+	// Transition effects based on mode change
+	if fromMode == ModeNormal && toMode == ModeInsert {
+		// Normal → Insert: Eyes get focused, cursor appears
+		frames = e.CreateNormalToInsertTransition()
+	} else if fromMode == ModeInsert && toMode == ModeNormal {
+		// Insert → Normal: Cursor fades, eyes relax
+		frames = e.CreateInsertToNormalTransition()
+	} else if toMode == ModeConnect {
+		// Any → Connect: Lines extend outward
+		frames = e.CreateConnectModeTransition()
+	} else {
+		// Generic transition: quick blink
+		frames = e.CreateGenericTransition()
+	}
+
+	// Play the transition
+	anim := Animation{Frames: frames, Loop: false}
+	PlayAnimation(anim)
+}
+
+// CreateNormalToInsertTransition creates the calm → focused transition
+func (e *Editor) CreateNormalToInsertTransition() []AnimationFrame {
+	frames := []AnimationFrame{}
+
+	// Frame 1: Normal state
+	canvas1 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas1, "◉_◉", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas1, Delay: 200})
+
+	// Frame 2: Eyes widening
+	canvas2 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas2, "⊙_⊙", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas2, Delay: 100})
+
+	// Frame 3: Insert mode - focused
+	canvas3 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas3, "◉▿◉", "|")
+	frames = append(frames, AnimationFrame{Canvas: canvas3, Delay: 200})
+
+	return frames
+}
+
+// CreateInsertToNormalTransition creates the focused → calm transition
+func (e *Editor) CreateInsertToNormalTransition() []AnimationFrame {
+	frames := []AnimationFrame{}
+
+	// Frame 1: Insert state with cursor
+	canvas1 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas1, "◉▿◉", "|")
+	frames = append(frames, AnimationFrame{Canvas: canvas1, Delay: 150})
+
+	// Frame 2: Cursor fading
+	canvas2 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas2, "◉▿◉", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas2, Delay: 100})
+
+	// Frame 3: Eyes relaxing
+	canvas3 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas3, "◉_◉", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas3, Delay: 200})
+
+	return frames
+}
+
+// CreateConnectModeTransition creates connection lines extending
+func (e *Editor) CreateConnectModeTransition() []AnimationFrame {
+	frames := []AnimationFrame{}
+
+	// Frame 1: Normal box
+	canvas1 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas1, "⊙‿⊙", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas1, Delay: 100})
+
+	// Frame 2: Lines starting to extend
+	canvas2 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas2, "⊙‿⊙", "")
+	canvas2.Set(8, 2, '▶')
+	frames = append(frames, AnimationFrame{Canvas: canvas2, Delay: 100})
+
+	// Frame 3: Full connection mode
+	canvas3 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas3, "⊙‿⊙", "")
+	canvas3.Set(1, 2, '◀')
+	canvas3.Set(8, 2, '▶')
+	canvas3.Set(4, 0, '▲')
+	frames = append(frames, AnimationFrame{Canvas: canvas3, Delay: 200})
+
+	return frames
+}
+
+// CreateGenericTransition creates a simple blink transition
+func (e *Editor) CreateGenericTransition() []AnimationFrame {
+	frames := []AnimationFrame{}
+
+	// Blink effect
+	canvas1 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas1, "-_-", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas1, Delay: 100})
+
+	canvas2 := NewCanvas(15, 5)
+	e.drawBoxWithFace(canvas2, "◉_◉", "")
+	frames = append(frames, AnimationFrame{Canvas: canvas2, Delay: 100})
+
+	return frames
+}
+
+// Helper function to draw a box with face and optional cursor
+func (e *Editor) drawBoxWithFace(canvas *Canvas, face string, cursor string) {
+	// Draw box
+	canvas.Set(2, 1, '╭')
+	canvas.Set(7, 1, '╮')
+	canvas.Set(2, 3, '╰')
+	canvas.Set(7, 3, '╯')
+	for x := 3; x < 7; x++ {
+		canvas.Set(x, 1, '─')
+		canvas.Set(x, 3, '─')
+	}
+	canvas.Set(2, 2, '│')
+	canvas.Set(7, 2, '│')
+
+	// Add face
+	for i, ch := range face {
+		canvas.Set(3+i, 2, ch)
+	}
+
+	// Add cursor if provided
+	if cursor != "" {
+		for i, ch := range cursor {
+			canvas.Set(8+i, 2, ch)
+		}
+	}
+}
+
+// AddNode creates a new node with the given text
+func (e *Editor) AddNode(text []string) int {
+	width, height := CalculateNodeSize(text)
+	node := Node{
+		ID:     e.nextNodeID,
+		Text:   text,
+		Width:  width,
+		Height: height,
+		// X, Y will be set by layout algorithm
+	}
+	e.diagram.Nodes = append(e.diagram.Nodes, node)
+	nodeID := e.nextNodeID
+	e.nextNodeID++
+	e.currentNode = nodeID
+	return nodeID
+}
+
+// ========================================
+// ANIMATION SYSTEM
+// ========================================
+
+// AnimationFrame represents a single frame of animation
+type AnimationFrame struct {
+	Canvas *Canvas
+	Delay  int // milliseconds
+}
+
+// Animation represents a sequence of frames
+type Animation struct {
+	Frames []AnimationFrame
+	Loop   bool
+}
+
+// PlayAnimation renders animation frames with timing
+func PlayAnimation(anim Animation) {
+	PlayAnimationWithLimit(anim, -1) // No limit by default
+}
+
+// PlayAnimationWithLimit renders animation frames with optional cycle limit
+func PlayAnimationWithLimit(anim Animation, maxCycles int) {
+	cycles := 0
+	for i := 0; i < len(anim.Frames); i++ {
+		frame := anim.Frames[i]
+
+		// Clear screen and show frame
+		fmt.Print("\033[2J\033[H") // Clear screen, move cursor to top
+		fmt.Print(frame.Canvas.String())
+
+		// Wait for specified delay
+		if frame.Delay > 0 {
+			time.Sleep(time.Duration(frame.Delay) * time.Millisecond)
+		}
+
+		// Loop back to start if needed
+		if anim.Loop && i == len(anim.Frames)-1 {
+			cycles++
+			if maxCycles > 0 && cycles >= maxCycles {
+				break
+			}
+			i = -1 // Will be incremented to 0
+		}
+	}
+}
+
+// CreateStartupAnimation creates the box-morphing startup sequence
+func CreateStartupAnimation() Animation {
+	width, height := 40, 15
+	frames := []AnimationFrame{}
+
+	// Frame 1: Scattered pieces
+	canvas1 := NewCanvas(width, height)
+	canvas1.Set(5, 3, '╭')
+	canvas1.Set(25, 8, '╮')
+	canvas1.Set(15, 12, '╰')
+	canvas1.Set(30, 2, '╯')
+	canvas1.Set(10, 7, '─')
+	canvas1.Set(20, 5, '│')
+	frames = append(frames, AnimationFrame{Canvas: canvas1, Delay: 300})
+
+	// Frame 2: Pieces moving closer
+	canvas2 := NewCanvas(width, height)
+	canvas2.Set(12, 5, '╭')
+	canvas2.Set(22, 6, '╮')
+	canvas2.Set(13, 9, '╰')
+	canvas2.Set(21, 8, '╯')
+	canvas2.Set(15, 7, '─')
+	canvas2.Set(18, 6, '│')
+	frames = append(frames, AnimationFrame{Canvas: canvas2, Delay: 300})
+
+	// Frame 3: Almost formed box
+	canvas3 := NewCanvas(width, height)
+	canvas3.Set(15, 6, '╭')
+	canvas3.Set(20, 6, '╮')
+	canvas3.Set(15, 8, '╰')
+	canvas3.Set(20, 8, '╯')
+	for x := 16; x < 20; x++ {
+		canvas3.Set(x, 6, '─')
+		canvas3.Set(x, 8, '─')
+	}
+	canvas3.Set(15, 7, '│')
+	canvas3.Set(20, 7, '│')
+	frames = append(frames, AnimationFrame{Canvas: canvas3, Delay: 400})
+
+	// Frame 4: Complete box with eyes appearing
+	canvas4 := NewCanvas(width, height)
+	canvas4.Set(15, 6, '╭')
+	canvas4.Set(20, 6, '╮')
+	canvas4.Set(15, 8, '╰')
+	canvas4.Set(20, 8, '╯')
+	for x := 16; x < 20; x++ {
+		canvas4.Set(x, 6, '─')
+		canvas4.Set(x, 8, '─')
+	}
+	canvas4.Set(15, 7, '│')
+	canvas4.Set(20, 7, '│')
+	// Add eyes
+	canvas4.Set(16, 7, '◉')
+	canvas4.Set(19, 7, '◉')
+	frames = append(frames, AnimationFrame{Canvas: canvas4, Delay: 500})
+
+	// Frame 5: Happy face!
+	canvas5 := NewCanvas(width, height)
+	canvas5.Set(15, 6, '╭')
+	canvas5.Set(20, 6, '╮')
+	canvas5.Set(15, 8, '╰')
+	canvas5.Set(20, 8, '╯')
+	for x := 16; x < 20; x++ {
+		canvas5.Set(x, 6, '─')
+		canvas5.Set(x, 8, '─')
+	}
+	canvas5.Set(15, 7, '│')
+	canvas5.Set(20, 7, '│')
+	// Happy face: ◉‿◉
+	canvas5.Set(16, 7, '◉')
+	canvas5.Set(17, 7, '‿')
+	canvas5.Set(19, 7, '◉')
+	frames = append(frames, AnimationFrame{Canvas: canvas5, Delay: 800})
+
+	// Frame 6: Add "edd" text below
+	canvas6 := NewCanvas(width, height)
+	canvas6.Set(15, 6, '╭')
+	canvas6.Set(20, 6, '╮')
+	canvas6.Set(15, 8, '╰')
+	canvas6.Set(20, 8, '╯')
+	for x := 16; x < 20; x++ {
+		canvas6.Set(x, 6, '─')
+		canvas6.Set(x, 8, '─')
+	}
+	canvas6.Set(15, 7, '│')
+	canvas6.Set(20, 7, '│')
+	canvas6.Set(16, 7, '◉')
+	canvas6.Set(17, 7, '‿')
+	canvas6.Set(19, 7, '◉')
+
+	// "edd" text
+	text := "edd - elegant diagram drawer"
+	startX := (width - len(text)) / 2
+	for i, ch := range text {
+		canvas6.Set(startX+i, 10, ch)
+	}
+	frames = append(frames, AnimationFrame{Canvas: canvas6, Delay: 1000})
+
+	return Animation{Frames: frames, Loop: false}
+}
+
+// CreateThinkingAnimation creates a "processing" animation
+func CreateThinkingAnimation() Animation {
+	width, height := 20, 10
+	frames := []AnimationFrame{}
+
+	// Thinking faces cycle
+	faces := []string{"⊙_⊙", "◉_◉", "⊙_⊙", "-_-"}
+
+	for _, face := range faces {
+		canvas := NewCanvas(width, height)
+
+		// Draw box
+		canvas.Set(8, 3, '╭')
+		canvas.Set(12, 3, '╮')
+		canvas.Set(8, 5, '╰')
+		canvas.Set(12, 5, '╯')
+		for x := 9; x < 12; x++ {
+			canvas.Set(x, 3, '─')
+			canvas.Set(x, 5, '─')
+		}
+		canvas.Set(8, 4, '│')
+		canvas.Set(12, 4, '│')
+
+		// Add face
+		for i, ch := range face {
+			canvas.Set(9+i, 4, ch)
+		}
+
+		frames = append(frames, AnimationFrame{Canvas: canvas, Delay: 400})
+	}
+
+	return Animation{Frames: frames, Loop: true}
+}
+
+// CreateSuccessAnimation creates a celebration animation
+func CreateSuccessAnimation() Animation {
+	width, height := 30, 12
+	frames := []AnimationFrame{}
+
+	// Success sequence
+	celebrations := []struct {
+		face string
+		arms string
+	}{
+		{"◉‿◉", ""},
+		{"◉‿◉", "\\o/"},
+		{"◉▿◉", "\\o/"},
+		{"◉‿◉", "\\o/"},
+	}
+
+	for _, celeb := range celebrations {
+		canvas := NewCanvas(width, height)
+
+		// Center the box
+		centerX := width / 2
+
+		// Draw box
+		canvas.Set(centerX-2, 4, '╭')
+		canvas.Set(centerX+2, 4, '╮')
+		canvas.Set(centerX-2, 6, '╰')
+		canvas.Set(centerX+2, 6, '╯')
+		for x := centerX - 1; x < centerX+2; x++ {
+			canvas.Set(x, 4, '─')
+			canvas.Set(x, 6, '─')
+		}
+		canvas.Set(centerX-2, 5, '│')
+		canvas.Set(centerX+2, 5, '│')
+
+		// Add face
+		for i, ch := range celeb.face {
+			canvas.Set(centerX-1+i, 5, ch)
+		}
+
+		// Add celebration arms if present
+		if celeb.arms != "" {
+			for i, ch := range celeb.arms {
+				canvas.Set(centerX-1+i, 3, ch)
+			}
+		}
+
+		frames = append(frames, AnimationFrame{Canvas: canvas, Delay: 300})
+	}
+
+	return Animation{Frames: frames, Loop: false}
+}
+
 func main() {
-	fmt.Println("edd - elegant diagram drawer")
+	fmt.Println("Starting edd...")
+
+	// Play startup animation
+	startup := CreateStartupAnimation()
+	PlayAnimation(startup)
+
+	fmt.Println("\nPress Enter to meet living edd...")
+	fmt.Scanln()
+
+	fmt.Print("\033[2J\033[H") // Clear screen
+
+	// Demo living character
+	editor := NewEditor()
+
+	fmt.Println("🌟 Meet ed - your living diagram companion!")
+	fmt.Println("Watch him smile, blink, and look around!")
+	fmt.Println()
+	fmt.Println("Press 'i' for Insert Mode, 'c' for Connect Mode")
+	fmt.Println("Press 'q' to quit")
+	fmt.Println()
+
+	editor.StartLivingAnimation()
+
+	// Simple input loop to demo mode changes
+	for {
+		var input string
+		fmt.Print("\n> ")
+		fmt.Scanln(&input)
+
+		switch input {
+		case "i":
+			fmt.Print("\033[2J\033[H")
+			fmt.Println("⚡ INSERT Mode - Focused and ready to type!")
+			fmt.Println("Notice the cursor blinking and focused expression")
+			fmt.Println()
+			fmt.Println("Press 'n' for Normal, 'c' for Connect, 'q' to quit")
+			editor.SetMode(ModeInsert)
+		case "c":
+			fmt.Print("\033[2J\033[H")
+			fmt.Println("🔗 CONNECT Mode - Looking for connections!")
+			fmt.Println("Watch the connection lines extend and retract")
+			fmt.Println()
+			fmt.Println("Press 'n' for Normal, 'i' for Insert, 'q' to quit")
+			editor.SetMode(ModeConnect)
+		case "n":
+			fmt.Print("\033[2J\033[H")
+			fmt.Println("🌟 NORMAL Mode - Happy and patient")
+			fmt.Println("Watch ed smile, blink, and look around!")
+			fmt.Println()
+			fmt.Println("Press 'i' for Insert, 'c' for Connect, 'q' to quit")
+			editor.SetMode(ModeNormal)
+		case "q":
+			editor.StopLivingAnimation()
+			fmt.Println("\nGoodbye from ed! 👋")
+			fmt.Println("Your living companion for diagram creation! 🎭")
+			return
+		default:
+			fmt.Println("Unknown command. Try 'i', 'c', 'n', or 'q'")
+		}
+	}
 }

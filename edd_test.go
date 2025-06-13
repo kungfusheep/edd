@@ -34,7 +34,7 @@ func TestCalculateNodeSize(t *testing.T) {
 			name:      "empty node",
 			text:      []string{},
 			expWidth:  16, // minimum width
-			expHeight: 3, // minimum height
+			expHeight: 3,  // minimum height
 		},
 	}
 
@@ -255,12 +255,16 @@ func TestLayeredLayout(t *testing.T) {
 					{From: 1, To: 2},
 					{From: 2, To: 3},
 					{From: 2, To: 1}, // feedback loop
+					{From: 2, To: 0}, // feedback loop
 				},
 			},
 			expected: `
 ╭──────────────╮    ╭──────────────╮    ╭──────────────╮    ╭──────────────╮
-│    input     ├───▶│   process    ├───▶│   validate   ├───▶│    output    │
-╰──────────────╯    ╰──────────────╯    ╰──────────────╯    ╰──────────────╯`,
+│    input     ├───▶│   process    ├◀──▶┤   validate   ├───▶│    output    │
+╰───────▲──────╯    ╰──────────────╯    ╰───────┬──────╯    ╰──────────────╯
+        │                                       │
+        │                                       │
+        ╰───────────────────────────────────────╯`,
 		},
 	}
 
@@ -281,8 +285,8 @@ func TestLayeredLayout(t *testing.T) {
 				}
 			}
 
-			// Add space for connections
-			canvas := NewCanvas(maxX+20, maxY+10) // More padding for routing
+			// Add space for connections and feedback loops
+			canvas := NewCanvas(maxX+20, maxY+15) // Extra padding for feedback routing
 			canvas.Render(tt.diagram)
 
 			// Compare with expected output
@@ -296,6 +300,72 @@ func TestLayeredLayout(t *testing.T) {
 		})
 	}
 }
+
+// func TestEditor(t *testing.T) {
+// 	t.Run("new editor starts in normal mode", func(t *testing.T) {
+// 		editor := NewEditor()
+// 		if editor.mode != ModeNormal {
+// 			t.Errorf("Expected ModeNormal, got %v", editor.mode)
+// 		}
+// 		if editor.currentNode != -1 {
+// 			t.Errorf("Expected no selected node (-1), got %d", editor.currentNode)
+// 		}
+// 		if editor.nextNodeID != 0 {
+// 			t.Errorf("Expected nextNodeID 0, got %d", editor.nextNodeID)
+// 		}
+// 	})
+//
+// 	t.Run("mode string representation", func(t *testing.T) {
+// 		tests := []struct {
+// 			mode Mode
+// 			want string
+// 		}{
+// 			{ModeNormal, "NORMAL"},
+// 			{ModeInsert, "INSERT"},
+// 			{ModeConnect, "CONNECT"},
+// 			{ModeCommand, "COMMAND"},
+// 		}
+// 		for _, tt := range tests {
+// 			if got := tt.mode.String(); got != tt.want {
+// 				t.Errorf("Mode(%d).String() = %q, want %q", tt.mode, got, tt.want)
+// 			}
+// 		}
+// 	})
+//
+// 	t.Run("set mode", func(t *testing.T) {
+// 		editor := NewEditor()
+// 		editor.SetMode(ModeInsert)
+// 		if editor.mode != ModeInsert {
+// 			t.Errorf("Expected ModeInsert, got %v", editor.mode)
+// 		}
+// 	})
+//
+// 	t.Run("add node", func(t *testing.T) {
+// 		editor := NewEditor()
+// 		nodeID := editor.AddNode([]string{"test"})
+//
+// 		if nodeID != 0 {
+// 			t.Errorf("Expected first node ID to be 0, got %d", nodeID)
+// 		}
+// 		if len(editor.diagram.Nodes) != 1 {
+// 			t.Errorf("Expected 1 node, got %d", len(editor.diagram.Nodes))
+// 		}
+// 		if editor.currentNode != 0 {
+// 			t.Errorf("Expected current node to be 0, got %d", editor.currentNode)
+// 		}
+// 		if editor.nextNodeID != 1 {
+// 			t.Errorf("Expected next node ID to be 1, got %d", editor.nextNodeID)
+// 		}
+//
+// 		node := editor.diagram.Nodes[0]
+// 		if node.ID != 0 {
+// 			t.Errorf("Expected node ID 0, got %d", node.ID)
+// 		}
+// 		if len(node.Text) != 1 || node.Text[0] != "test" {
+// 			t.Errorf("Expected node text ['test'], got %v", node.Text)
+// 		}
+// 	})
+// }
 
 func TestCanvasOperations(t *testing.T) {
 	t.Run("set and get", func(t *testing.T) {
@@ -323,4 +393,3 @@ func TestCanvasOperations(t *testing.T) {
 		}
 	})
 }
-
