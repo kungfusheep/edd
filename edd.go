@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -1328,9 +1330,9 @@ func NewEditor() *Editor {
 		mode:             ModeNormal,
 		currentNode:      -1, // No node selected initially
 		nextNodeID:       0,
-		canvas:           NewCanvas(120, 40), // Default size
-		modeIndicator:    NewCanvas(15, 5),   // Small indicator box
-		eddCharacter:     NewEddCharacter(),  // Meet ed!
+		canvas:           NewCanvas(80, 30), // Reasonable size
+		modeIndicator:    NewCanvas(15, 5),  // Small indicator box
+		eddCharacter:     NewEddCharacter(), // Meet ed!
 		animationRunning: false,
 	}
 }
@@ -2058,201 +2060,156 @@ func CreateSuccessAnimation() Animation {
 }
 
 // ========================================
-// TERMINAL UI FRAMEWORK
+// SIMPLE TCELL UI
 // ========================================
-
-// enableRawMode switches terminal to raw mode for immediate key handling
-func enableRawMode() {
-	// This would typically use a package like golang.org/x/term
-	// For now, we'll use a simpler approach
-}
-
-// disableRawMode restores normal terminal mode
-func disableRawMode() {
-	// Restore terminal
-}
-
-// clearScreen clears the terminal screen
-func clearScreen() {
-	fmt.Print("\033[2J\033[H")
-}
-
-// moveCursor moves cursor to specified position
-func moveCursor(x, y int) {
-	fmt.Printf("\033[%d;%dH", y, x)
-}
 
 // RunEditor starts the main editor interface
 func (e *Editor) RunEditor() error {
 	// Start living character animation
 	e.StartLivingAnimation()
 	defer e.StopLivingAnimation()
-	
-	// Clear screen and show initial state
-	clearScreen()
+
+	// Initial render
 	e.Render()
-	
-	// Main editor loop
+
+	// Simple input loop
+	reader := bufio.NewReader(os.Stdin)
 	for {
-		// Get keyboard input (simplified for now)
-		var input string
-		fmt.Print("\033[50;1H> ") // Position input at bottom
-		fmt.Scanln(&input)
-		
-		if len(input) == 0 {
-			continue
+		fmt.Print("\n> ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return err
 		}
-		
-		// Handle input based on current mode
-		switch e.mode {
-		case ModeNormal:
-			if e.handleNormalInput(input[0]) {
-				return nil // Exit requested
-			}
-		case ModeInsert:
-			if e.handleInsertInput(input) {
-				return nil
-			}
-		case ModeConnect:
-			if e.handleConnectInput(input[0]) {
-				return nil
-			}
+
+		input = strings.TrimSpace(input)
+		if e.handleCommand(input) {
+			return nil // Exit requested
 		}
-		
-		// Re-render after input
+
 		e.Render()
 	}
 }
 
-// handleNormalInput processes keys in Normal mode
-func (e *Editor) handleNormalInput(key byte) bool {
-	switch key {
-	case 'q':
+// handleCommand processes simple text commands
+func (e *Editor) handleCommand(cmd string) bool {
+	switch cmd {
+	case "q", "quit":
 		return true // Exit
-	case 'a':
+	case "a", "add":
 		e.SetMode(ModeInsert)
-		e.startNodeCreation()
-	case 'c':
+		e.promptForNodeText()
+	case "c", "connect":
 		e.SetMode(ModeConnect)
-	case ':':
-		e.SetMode(ModeCommand)
-	}
-	return false
-}
-
-// handleInsertInput processes input in Insert mode
-func (e *Editor) handleInsertInput(input string) bool {
-	if input == "ESC" || input == "esc" {
+		e.promptForConnection()
+	case "n", "normal":
 		e.SetMode(ModeNormal)
-		return false
-	}
-	
-	// Handle text input for node creation
-	e.addTextToCurrentNode(input)
-	return false
-}
-
-// handleConnectInput processes keys in Connect mode
-func (e *Editor) handleConnectInput(key byte) bool {
-	switch key {
-	case 27: // ESC
-		e.SetMode(ModeNormal)
-	}
-	return false
-}
-
-// Render draws the entire editor interface
-func (e *Editor) Render() {
-	// Clear screen completely
-	clearScreen()
-	
-	// Clear the main canvas
-	e.canvas.Clear()
-	
-	// Render the diagram on the canvas
-	e.canvas.Render(e.diagram)
-	
-	// Display the main canvas
-	moveCursor(1, 1)
-	fmt.Print(e.canvas.String())
-	
-	// Display ed character in bottom-left corner
-	moveCursor(1, 42)
-	fmt.Print(e.modeIndicator.String())
-	
-	// Display status line at bottom
-	e.renderStatusLine()
-}
-
-// renderStatusLine shows current mode and instructions
-func (e *Editor) renderStatusLine() {
-	moveCursor(20, 45)
-	fmt.Printf("Nodes: %d | Connections: %d", 
-		len(e.diagram.Nodes), len(e.diagram.Connections))
-}
-
-// Node creation workflow
-func (e *Editor) startNodeCreation() {
-	// Create a new node at a default position
-	// This will be improved with proper positioning later
-	e.createNewNode()
-}
-
-func (e *Editor) createNewNode() {
-	// Calculate position for new node (simple placement for now)
-	x := 10 + (len(e.diagram.Nodes) * 20) // Space nodes horizontally
-	y := 10
-	
-	// Create the node with placeholder text
-	node := Node{
-		ID:     e.nextNodeID,
-		X:      x,
-		Y:      y,
-		Width:  16, // Default width
-		Height: 3,  // Default height
-		Text:   []string{"New Node"},
-	}
-	
-	e.diagram.Nodes = append(e.diagram.Nodes, node)
-	e.currentNode = e.nextNodeID
-	e.nextNodeID++
-}
-
-func (e *Editor) addTextToCurrentNode(text string) {
-	if e.currentNode >= 0 {
-		// Find the node with the current ID
-		for i := range e.diagram.Nodes {
-			if e.diagram.Nodes[i].ID == e.currentNode {
-				// Update the node's text
-				e.diagram.Nodes[i].Text = []string{text}
-				
-				// Recalculate node size
-				width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
-				e.diagram.Nodes[i].Width = width
-				e.diagram.Nodes[i].Height = height
-				break
-			}
+	default:
+		if strings.Contains(cmd, ",") && e.mode == ModeConnect {
+			// Handle connection format "0,1"
+			e.handleConnectionInput(cmd)
+			e.SetMode(ModeNormal)
+		} else if e.mode == ModeInsert {
+			// Handle node text input
+			e.AddNode([]string{cmd})
+			e.SetMode(ModeNormal)
 		}
 	}
+	return false
+}
+
+// promptForNodeText shows prompt for node creation
+func (e *Editor) promptForNodeText() {
+	fmt.Println("Enter node text:")
+}
+
+// promptForConnection shows prompt for connection creation
+func (e *Editor) promptForConnection() {
+	fmt.Println("Enter connection (from,to):")
+	for i, node := range e.diagram.Nodes {
+		fmt.Printf("  %d: %s\n", node.ID, strings.Join(node.Text, " "))
+		_ = i
+	}
+}
+
+// handleConnectionInput processes connection input like "0,1"
+func (e *Editor) handleConnectionInput(input string) {
+	parts := strings.Split(input, ",")
+	if len(parts) != 2 {
+		fmt.Println("Invalid format. Use: from,to (e.g., 0,1)")
+		return
+	}
+
+	var from, to int
+	if _, err := fmt.Sscanf(parts[0], "%d", &from); err != nil {
+		fmt.Println("Invalid from node ID")
+		return
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &to); err != nil {
+		fmt.Println("Invalid to node ID")
+		return
+	}
+
+	// Add the connection
+	conn := Connection{From: from, To: to}
+	e.diagram.Connections = append(e.diagram.Connections, conn)
+	fmt.Printf("Connected node %d to node %d\n", from, to)
+}
+
+// Render draws the interface simply
+func (e *Editor) Render() {
+	// Clear screen
+	fmt.Print("\033[2J\033[H")
+
+	// Clear canvas
+	e.canvas.Clear()
+
+	// Render diagram
+	e.canvas.Render(e.diagram)
+
+	// Display main canvas
+	fmt.Print(e.canvas.String())
+	fmt.Print("\n\n")
+
+	// Display ed character with color
+	fmt.Print("\033[33m") // Yellow
+	fmt.Print(e.modeIndicator.String())
+	fmt.Print("\033[0m") // Reset
+	fmt.Print("\n")
+
+	// Status line
+	fmt.Printf("Nodes: %d | Connections: %d\n", 
+		len(e.diagram.Nodes), len(e.diagram.Connections))
+
+	// Mode-specific help
+	var helpText string
+	switch e.mode {
+	case ModeNormal:
+		helpText = "Commands: 'a' add node, 'c' connect nodes, 'q' quit"
+	case ModeInsert:
+		helpText = "Insert mode: Enter node text"
+	case ModeConnect:
+		helpText = "Connect mode: Enter 'from,to' (e.g., '0,1')"
+	}
+	fmt.Printf("\033[36m%s\033[0m\n", helpText) // Cyan
 }
 
 func main() {
 	fmt.Println("Starting edd...")
-	
+
 	// Play startup animation
 	startup := CreateStartupAnimation()
 	PlayAnimation(startup)
-	
+
 	// Start the editor
 	editor := NewEditor()
-	
+
 	fmt.Println("\nStarting editor...")
 	time.Sleep(1 * time.Second)
-	
+
 	err := editor.RunEditor()
 	if err != nil {
 		fmt.Printf("Editor error: %v\n", err)
 	}
-	
+
 	fmt.Println("\nGoodbye from ed! 👋")
 }
