@@ -1238,7 +1238,6 @@ type Mode int
 const (
 	ModeNormal Mode = iota
 	ModeInsert
-	ModeConnect
 	ModeCommand
 	ModeSelectFrom // Selecting source node for connection
 	ModeSelectTo   // Selecting target node for connection
@@ -1251,8 +1250,6 @@ func (m Mode) String() string {
 		return "NORMAL"
 	case ModeInsert:
 		return "INSERT"
-	case ModeConnect:
-		return "CONNECT"
 	case ModeCommand:
 		return "COMMAND"
 	case ModeSelectFrom:
@@ -1318,9 +1315,14 @@ func NewEddCharacter() *EddCharacter {
 		"○‿ ○", "-‿ -", "○‿ ○", "○‿ ○", "◉‿ ◉", "○‿ ○", // Full blink and focus burst
 	}
 
-	ed.idleAnimations[ModeConnect] = []string{
-		"⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "◉‿ ◉", "⊙‿ ⊙", // Eye scanning with happiness
-		"⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙", "⊙‿ ⊙",
+	ed.idleAnimations[ModeSelectFrom] = []string{
+		"◉‿ ◉", "◎‿ ◎", "◉‿ ◉", "◎‿ ◎", "◉‿ ◉", "◎‿ ◎", // Eyes darting between nodes
+		"◎‿ ◎", "-‿ -", "◎‿ ◎", "◎‿ ◎", "◎‿ ◎", "◎‿ ◎", // Quick blink while scanning
+	}
+
+	ed.idleAnimations[ModeSelectTo] = []string{
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Focused on target selection
+		"◉‿ ◉", "◉‿ ◉", "-‿ -", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Focused with quick blink
 	}
 
 	ed.idleAnimations[ModeCommand] = []string{
@@ -1523,7 +1525,7 @@ func (edd *EddCharacter) GetCurrentFrame(mode Mode) string {
 func (edd *EddCharacter) GetConnections(mode Mode) map[string]rune {
 	connections := make(map[string]rune)
 
-	if mode == ModeConnect {
+	if mode == ModeSelectFrom || mode == ModeSelectTo {
 		// Animate connection lines extending/retracting
 		intensity := edd.currentFrame % 4
 		if intensity >= 1 {
@@ -1561,8 +1563,6 @@ func (e *Editor) UpdateModeIndicator() {
 		e.DrawNormalModeIndicator()
 	case ModeInsert:
 		e.DrawInsertModeIndicator()
-	case ModeConnect:
-		e.DrawConnectModeIndicator()
 	case ModeCommand:
 		e.DrawCommandModeIndicator()
 	}
@@ -1694,7 +1694,7 @@ func (e *Editor) PlayModeTransition(fromMode, toMode Mode) {
 	} else if fromMode == ModeInsert && toMode == ModeNormal {
 		// Insert → Normal: Cursor fades, eyes relax
 		frames = e.CreateInsertToNormalTransition()
-	} else if toMode == ModeConnect {
+	} else if toMode == ModeSelectFrom || toMode == ModeSelectTo {
 		// Any → Connect: Lines extend outward
 		frames = e.CreateConnectModeTransition()
 	} else {
@@ -2254,8 +2254,6 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleNormalKey(key)
 	case ModeInsert:
 		return e.handleInsertKey(key)
-	case ModeConnect:
-		return e.handleConnectKey(key)
 	case ModeSelectFrom, ModeSelectTo:
 		return e.handleSelectKey(key)
 	}
@@ -2286,7 +2284,9 @@ func (e *Editor) handleInsertKey(key rune) bool {
 	case 127, 8: // Backspace or Delete
 		e.handleBackspace()
 	case 13, 10: // Enter
-		e.SetMode(ModeNormal)
+		// Create another new node and stay in insert mode
+		nodeID := e.AddNode([]string{""})
+		e.currentNode = nodeID
 	case 3: // Ctrl+C
 		return true
 	default:
@@ -2297,16 +2297,6 @@ func (e *Editor) handleInsertKey(key rune) bool {
 	return false
 }
 
-// handleConnectKey processes keys in connect mode (legacy)
-func (e *Editor) handleConnectKey(key rune) bool {
-	switch key {
-	case 27: // ESC
-		e.SetMode(ModeNormal)
-	case 3: // Ctrl+C
-		return true
-	}
-	return false
-}
 
 // handleSelectKey processes keys in selection modes
 func (e *Editor) handleSelectKey(key rune) bool {
@@ -2457,9 +2447,7 @@ func (e *Editor) Render() {
 	case ModeNormal:
 		helpText = "Normal: 'a' add node, 'c' connect, 'q' quit"
 	case ModeInsert:
-		helpText = "Insert: Type text, ESC/Enter to finish"
-	case ModeConnect:
-		helpText = "Connect: Select node numbers, ESC to cancel"
+		helpText = "Insert: Type text, Enter for new node, ESC to finish"
 	case ModeSelectFrom:
 		helpText = "Select FROM node: Press letter on node, ESC to cancel"
 	case ModeSelectTo:
