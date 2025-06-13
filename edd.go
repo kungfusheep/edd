@@ -881,6 +881,32 @@ func (c *Canvas) Render(diagram Diagram) {
 	layout := NewLayeredLayout()
 	positioned := layout.CalculateLayout(diagram.Nodes, diagram.Connections)
 
+	// Calculate required canvas size based on positioned nodes
+	maxX, maxY := 0, 0
+	for _, node := range positioned {
+		if node.X+node.Width > maxX {
+			maxX = node.X + node.Width
+		}
+		if node.Y+node.Height > maxY {
+			maxY = node.Y + node.Height
+		}
+	}
+
+	// Add extra space for connections and feedback loops
+	requiredWidth := maxX + 20
+	requiredHeight := maxY + 15
+
+	// Resize canvas if needed
+	if requiredWidth > c.width || requiredHeight > c.height {
+		c.width = requiredWidth
+		c.height = requiredHeight
+		c.cells = make([]rune, c.width*c.height)
+		// Fill with spaces
+		for i := range c.cells {
+			c.cells[i] = ' '
+		}
+	}
+
 	// Draw all nodes in their calculated positions
 	for _, node := range positioned {
 		c.DrawBox(node)
@@ -1025,27 +1051,109 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		result[i].Height = height
 	}
 
-	// Step 2: Build adjacency list for topological sort
+	// Step 2: Find connected components
+	components := l.findConnectedComponents(nodes, connections)
+	
+	// Step 3: Layout each component separately and position side-by-side
+	currentX := 0
+	for _, component := range components {
+		componentWidth := l.layoutComponent(component, connections, nodeMap, currentX)
+		currentX += componentWidth + 4 // Add spacing between components
+	}
+	
+	return result
+}
+
+// findConnectedComponents identifies separate subgraphs using DFS
+func (l *LayeredLayout) findConnectedComponents(nodes []Node, connections []Connection) [][]int {
+	// Build bidirectional adjacency list (undirected graph for component detection)
+	adjacent := make(map[int][]int)
+	for _, node := range nodes {
+		adjacent[node.ID] = []int{}
+	}
+	for _, conn := range connections {
+		adjacent[conn.From] = append(adjacent[conn.From], conn.To)
+		adjacent[conn.To] = append(adjacent[conn.To], conn.From)
+	}
+	
+	// Find components using DFS
+	visited := make(map[int]bool)
+	components := [][]int{}
+	
+	for _, node := range nodes {
+		if !visited[node.ID] {
+			component := []int{}
+			stack := []int{node.ID}
+			
+			for len(stack) > 0 {
+				current := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				
+				if visited[current] {
+					continue
+				}
+				visited[current] = true
+				component = append(component, current)
+				
+				for _, neighbor := range adjacent[current] {
+					if !visited[neighbor] {
+						stack = append(stack, neighbor)
+					}
+				}
+			}
+			
+			// Sort component by ID for consistent ordering
+			sort.Slice(component, func(i, j int) bool {
+				return component[i] < component[j]
+			})
+			
+			components = append(components, component)
+		}
+	}
+	
+	return components
+}
+
+// layoutComponent lays out a single connected component at the given X offset
+func (l *LayeredLayout) layoutComponent(componentNodes []int, connections []Connection, nodeMap map[int]*Node, startX int) int {
+	// Filter connections for this component only
+	componentSet := make(map[int]bool)
+	for _, nodeID := range componentNodes {
+		componentSet[nodeID] = true
+	}
+	
+	componentConnections := []Connection{}
+	for _, conn := range connections {
+		if componentSet[conn.From] && componentSet[conn.To] {
+			componentConnections = append(componentConnections, conn)
+		}
+	}
+	
+	// Use the original layout algorithm for this component
+	return l.layoutSingleComponent(componentNodes, componentConnections, nodeMap, startX)
+}
+
+// layoutSingleComponent applies the original algorithm to a single component
+func (l *LayeredLayout) layoutSingleComponent(nodeIDs []int, connections []Connection, nodeMap map[int]*Node, startX int) int {
+	// Build adjacency list for topological sort
 	graph := make(map[int][]int)
 	inDegree := make(map[int]int)
-	backwardEdges := make(map[string]bool) // Track backward edges
+	backwardEdges := make(map[string]bool)
 
-	for _, node := range nodes {
-		graph[node.ID] = []int{}
-		inDegree[node.ID] = 0
+	for _, nodeID := range nodeIDs {
+		graph[nodeID] = []int{}
+		inDegree[nodeID] = 0
 	}
 
-	// First pass: identify backward edges (edges that create cycles)
-	// A simple heuristic: if To < From, it's likely a backward edge
+	// First pass: identify backward edges
 	for _, conn := range connections {
 		if conn.To < conn.From {
-			// This is likely a feedback/backward connection
 			key := fmt.Sprintf("%d->%d", conn.From, conn.To)
 			backwardEdges[key] = true
 		}
 	}
 
-	// Second pass: build graph excluding backward edges for topological sort
+	// Second pass: build graph excluding backward edges
 	for _, conn := range connections {
 		key := fmt.Sprintf("%d->%d", conn.From, conn.To)
 		if !backwardEdges[key] {
@@ -1054,15 +1162,15 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		}
 	}
 
-	// Step 3: Topological sort to determine columns (left-to-right dependency levels)
+	// Topological sort to determine columns
 	columns := [][]int{}
 	remaining := make(map[int]bool)
-	for _, node := range nodes {
-		remaining[node.ID] = true
+	for _, nodeID := range nodeIDs {
+		remaining[nodeID] = true
 	}
 
 	for len(remaining) > 0 {
-		// Find nodes with no incoming edges (can be placed in current column)
+		// Find nodes with no incoming edges
 		candidates := []int{}
 		for nodeID := range remaining {
 			if inDegree[nodeID] == 0 {
@@ -1071,14 +1179,14 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		}
 
 		if len(candidates) == 0 {
-			// Cycle detected - break it by taking any remaining node
+			// Cycle detected - break it
 			for nodeID := range remaining {
 				candidates = append(candidates, nodeID)
 				break
 			}
 		}
 
-		// Sort candidates by ID for consistent ordering
+		// Sort by ID for consistent ordering
 		sort.Slice(candidates, func(i, j int) bool {
 			return candidates[i] < candidates[j]
 		})
@@ -1094,7 +1202,7 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		}
 	}
 
-	// Step 4: Calculate column widths (maximum width of all nodes in each column)
+	// Calculate column widths
 	columnWidths := make([]int, len(columns))
 	for colIdx, column := range columns {
 		maxWidth := 0
@@ -1107,22 +1215,22 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		columnWidths[colIdx] = maxWidth
 	}
 
-	// Step 5: Assign X positions to columns
+	// Assign X positions to columns (offset by startX)
 	columnStartX := make([]int, len(columns))
-	currentX := 0
+	currentX := startX
 	for colIdx := range columns {
 		columnStartX[colIdx] = currentX
 		currentX += columnWidths[colIdx] + l.NodeSpacing
 	}
 
-	// Step 6: Assign Y positions within each column (center-aligned, evenly distributed)
+	// Assign Y positions within each column
 	for colIdx, column := range columns {
 		if len(column) == 1 {
 			// Single node - center vertically
 			nodeID := column[0]
 			node := nodeMap[nodeID]
 			node.X = columnStartX[colIdx]
-			node.Y = 0 // Start at top for now
+			node.Y = 0 // Start at top
 		} else {
 			// Multiple nodes - distribute vertically
 			for nodeIdx, nodeID := range column {
@@ -1133,7 +1241,8 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 		}
 	}
 
-	return result
+	// Return the width of this component
+	return currentX - startX
 }
 
 func SimpleOrthogonalRoute(from, to Node) []Point {
