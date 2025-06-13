@@ -1240,6 +1240,8 @@ const (
 	ModeInsert
 	ModeConnect
 	ModeCommand
+	ModeSelectFrom // Selecting source node for connection
+	ModeSelectTo   // Selecting target node for connection
 )
 
 // String returns the mode name for display
@@ -1253,6 +1255,10 @@ func (m Mode) String() string {
 		return "CONNECT"
 	case ModeCommand:
 		return "COMMAND"
+	case ModeSelectFrom:
+		return "SELECT FROM"
+	case ModeSelectTo:
+		return "SELECT TO"
 	default:
 		return "UNKNOWN"
 	}
@@ -1268,6 +1274,11 @@ type Editor struct {
 	modeIndicator    *Canvas       // Small canvas for mode animation
 	eddCharacter     *EddCharacter // The living edd character
 	animationRunning bool          // Whether the living animation is active
+	
+	// Jump selection state
+	jumpActive       bool
+	jumpLabels       map[int]rune // Map from node ID to jump label
+	connectionFrom   int          // Source node for connection (when in SelectTo mode)
 }
 
 // EddCharacter represents the living animated character
@@ -1334,6 +1345,9 @@ func NewEditor() *Editor {
 		modeIndicator:    NewCanvas(15, 5),  // Small indicator box
 		eddCharacter:     NewEddCharacter(), // Meet ed!
 		animationRunning: false,
+		aceJumpActive:    false,
+		aceJumpLabels:    make(map[int]rune),
+		connectionFrom:   -1,
 	}
 }
 
@@ -1824,6 +1838,99 @@ func (e *Editor) AddNode(text []string) int {
 }
 
 // ========================================
+// ACE-JUMP SELECTION SYSTEM
+// ========================================
+
+// startAceJump activates ace-jump mode and assigns labels to nodes
+func (e *Editor) startAceJump() {
+	if len(e.diagram.Nodes) == 0 {
+		return // No nodes to select
+	}
+	
+	e.aceJumpActive = true
+	e.aceJumpLabels = make(map[int]rune)
+	
+	// Generate labels using home row keys first, then other letters
+	labels := "asdfghjklqwertyuiopzxcvbnm"
+	labelIndex := 0
+	
+	for _, node := range e.diagram.Nodes {
+		if labelIndex < len(labels) {
+			e.aceJumpLabels[node.ID] = rune(labels[labelIndex])
+			labelIndex++
+		}
+	}
+}
+
+// stopAceJump deactivates ace-jump mode
+func (e *Editor) stopAceJump() {
+	e.aceJumpActive = false
+	e.aceJumpLabels = make(map[int]rune)
+}
+
+// handleAceJumpSelection processes ace-jump character selection
+func (e *Editor) handleAceJumpSelection(key rune) bool {
+	// Find node with this label
+	for nodeID, label := range e.aceJumpLabels {
+		if label == key {
+			return e.selectNode(nodeID)
+		}
+	}
+	return false // Key not found
+}
+
+// selectNode handles node selection based on current mode
+func (e *Editor) selectNode(nodeID int) bool {
+	switch e.mode {
+	case ModeSelectFrom:
+		// Selected source node for connection
+		e.connectionFrom = nodeID
+		e.SetMode(ModeSelectTo)
+		e.startAceJump() // Start new ace-jump for target selection
+		return false
+		
+	case ModeSelectTo:
+		// Selected target node, create connection
+		if e.connectionFrom >= 0 {
+			conn := Connection{From: e.connectionFrom, To: nodeID}
+			e.diagram.Connections = append(e.diagram.Connections, conn)
+			fmt.Printf("Connected node %d to node %d\n", e.connectionFrom, nodeID)
+		}
+		e.stopAceJump()
+		e.SetMode(ModeNormal)
+		e.connectionFrom = -1
+		return false
+		
+	default:
+		// Just select the node
+		e.currentNode = nodeID
+		e.stopAceJump()
+		e.SetMode(ModeNormal)
+		return false
+	}
+}
+
+// renderAceJumpLabels overlays ace-jump labels on nodes
+func (e *Editor) renderAceJumpLabels() {
+	// Get positioned nodes
+	layout := NewLayeredLayout()
+	positioned := layout.CalculateLayout(e.diagram.Nodes, e.diagram.Connections)
+	
+	// Print yellow labels directly after the canvas
+	fmt.Print("\033[s") // Save cursor position
+	for _, node := range positioned {
+		if label, exists := e.aceJumpLabels[node.ID]; exists {
+			// Position cursor and print yellow label
+			labelX := node.X + 1
+			labelY := node.Y
+			fmt.Printf("\033[%d;%dH\033[33m%c\033[0m", labelY+1, labelX+1, label)
+		}
+	}
+	fmt.Print("\033[u") // Restore cursor position
+}
+
+
+// ========================================
 // ANIMATION SYSTEM
 // ========================================
 
@@ -2137,6 +2244,11 @@ func (e *Editor) readKey() (rune, error) {
 
 // handleKey processes single key presses
 func (e *Editor) handleKey(key rune) bool {
+	// Handle ace-jump mode first
+	if e.aceJumpActive {
+		return e.handleAceJumpKey(key)
+	}
+	
 	switch e.mode {
 	case ModeNormal:
 		return e.handleNormalKey(key)
@@ -2144,6 +2256,8 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleInsertKey(key)
 	case ModeConnect:
 		return e.handleConnectKey(key)
+	case ModeSelectFrom, ModeSelectTo:
+		return e.handleSelectKey(key)
 	}
 	return false
 }
@@ -2158,7 +2272,8 @@ func (e *Editor) handleNormalKey(key rune) bool {
 		nodeID := e.AddNode([]string{""}) // Create empty node for editing
 		e.currentNode = nodeID
 	case 'c':
-		e.SetMode(ModeConnect)
+		e.SetMode(ModeSelectFrom)
+		e.startAceJump()
 	}
 	return false
 }
@@ -2182,16 +2297,42 @@ func (e *Editor) handleInsertKey(key rune) bool {
 	return false
 }
 
-// handleConnectKey processes keys in connect mode
+// handleConnectKey processes keys in connect mode (legacy)
 func (e *Editor) handleConnectKey(key rune) bool {
 	switch key {
 	case 27: // ESC
 		e.SetMode(ModeNormal)
 	case 3: // Ctrl+C
 		return true
-	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		// For now, just go back to normal - we'll implement proper selection later
+	}
+	return false
+}
+
+// handleSelectKey processes keys in selection modes
+func (e *Editor) handleSelectKey(key rune) bool {
+	switch key {
+	case 27: // ESC
+		e.stopAceJump()
 		e.SetMode(ModeNormal)
+		e.connectionFrom = -1
+	case 3: // Ctrl+C
+		return true
+	}
+	return false
+}
+
+// handleAceJumpKey processes keys when ace-jump is active
+func (e *Editor) handleAceJumpKey(key rune) bool {
+	switch key {
+	case 27: // ESC
+		e.stopAceJump()
+		e.SetMode(ModeNormal)
+		e.connectionFrom = -1
+	case 3: // Ctrl+C
+		return true
+	default:
+		// Try to select node with this key
+		return e.handleAceJumpSelection(key)
 	}
 	return false
 }
@@ -2292,6 +2433,12 @@ func (e *Editor) Render() {
 
 	// Display main canvas
 	fmt.Print(e.canvas.String())
+	
+	// Add ace-jump labels if active (overlay on top)
+	if e.aceJumpActive {
+		e.renderAceJumpLabels()
+	}
+	
 	fmt.Print("\n\n")
 
 	// Display ed character with color
@@ -2313,6 +2460,13 @@ func (e *Editor) Render() {
 		helpText = "Insert: Type text, ESC/Enter to finish"
 	case ModeConnect:
 		helpText = "Connect: Select node numbers, ESC to cancel"
+	case ModeSelectFrom:
+		helpText = "Select FROM node: Press letter on node, ESC to cancel"
+	case ModeSelectTo:
+		helpText = "Select TO node: Press letter on node, ESC to cancel"
+	}
+	if e.aceJumpActive {
+		helpText += " | Ace-jump active: Press highlighted letters"
 	}
 	fmt.Printf("\033[36m%s\033[0m\n", helpText) // Cyan
 }
