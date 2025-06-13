@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -2069,20 +2069,23 @@ func (e *Editor) RunEditor() error {
 	e.StartLivingAnimation()
 	defer e.StopLivingAnimation()
 
+	// Set terminal to raw mode for single-key input
+	if err := e.setRawMode(); err != nil {
+		return err
+	}
+	defer e.restoreTerminal()
+
 	// Initial render
 	e.Render()
 
-	// Simple input loop
-	reader := bufio.NewReader(os.Stdin)
+	// Single-key input loop
 	for {
-		fmt.Print("\n> ")
-		input, err := reader.ReadString('\n')
+		key, err := e.readKey()
 		if err != nil {
 			return err
 		}
 
-		input = strings.TrimSpace(input)
-		if e.handleCommand(input) {
+		if e.handleKey(key) {
 			return nil // Exit requested
 		}
 
@@ -2090,29 +2093,87 @@ func (e *Editor) RunEditor() error {
 	}
 }
 
-// handleCommand processes simple text commands
-func (e *Editor) handleCommand(cmd string) bool {
-	switch cmd {
-	case "q", "quit":
+// setRawMode puts terminal into raw mode for single-key input
+func (e *Editor) setRawMode() error {
+	cmd := exec.Command("stty", "-echo", "-icanon")
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
+// restoreTerminal restores normal terminal mode
+func (e *Editor) restoreTerminal() {
+	cmd := exec.Command("stty", "echo", "icanon")
+	cmd.Stdin = os.Stdin
+	cmd.Run()
+}
+
+// readKey reads a single key press
+func (e *Editor) readKey() (rune, error) {
+	buffer := make([]byte, 1)
+	_, err := os.Stdin.Read(buffer)
+	if err != nil {
+		return 0, err
+	}
+	return rune(buffer[0]), nil
+}
+
+// handleKey processes single key presses
+func (e *Editor) handleKey(key rune) bool {
+	switch e.mode {
+	case ModeNormal:
+		return e.handleNormalKey(key)
+	case ModeInsert:
+		return e.handleInsertKey(key)
+	case ModeConnect:
+		return e.handleConnectKey(key)
+	}
+	return false
+}
+
+// handleNormalKey processes keys in normal mode
+func (e *Editor) handleNormalKey(key rune) bool {
+	switch key {
+	case 'q', 3: // q or Ctrl+C
 		return true // Exit
-	case "a", "add":
+	case 'a':
 		e.SetMode(ModeInsert)
-		e.promptForNodeText()
-	case "c", "connect":
+		nodeID := e.AddNode([]string{""}) // Create empty node for editing
+		e.currentNode = nodeID
+	case 'c':
 		e.SetMode(ModeConnect)
-		e.promptForConnection()
-	case "n", "normal":
+	}
+	return false
+}
+
+// handleInsertKey processes keys in insert mode
+func (e *Editor) handleInsertKey(key rune) bool {
+	switch key {
+	case 27: // ESC
 		e.SetMode(ModeNormal)
+	case 127, 8: // Backspace or Delete
+		e.handleBackspace()
+	case 13, 10: // Enter
+		e.SetMode(ModeNormal)
+	case 3: // Ctrl+C
+		return true
 	default:
-		if strings.Contains(cmd, ",") && e.mode == ModeConnect {
-			// Handle connection format "0,1"
-			e.handleConnectionInput(cmd)
-			e.SetMode(ModeNormal)
-		} else if e.mode == ModeInsert {
-			// Handle node text input
-			e.AddNode([]string{cmd})
-			e.SetMode(ModeNormal)
+		if key >= 32 && key <= 126 { // Printable characters
+			e.addCharToCurrentNode(key)
 		}
+	}
+	return false
+}
+
+// handleConnectKey processes keys in connect mode
+func (e *Editor) handleConnectKey(key rune) bool {
+	switch key {
+	case 27: // ESC
+		e.SetMode(ModeNormal)
+	case 3: // Ctrl+C
+		return true
+	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		// For now, just go back to normal - we'll implement proper selection later
+		e.SetMode(ModeNormal)
 	}
 	return false
 }
@@ -2155,6 +2216,51 @@ func (e *Editor) handleConnectionInput(input string) {
 	fmt.Printf("Connected node %d to node %d\n", from, to)
 }
 
+// addCharToCurrentNode adds a character to the current node's text
+func (e *Editor) addCharToCurrentNode(ch rune) {
+	if e.currentNode >= 0 {
+		// Find the node with the current ID
+		for i := range e.diagram.Nodes {
+			if e.diagram.Nodes[i].ID == e.currentNode {
+				// Add character to the first line of text
+				if len(e.diagram.Nodes[i].Text) == 0 {
+					e.diagram.Nodes[i].Text = []string{string(ch)}
+				} else {
+					e.diagram.Nodes[i].Text[0] += string(ch)
+				}
+				
+				// Recalculate node size
+				width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
+				e.diagram.Nodes[i].Width = width
+				e.diagram.Nodes[i].Height = height
+				break
+			}
+		}
+	}
+}
+
+// handleBackspace removes the last character from current node's text
+func (e *Editor) handleBackspace() {
+	if e.currentNode >= 0 {
+		// Find the node with the current ID
+		for i := range e.diagram.Nodes {
+			if e.diagram.Nodes[i].ID == e.currentNode {
+				// Remove last character from the first line of text
+				if len(e.diagram.Nodes[i].Text) > 0 && len(e.diagram.Nodes[i].Text[0]) > 0 {
+					text := e.diagram.Nodes[i].Text[0]
+					e.diagram.Nodes[i].Text[0] = text[:len(text)-1]
+					
+					// Recalculate node size
+					width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
+					e.diagram.Nodes[i].Width = width
+					e.diagram.Nodes[i].Height = height
+				}
+				break
+			}
+		}
+	}
+}
+
 // Render draws the interface simply
 func (e *Editor) Render() {
 	// Clear screen
@@ -2184,11 +2290,11 @@ func (e *Editor) Render() {
 	var helpText string
 	switch e.mode {
 	case ModeNormal:
-		helpText = "Commands: 'a' add node, 'c' connect nodes, 'q' quit"
+		helpText = "Normal: 'a' add node, 'c' connect, 'q' quit"
 	case ModeInsert:
-		helpText = "Insert mode: Enter node text"
+		helpText = "Insert: Type text, ESC/Enter to finish"
 	case ModeConnect:
-		helpText = "Connect mode: Enter 'from,to' (e.g., '0,1')"
+		helpText = "Connect: Select node numbers, ESC to cancel"
 	}
 	fmt.Printf("\033[36m%s\033[0m\n", helpText) // Cyan
 }
