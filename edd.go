@@ -2542,6 +2542,11 @@ func CreateSuccessAnimation() Animation {
 
 // RunEditor starts the main editor interface
 func (e *Editor) RunEditor() error {
+	// Ensure cursor is restored on any exit
+	defer func() {
+		fmt.Print("\033[?25h") // Show cursor
+	}()
+
 	// Start living character animation
 	e.StartLivingAnimation()
 	defer e.StopLivingAnimation()
@@ -2552,9 +2557,9 @@ func (e *Editor) RunEditor() error {
 	}
 	defer e.restoreTerminal()
 
-	// Set up signal handling for window resize
+	// Set up signal handling for window resize and interrupts
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGWINCH)
+	signal.Notify(sigChan, syscall.SIGWINCH, syscall.SIGINT, syscall.SIGTERM)
 
 	// Initial render
 	e.Render()
@@ -2590,10 +2595,16 @@ func (e *Editor) RunEditor() error {
 		case <-ticker.C:
 			// Regular animation refresh
 			e.Render()
-		case <-sigChan:
-			// Terminal was resized - update canvas size
-			e.ResizeBuffer()
-			e.Render()
+		case sig := <-sigChan:
+			switch sig {
+			case syscall.SIGWINCH:
+				// Terminal was resized - update canvas size
+				e.ResizeBuffer()
+				e.Render()
+			case syscall.SIGINT, syscall.SIGTERM:
+				// Graceful shutdown on interrupt
+				return nil
+			}
 		}
 	}
 }
