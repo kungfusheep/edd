@@ -1531,9 +1531,10 @@ const (
 	ModeNormal Mode = iota
 	ModeInsert
 	ModeCommand
-	ModeSelectFrom // Selecting source node for connection
-	ModeSelectTo   // Selecting target node for connection
-	ModeDelete     // Selecting node to delete
+	ModeSelectFrom     // Selecting source node for connection
+	ModeSelectTo       // Selecting target node for connection
+	ModeDelete         // Selecting node to delete
+	ModeDeleteConfirm  // Confirming node deletion
 )
 
 // String returns the mode name for display
@@ -1551,6 +1552,8 @@ func (m Mode) String() string {
 		return "SELECT TO"
 	case ModeDelete:
 		return "DELETE"
+	case ModeDeleteConfirm:
+		return "DELETE CONFIRM"
 	default:
 		return "UNKNOWN"
 	}
@@ -1583,6 +1586,7 @@ type EddCharacter struct {
 	blinkTimer      int
 	lookTimer       int
 	lookDirection   int // -1 left, 0 center, 1 right
+	tableFlipFrames int // Countdown for table flip animation
 }
 
 // NewEddCharacter creates a new living ed character
@@ -1623,6 +1627,11 @@ func NewEddCharacter() *EddCharacter {
 	ed.idleAnimations[ModeDelete] = []string{
 		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Serious focused look
 		"◉‿ ◉", "◉‿ ◉", ">‿ <", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Squinting concentration
+	}
+
+	ed.idleAnimations[ModeDeleteConfirm] = []string{
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Serious, waiting
+		"◉‿ ◉", "◉‿ ◉", ">‿ <", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Focused concentration
 	}
 
 	ed.idleAnimations[ModeCommand] = []string{
@@ -1846,6 +1855,12 @@ func (e *Editor) drawLivingEdd(face, cursor string, connections map[string]rune)
 
 // NextFrame advances to the next frame in the current mode's animation
 func (edd *EddCharacter) NextFrame(mode Mode) {
+	// Handle table flip countdown
+	if edd.tableFlipFrames > 0 {
+		edd.tableFlipFrames--
+		return
+	}
+
 	if edd.isTransitioning {
 		return // Don't advance during transitions
 	}
@@ -1858,11 +1873,30 @@ func (edd *EddCharacter) NextFrame(mode Mode) {
 
 // GetCurrentFrame returns the current animation frame for the given mode
 func (edd *EddCharacter) GetCurrentFrame(mode Mode) string {
+	// Show table flip animation if active
+	if edd.tableFlipFrames > 0 {
+		switch edd.tableFlipFrames {
+		case 5:
+			return ">‿ <"              // Getting angry
+		case 4:
+			return "◉Д ◉"              // Wide eyes
+		case 3:
+			return "(╯◉Д◉)╯"           // Preparing to flip
+		case 2, 1:
+			return "(╯°□°)╯ ︵ ┻━┻"     // TABLE FLIP!
+		}
+	}
+
 	frames := edd.idleAnimations[mode]
 	if len(frames) == 0 {
 		return "◉_◉" // Default
 	}
 	return frames[edd.currentFrame]
+}
+
+// TriggerTableFlip starts the table flip animation sequence
+func (edd *EddCharacter) TriggerTableFlip() {
+	edd.tableFlipFrames = 5 // Will show table flip for next 5 frames
 }
 
 // GetConnections returns connection indicators for the current mode
@@ -2296,28 +2330,13 @@ func (e *Editor) selectNode(nodeID int) bool {
 
 // confirmDelete handles delete confirmation for a node
 func (e *Editor) confirmDelete(nodeID int) bool {
-	e.stopJump()
+	// Keep jump active but store the node to delete
+	e.connectionFrom = nodeID // Reuse this field to store pending delete
+	e.stopJump() // Stop showing jump labels but keep node highlighted
 	
-	// Show table flip animation
-	e.showTableFlipAnimation()
+	// Switch to delete confirm mode - this triggers ed's table flip animation
+	e.SetMode(ModeDeleteConfirm)
 	
-	fmt.Printf("\nDelete node %d? (y/N): ", nodeID)
-	
-	// Read confirmation
-	key, err := e.readKey()
-	if err != nil {
-		e.SetMode(ModeNormal)
-		return false
-	}
-	
-	if key == 'y' || key == 'Y' {
-		e.deleteNode(nodeID)
-		fmt.Printf("Node %d deleted!\n", nodeID)
-	} else {
-		fmt.Printf("Delete cancelled.\n")
-	}
-	
-	e.SetMode(ModeNormal)
 	return false
 }
 
@@ -2346,22 +2365,6 @@ func (e *Editor) deleteNode(nodeID int) {
 	}
 }
 
-// showTableFlipAnimation displays ed doing a table flip
-func (e *Editor) showTableFlipAnimation() {
-	tableFlipFrames := []string{
-		"◉‿ ◉",        // Normal
-		">‿ <",        // Getting angry
-		"◉Д ◉",        // Wide eyes
-		"(╯◉Д◉)╯",     // Preparing to flip
-		"(╯°□°)╯ ︵ ┻━┻", // TABLE FLIP!
-	}
-	
-	for _, frame := range tableFlipFrames {
-		fmt.Print("\033[2J\033[H") // Clear screen
-		fmt.Printf("ed: %s\n", frame)
-		time.Sleep(300 * time.Millisecond)
-	}
-}
 
 // renderJumpLabels overlays jump labels on nodes
 func (e *Editor) renderJumpLabels() {
@@ -2372,7 +2375,12 @@ func (e *Editor) renderJumpLabels() {
 	// Print yellow labels directly after the canvas
 	fmt.Print("\033[s") // Save cursor position
 	for _, node := range positioned {
-		if label, exists := e.jumpLabels[node.ID]; exists {
+		if e.mode == ModeDeleteConfirm && node.ID == e.connectionFrom {
+			// Show y/N prompt for the node being deleted
+			labelX := node.X + 1
+			labelY := node.Y
+			fmt.Printf("\033[%d;%dH\033[33my/N?\033[0m", labelY+1, labelX+1)
+		} else if label, exists := e.jumpLabels[node.ID]; exists {
 			// Position cursor and print yellow label
 			labelX := node.X + 1
 			labelY := node.Y
@@ -2730,6 +2738,8 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleInsertKey(key)
 	case ModeSelectFrom, ModeSelectTo, ModeDelete:
 		return e.handleSelectKey(key)
+	case ModeDeleteConfirm:
+		return e.handleDeleteConfirmKey(key)
 	}
 	return false
 }
@@ -2785,6 +2795,28 @@ func (e *Editor) handleSelectKey(key rune) bool {
 	switch key {
 	case 27: // ESC
 		e.stopJump()
+		e.SetMode(ModeNormal)
+		e.connectionFrom = -1
+	case 3: // Ctrl+C
+		return true
+	}
+	return false
+}
+
+// handleDeleteConfirmKey processes y/N confirmation for delete
+func (e *Editor) handleDeleteConfirmKey(key rune) bool {
+	switch key {
+	case 'y', 'Y':
+		// Confirm delete
+		if e.connectionFrom >= 0 {
+			// Trigger table flip animation sequence
+			e.eddCharacter.TriggerTableFlip()
+			e.deleteNode(e.connectionFrom)
+		}
+		e.SetMode(ModeNormal)
+		e.connectionFrom = -1
+	case 'n', 'N', 27: // N, n, or ESC to cancel
+		// Cancel delete
 		e.SetMode(ModeNormal)
 		e.connectionFrom = -1
 	case 3: // Ctrl+C
@@ -2906,8 +2938,8 @@ func (e *Editor) Render() {
 	// Display main canvas
 	fmt.Print(e.canvas.String())
 	
-	// Add jump labels if active (overlay on top)
-	if e.jumpActive {
+	// Add jump labels if active or in delete confirm mode (overlay on top)
+	if e.jumpActive || e.mode == ModeDeleteConfirm {
 		e.renderJumpLabels()
 	}
 	
@@ -2936,6 +2968,8 @@ func (e *Editor) Render() {
 		helpText = "Select TO node: Press letter on node, ESC to cancel"
 	case ModeDelete:
 		helpText = "Delete mode: Press letter on node to delete, ESC to cancel"
+	case ModeDeleteConfirm:
+		helpText = "Confirm delete: press y/N"
 	}
 	if e.jumpActive {
 		helpText += " | Jump active: Press highlighted letters"
