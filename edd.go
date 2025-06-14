@@ -627,6 +627,68 @@ func routeBidirectional(from, to Node, isUpper bool) []Point {
 	return path
 }
 
+// routeBackwardBelowWithContext creates a backward path that goes below all boxes to avoid collisions
+func routeBackwardBelowWithContext(from, to Node, allNodes []Node) []Point {
+	var path []Point
+
+	// Exit from bottom center of source box
+	startX := from.X + from.Width/2
+	startY := from.Y + from.Height - 1
+
+	// Enter at bottom center of target box (1 line below the box)
+	endX := to.X + to.Width/2
+	endY := to.Y + to.Height
+
+	// Find the maximum Y position of all boxes to route below them
+	maxY := 0
+	for _, node := range allNodes {
+		nodeBottom := node.Y + node.Height
+		if nodeBottom > maxY {
+			maxY = nodeBottom
+		}
+	}
+	
+	// Route 3 lines below the lowest box to ensure clearance
+	routeY := maxY + 3
+
+	// Exit from bottom
+	path = append(path, Point{X: startX, Y: startY, Rune: '┬'})
+
+	// Go down
+	for y := startY + 1; y < routeY; y++ {
+		path = append(path, Point{X: startX, Y: y, Rune: '│'})
+	}
+
+	// Turn left at the bottom
+	if endX < startX {
+		path = append(path, Point{X: startX, Y: routeY, Rune: '╯'})
+		// Go left
+		for x := startX - 1; x > endX; x-- {
+			path = append(path, Point{X: x, Y: routeY, Rune: '─'})
+		}
+	} else {
+		// Turn right if target is to the right
+		path = append(path, Point{X: startX, Y: routeY, Rune: '╰'})
+		// Go right
+		for x := startX + 1; x < endX; x++ {
+			path = append(path, Point{X: x, Y: routeY, Rune: '─'})
+		}
+	}
+
+	// Turn up towards target
+	path = append(path, Point{X: endX, Y: routeY, Rune: '╰'})
+
+	// Go up to target
+	for y := routeY - 1; y > endY; y-- {
+		path = append(path, Point{X: endX, Y: y, Rune: '│'})
+	}
+
+	// Enter target from bottom
+	path = append(path, Point{X: endX, Y: endY, Rune: '▲'})
+
+	return path
+}
+
 // routeBackwardBelow creates a backward path that goes below boxes to avoid collisions
 func routeBackwardBelow(from, to Node) []Point {
 	var path []Point
@@ -639,8 +701,8 @@ func routeBackwardBelow(from, to Node) []Point {
 	endX := to.X + to.Width/2
 	endY := to.Y + to.Height - 1
 
-	// Route below all boxes
-	routeY := from.Y + from.Height + 2 // 2 lines below the source box
+	// Route below all boxes - use a safe Y that should be below any reasonable layout
+	routeY := 20 // Fixed Y position that should be below most diagrams
 
 	// Exit from bottom
 	path = append(path, Point{X: startX, Y: startY, Rune: '┬'})
@@ -921,7 +983,7 @@ func (c *Canvas) Render(diagram Diagram) {
 	for _, conn := range diagram.Connections {
 		from := nodeMap[conn.From]
 		to := nodeMap[conn.To]
-		path := SimpleOrthogonalRoute(from, to)
+		path := SimpleOrthogonalRouteWithContext(from, to, positioned)
 		c.DrawConnection(path)
 	}
 }
@@ -1223,26 +1285,175 @@ func (l *LayeredLayout) layoutSingleComponent(nodeIDs []int, connections []Conne
 		currentX += columnWidths[colIdx] + l.NodeSpacing
 	}
 
-	// Assign Y positions within each column
+	// Assign Y positions within each column, considering connections
 	for colIdx, column := range columns {
-		if len(column) == 1 {
-			// Single node - center vertically
-			nodeID := column[0]
+		// Check if this column has 1-to-1 connections (should align)
+		// vs hub-and-spoke connections (should distribute)
+		shouldAlign := make(map[int]bool)
+		
+		if colIdx > 0 {
+			// Count outgoing connections from previous column nodes
+			prevColumnOutgoing := make(map[int]int)
+			for _, conn := range connections {
+				for _, prevNodeID := range columns[colIdx-1] {
+					if conn.From == prevNodeID {
+						prevColumnOutgoing[prevNodeID]++
+					}
+				}
+			}
+			
+			// Check each node in current column
+			for _, nodeID := range column {
+				for _, conn := range connections {
+					if conn.To == nodeID {
+						sourceNodeID := conn.From
+						// Only align if source has exactly 1 outgoing connection
+						if prevColumnOutgoing[sourceNodeID] == 1 {
+							shouldAlign[nodeID] = true
+						}
+						break
+					}
+				}
+			}
+		}
+		
+		// Assign positions
+		unalignedIndex := 0
+		for _, nodeID := range column {
 			node := nodeMap[nodeID]
 			node.X = columnStartX[colIdx]
-			node.Y = 0 // Start at top
-		} else {
-			// Multiple nodes - distribute vertically
-			for nodeIdx, nodeID := range column {
-				node := nodeMap[nodeID]
-				node.X = columnStartX[colIdx]
-				node.Y = nodeIdx * (node.Height + l.LayerSpacing)
+			
+			if shouldAlign[nodeID] {
+				// Find the source node's Y position for alignment
+				for _, conn := range connections {
+					if conn.To == nodeID {
+						sourceNode := nodeMap[conn.From]
+						node.Y = sourceNode.Y
+						break
+					}
+				}
+			} else {
+				// Use vertical distribution
+				node.Y = unalignedIndex * (node.Height + l.LayerSpacing)
+				unalignedIndex++
 			}
 		}
 	}
 
 	// Return the width of this component
 	return currentX - startX
+}
+
+func SimpleOrthogonalRouteWithContext(from, to Node, allNodes []Node) []Point {
+	// Check if this is a backward connection
+	if to.X+to.Width < from.X {
+		// Target is to the left of source
+		// If it's a multi-hop backward connection, route from bottom
+		if from.X-(to.X+to.Width) > 20 {
+			return routeBackwardBelowWithContext(from, to, allNodes)
+		}
+		// Otherwise use simple left routing
+		return routeHorizontalLeft(from, to)
+	}
+
+	var path []Point
+
+	// Exit from center-right of source box border
+	startX := from.X + from.Width - 1 // On the border, not past it
+	startY := from.Y + from.Height/2
+
+	// Enter at center-left of target
+	endX := to.X - 1
+	endY := to.Y + to.Height/2
+
+	// Simple L-shaped route
+	if startY == endY {
+		// Same level - check for box collisions on horizontal path
+		hasCollision := false
+		for _, node := range allNodes {
+			if node.ID == from.ID || node.ID == to.ID {
+				continue // Skip source and target nodes
+			}
+			// Check if the horizontal line at startY intersects with this box
+			if startY >= node.Y && startY < node.Y+node.Height && 
+			   startX < node.X+node.Width && endX > node.X {
+				hasCollision = true
+				break
+			}
+		}
+		
+		if !hasCollision {
+			// No collision - straight horizontal
+			path = append(path, Point{X: startX, Y: startY, Rune: '├'})
+			for x := startX + 1; x < endX; x++ {
+				path = append(path, Point{X: x, Y: startY, Rune: '─'})
+			}
+			path = append(path, Point{X: endX, Y: endY, Rune: '▶'})
+		} else {
+			// Collision detected - route below the obstructing boxes
+			maxY := 0
+			for _, node := range allNodes {
+				nodeBottom := node.Y + node.Height
+				if nodeBottom > maxY {
+					maxY = nodeBottom
+				}
+			}
+			safeY := maxY + 1
+			
+			// Go down to safe Y
+			path = append(path, Point{X: startX, Y: startY, Rune: '├'})
+			path = append(path, Point{X: startX + 1, Y: startY, Rune: '─'})
+			path = append(path, Point{X: startX + 2, Y: startY, Rune: '╮'})
+			for y := startY + 1; y < safeY; y++ {
+				path = append(path, Point{X: startX + 2, Y: y, Rune: '│'})
+			}
+			path = append(path, Point{X: startX + 2, Y: safeY, Rune: '╰'})
+			
+			// Horizontal to target at safe Y
+			for x := startX + 3; x < endX; x++ {
+				path = append(path, Point{X: x, Y: safeY, Rune: '─'})
+			}
+			
+			// Go up to target Y
+			path = append(path, Point{X: endX, Y: safeY, Rune: '╮'})
+			for y := safeY - 1; y > endY; y-- {
+				path = append(path, Point{X: endX, Y: y, Rune: '│'})
+			}
+			path = append(path, Point{X: endX, Y: endY, Rune: '▶'})
+		}
+	} else {
+		// Different levels - L shape
+		midX := startX + 2 // Small horizontal segment
+
+		// Exit horizontally
+		path = append(path, Point{X: startX, Y: startY, Rune: '├'})
+		path = append(path, Point{X: startX + 1, Y: startY, Rune: '─'})
+
+		// Turn down/up
+		if endY > startY {
+			// Going down
+			path = append(path, Point{X: midX, Y: startY, Rune: '╮'})
+			for y := startY + 1; y < endY; y++ {
+				path = append(path, Point{X: midX, Y: y, Rune: '│'})
+			}
+			path = append(path, Point{X: midX, Y: endY, Rune: '╰'})
+		} else {
+			// Going up
+			path = append(path, Point{X: midX, Y: startY, Rune: '╮'})
+			for y := startY - 1; y > endY; y-- {
+				path = append(path, Point{X: midX, Y: y, Rune: '│'})
+			}
+			path = append(path, Point{X: midX, Y: endY, Rune: '╰'})
+		}
+
+		// Horizontal to target
+		for x := midX + 1; x < endX; x++ {
+			path = append(path, Point{X: x, Y: endY, Rune: '─'})
+		}
+		path = append(path, Point{X: endX, Y: endY, Rune: '▶'})
+	}
+
+	return path
 }
 
 func SimpleOrthogonalRoute(from, to Node) []Point {
@@ -1940,6 +2151,15 @@ func (e *Editor) printDebugInfo() {
 			fmt.Printf(" (path length: %d)", len(conn.Path))
 		}
 		fmt.Println()
+	}
+
+	// Show positioned nodes from layout
+	fmt.Println("\nPositioned Nodes (from layout):")
+	layout := NewLayeredLayout()
+	positioned := layout.CalculateLayout(e.diagram.Nodes, e.diagram.Connections)
+	for _, node := range positioned {
+		fmt.Printf("  Node %d: pos(%d,%d) size(%dx%d) text=%q\n",
+			node.ID, node.X, node.Y, node.Width, node.Height, strings.Join(node.Text, " "))
 	}
 	
 	fmt.Println("\n=== END DEBUG INFO ===")
