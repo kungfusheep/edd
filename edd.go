@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -963,8 +965,8 @@ func (c *Canvas) Render(diagram Diagram) {
 		}
 	}
 
-	// Canvas size is fixed to terminal dimensions - no auto-resizing
-	// If content goes beyond canvas, it will be clipped
+	// Auto-resize canvas to match current terminal size (throttled check)
+	// This will be handled by the Editor, not the Canvas directly
 
 	// Draw all nodes in their calculated positions
 	for _, node := range positioned {
@@ -2550,6 +2552,10 @@ func (e *Editor) RunEditor() error {
 	}
 	defer e.restoreTerminal()
 
+	// Set up signal handling for window resize
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGWINCH)
+
 	// Initial render
 	e.Render()
 
@@ -2584,6 +2590,10 @@ func (e *Editor) RunEditor() error {
 		case <-ticker.C:
 			// Regular animation refresh
 			e.Render()
+		case <-sigChan:
+			// Terminal was resized - update canvas size
+			e.ResizeBuffer()
+			e.Render()
 		}
 	}
 }
@@ -2597,6 +2607,8 @@ func (e *Editor) setRawMode() error {
 
 // restoreTerminal restores normal terminal mode
 func (e *Editor) restoreTerminal() {
+	// Show cursor and restore terminal
+	fmt.Print("\033[?25h") // Show cursor
 	cmd := exec.Command("stty", "echo", "icanon")
 	cmd.Stdin = os.Stdin
 	cmd.Run()
@@ -2787,8 +2799,8 @@ func (e *Editor) handleBackspace() {
 
 // Render draws the interface simply
 func (e *Editor) Render() {
-	// Clear screen
-	fmt.Print("\033[2J\033[H")
+	// Clear screen and hide cursor
+	fmt.Print("\033[2J\033[H\033[?25l")
 
 	// Clear canvas
 	e.canvas.Clear()
