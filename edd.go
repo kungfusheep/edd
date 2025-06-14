@@ -1533,6 +1533,7 @@ const (
 	ModeCommand
 	ModeSelectFrom // Selecting source node for connection
 	ModeSelectTo   // Selecting target node for connection
+	ModeDelete     // Selecting node to delete
 )
 
 // String returns the mode name for display
@@ -1548,6 +1549,8 @@ func (m Mode) String() string {
 		return "SELECT FROM"
 	case ModeSelectTo:
 		return "SELECT TO"
+	case ModeDelete:
+		return "DELETE"
 	default:
 		return "UNKNOWN"
 	}
@@ -1615,6 +1618,11 @@ func NewEddCharacter() *EddCharacter {
 	ed.idleAnimations[ModeSelectTo] = []string{
 		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Focused on target selection
 		"◉‿ ◉", "◉‿ ◉", "-‿ -", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Focused with quick blink
+	}
+
+	ed.idleAnimations[ModeDelete] = []string{
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Serious focused look
+		"◉‿ ◉", "◉‿ ◉", ">‿ <", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Squinting concentration
 	}
 
 	ed.idleAnimations[ModeCommand] = []string{
@@ -2273,12 +2281,85 @@ func (e *Editor) selectNode(nodeID int) bool {
 		e.connectionFrom = -1
 		return false
 		
+	case ModeDelete:
+		// Selected node to delete - prompt for confirmation
+		return e.confirmDelete(nodeID)
+		
 	default:
 		// Just select the node
 		e.currentNode = nodeID
 		e.stopJump()
 		e.SetMode(ModeNormal)
 		return false
+	}
+}
+
+// confirmDelete handles delete confirmation for a node
+func (e *Editor) confirmDelete(nodeID int) bool {
+	e.stopJump()
+	
+	// Show table flip animation
+	e.showTableFlipAnimation()
+	
+	fmt.Printf("\nDelete node %d? (y/N): ", nodeID)
+	
+	// Read confirmation
+	key, err := e.readKey()
+	if err != nil {
+		e.SetMode(ModeNormal)
+		return false
+	}
+	
+	if key == 'y' || key == 'Y' {
+		e.deleteNode(nodeID)
+		fmt.Printf("Node %d deleted!\n", nodeID)
+	} else {
+		fmt.Printf("Delete cancelled.\n")
+	}
+	
+	e.SetMode(ModeNormal)
+	return false
+}
+
+// deleteNode removes a node and all its connections
+func (e *Editor) deleteNode(nodeID int) {
+	// Remove the node
+	for i, node := range e.diagram.Nodes {
+		if node.ID == nodeID {
+			e.diagram.Nodes = append(e.diagram.Nodes[:i], e.diagram.Nodes[i+1:]...)
+			break
+		}
+	}
+	
+	// Remove all connections involving this node
+	var remainingConnections []Connection
+	for _, conn := range e.diagram.Connections {
+		if conn.From != nodeID && conn.To != nodeID {
+			remainingConnections = append(remainingConnections, conn)
+		}
+	}
+	e.diagram.Connections = remainingConnections
+	
+	// Update current node if it was deleted
+	if e.currentNode == nodeID {
+		e.currentNode = -1
+	}
+}
+
+// showTableFlipAnimation displays ed doing a table flip
+func (e *Editor) showTableFlipAnimation() {
+	tableFlipFrames := []string{
+		"◉‿ ◉",        // Normal
+		">‿ <",        // Getting angry
+		"◉Д ◉",        // Wide eyes
+		"(╯◉Д◉)╯",     // Preparing to flip
+		"(╯°□°)╯ ︵ ┻━┻", // TABLE FLIP!
+	}
+	
+	for _, frame := range tableFlipFrames {
+		fmt.Print("\033[2J\033[H") // Clear screen
+		fmt.Printf("ed: %s\n", frame)
+		time.Sleep(300 * time.Millisecond)
 	}
 }
 
@@ -2647,7 +2728,7 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleNormalKey(key)
 	case ModeInsert:
 		return e.handleInsertKey(key)
-	case ModeSelectFrom, ModeSelectTo:
+	case ModeSelectFrom, ModeSelectTo, ModeDelete:
 		return e.handleSelectKey(key)
 	}
 	return false
@@ -2667,6 +2748,9 @@ func (e *Editor) handleNormalKey(key rune) bool {
 		e.currentNode = nodeID
 	case 'c':
 		e.SetMode(ModeSelectFrom)
+		e.startJump()
+	case 'd':
+		e.SetMode(ModeDelete)
 		e.startJump()
 	case 'r': // Resize buffer to fit terminal
 		e.ResizeBuffer()
@@ -2843,13 +2927,15 @@ func (e *Editor) Render() {
 	var helpText string
 	switch e.mode {
 	case ModeNormal:
-		helpText = "Normal: 'a' add node, 'c' connect, 'r' resize, 'q' quit, 'Q' debug quit"
+		helpText = "Normal: 'a' add node, 'c' connect, 'd' delete, 'r' resize, 'q' quit, 'Q' debug quit"
 	case ModeInsert:
 		helpText = "Insert: Type text, Enter for new node, ESC to finish"
 	case ModeSelectFrom:
 		helpText = "Select FROM node: Press letter on node, ESC to cancel"
 	case ModeSelectTo:
 		helpText = "Select TO node: Press letter on node, ESC to cancel"
+	case ModeDelete:
+		helpText = "Delete mode: Press letter on node to delete, ESC to cancel"
 	}
 	if e.jumpActive {
 		helpText += " | Jump active: Press highlighted letters"
