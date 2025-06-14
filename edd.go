@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -67,6 +68,14 @@ func (c *Canvas) Clear() {
 	for i := range c.cells {
 		c.cells[i] = ' '
 	}
+}
+
+// Resize changes the canvas dimensions
+func (c *Canvas) Resize(width, height int) {
+	c.width = width
+	c.height = height
+	c.cells = make([]rune, width*height)
+	c.Clear()
 }
 
 // Set places a rune at the given position
@@ -954,20 +963,8 @@ func (c *Canvas) Render(diagram Diagram) {
 		}
 	}
 
-	// Add extra space for connections and feedback loops
-	requiredWidth := maxX + 20
-	requiredHeight := maxY + 15
-
-	// Resize canvas if needed
-	if requiredWidth > c.width || requiredHeight > c.height {
-		c.width = requiredWidth
-		c.height = requiredHeight
-		c.cells = make([]rune, c.width*c.height)
-		// Fill with spaces
-		for i := range c.cells {
-			c.cells[i] = ' '
-		}
-	}
+	// Canvas size is fixed to terminal dimensions - no auto-resizing
+	// If content goes beyond canvas, it will be clipped
 
 	// Draw all nodes in their calculated positions
 	for _, node := range positioned {
@@ -1626,8 +1623,46 @@ func NewEddCharacter() *EddCharacter {
 	return ed
 }
 
+// getTerminalSize returns the current terminal dimensions
+func getTerminalSize() (width, height int) {
+	// Use stty to get terminal size (matches our existing stty usage pattern)
+	cmd := exec.Command("stty", "size")
+	cmd.Stdin = os.Stdin
+	output, err := cmd.Output()
+	if err != nil {
+		return 80, 30 // fallback to reasonable defaults
+	}
+	
+	parts := strings.Fields(string(output))
+	if len(parts) != 2 {
+		return 80, 30 // fallback on parse error
+	}
+	
+	// stty returns "rows columns"
+	if h, err := strconv.Atoi(parts[0]); err == nil {
+		height = h
+	} else {
+		height = 30
+	}
+	
+	if w, err := strconv.Atoi(parts[1]); err == nil {
+		width = w
+	} else {
+		width = 80
+	}
+	
+	// Reserve space for ed character, help text, status, and padding
+	height = height - 9 // Leave room for ed, help text, status, padding
+	if height < 10 {
+		height = 10 // Minimum usable height
+	}
+	
+	return width, height
+}
+
 // NewEditor creates a new editor instance
 func NewEditor() *Editor {
+	width, height := getTerminalSize()
 	return &Editor{
 		diagram: Diagram{
 			Nodes:       []Node{},
@@ -1636,14 +1671,20 @@ func NewEditor() *Editor {
 		mode:             ModeNormal,
 		currentNode:      -1, // No node selected initially
 		nextNodeID:       0,
-		canvas:           NewCanvas(80, 30), // Reasonable size
-		modeIndicator:    NewCanvas(15, 5),  // Small indicator box
+		canvas:           NewCanvas(width, height),
+		modeIndicator:    NewCanvas(15, 5), // Small indicator box
 		eddCharacter:     NewEddCharacter(), // Meet ed!
 		animationRunning: false,
 		jumpActive:       false,
 		jumpLabels:       make(map[int]rune),
 		connectionFrom:   -1,
 	}
+}
+
+// ResizeBuffer resizes the canvas to match current terminal size
+func (e *Editor) ResizeBuffer() {
+	width, height := getTerminalSize()
+	e.canvas.Resize(width, height)
 }
 
 // SetMode changes the current editing mode
@@ -2604,6 +2645,8 @@ func (e *Editor) handleNormalKey(key rune) bool {
 	case 'c':
 		e.SetMode(ModeSelectFrom)
 		e.startJump()
+	case 'r': // Resize buffer to fit terminal
+		e.ResizeBuffer()
 	}
 	return false
 }
@@ -2777,7 +2820,7 @@ func (e *Editor) Render() {
 	var helpText string
 	switch e.mode {
 	case ModeNormal:
-		helpText = "Normal: 'a' add node, 'c' connect, 'q' quit, 'Q' debug quit"
+		helpText = "Normal: 'a' add node, 'c' connect, 'r' resize, 'q' quit, 'Q' debug quit"
 	case ModeInsert:
 		helpText = "Insert: Type text, Enter for new node, ESC to finish"
 	case ModeSelectFrom:
@@ -2795,14 +2838,14 @@ func main() {
 	fmt.Println("Starting edd...")
 
 	// Play startup animation
-	startup := CreateStartupAnimation()
-	PlayAnimation(startup)
+	// startup := CreateStartupAnimation()
+	// PlayAnimation(startup)
 
 	// Start the editor
 	editor := NewEditor()
 
-	fmt.Println("\nStarting editor...")
-	time.Sleep(1 * time.Second)
+	// fmt.Println("\nStarting editor...")
+	// time.Sleep(1 * time.Second)
 
 	err := editor.RunEditor()
 	if err != nil {
