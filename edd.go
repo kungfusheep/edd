@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,17 +24,18 @@ const (
 
 // Node represents a box in the diagram
 type Node struct {
-	ID     int
-	X, Y   int      // Top-left position
-	Width  int      // Calculated from text + padding
-	Height int      // Calculated from text lines + padding
-	Text   []string // Lines of text
+	ID     int      `json:"id"`
+	X, Y   int      `json:"-"` // Top-left position (calculated, not saved)
+	Width  int      `json:"-"` // Calculated from text + padding (not saved)
+	Height int      `json:"-"` // Calculated from text lines + padding (not saved)
+	Text   []string `json:"text"` // Lines of text
 }
 
 // Connection represents a directed edge between nodes
 type Connection struct {
-	From, To int     // Node IDs
-	Path     []Point // The actual route coordinates
+	From int     `json:"from"` // Source node ID
+	To   int     `json:"to"`   // Target node ID
+	Path []Point `json:"-"`    // The actual route coordinates (calculated, not saved)
 }
 
 // Point represents a coordinate in the canvas
@@ -44,8 +46,20 @@ type Point struct {
 
 // Diagram holds all nodes and connections
 type Diagram struct {
-	Nodes       []Node
-	Connections []Connection
+	Nodes       []Node       `json:"nodes"`
+	Connections []Connection `json:"connections"`
+}
+
+// SavedDiagram represents the JSON structure for .edd files
+type SavedDiagram struct {
+	Diagram  `json:",inline"` // Embed the diagram directly
+	Metadata DiagramMetadata `json:"metadata"`
+}
+
+// DiagramMetadata holds diagram metadata
+type DiagramMetadata struct {
+	Name    string `json:"name"`
+	Created string `json:"created"`
 }
 
 // Canvas represents the drawing surface
@@ -1584,6 +1598,12 @@ type Editor struct {
 	
 	// Insert mode cursor position
 	cursorPos        int          // Character position within current node's text
+	
+	// File management
+	currentFilename  string       // Current .edd file being edited
+	
+	// Command mode
+	commandBuffer    string       // Command being typed in command mode
 }
 
 // EddCharacter represents the living animated character
@@ -1721,6 +1741,8 @@ func NewEditor() *Editor {
 		connectionLabels: make(map[int]rune),
 		connectionFrom:   -1,
 		cursorPos:        0,
+		currentFilename:  "",
+		commandBuffer:    "",
 	}
 }
 
@@ -1775,6 +1797,34 @@ func (e *Editor) positionCursor() {
 	
 	// Move cursor and show it
 	fmt.Printf("\033[%d;%dH\033[?25h", cursorY+1, cursorX+1)
+}
+
+// saveDiagram saves the current diagram to a .edd file
+func (e *Editor) saveDiagram(filename string) error {
+	// Create saved diagram with metadata - no conversion needed!
+	saved := SavedDiagram{
+		Diagram: e.diagram, // Direct assignment, JSON tags handle the rest
+		Metadata: DiagramMetadata{
+			Name:    strings.TrimSuffix(filename, ".edd"),
+			Created: time.Now().Format("2006-01-02 15:04:05"),
+		},
+	}
+	
+	// Marshal to JSON with indentation for readability
+	jsonData, err := json.MarshalIndent(saved, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal diagram: %v", err)
+	}
+	
+	// Write to file
+	err = os.WriteFile(filename, jsonData, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %v", err)
+	}
+	
+	// Update current filename
+	e.currentFilename = filename
+	return nil
 }
 
 // SetMode changes the current editing mode
@@ -3025,6 +3075,8 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleDeleteConfirmKey(key)
 	case ModeHelp:
 		return e.handleHelpKey(key)
+	case ModeCommand:
+		return e.handleCommandKey(key)
 	}
 	return false
 }
@@ -3058,6 +3110,9 @@ func (e *Editor) handleNormalKey(key rune) bool {
 		e.ResizeBuffer()
 	case '?': // Show help
 		e.SetMode(ModeHelp)
+	case ':': // Enter command mode
+		e.SetMode(ModeCommand)
+		e.commandBuffer = ":"
 	}
 	return false
 }
@@ -3129,6 +3184,103 @@ func (e *Editor) handleHelpKey(key rune) bool {
 	case 27, '?', 'q', 3: // ESC, ?, q, or Ctrl+C to exit help
 		e.SetMode(ModeNormal)
 	}
+	return false
+}
+
+// handleCommandKey processes keys in command mode
+func (e *Editor) handleCommandKey(key rune) bool {
+	switch key {
+	case 27: // ESC
+		e.SetMode(ModeNormal)
+		e.commandBuffer = ""
+	case 13, 10: // Enter - execute command
+		result := e.executeCommand(e.commandBuffer)
+		if result {
+			return true // Exit requested
+		}
+		e.SetMode(ModeNormal)
+		e.commandBuffer = ""
+	case 127, 8: // Backspace
+		if len(e.commandBuffer) > 1 { // Keep the ':'
+			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
+		}
+	case 3: // Ctrl+C
+		return true
+	default:
+		if key >= 32 && key <= 126 { // Printable characters
+			e.commandBuffer += string(key)
+		}
+	}
+	return false
+}
+
+// executeCommand processes and executes vim-style commands
+func (e *Editor) executeCommand(command string) bool {
+	// Remove leading ':'
+	if strings.HasPrefix(command, ":") {
+		command = command[1:]
+	}
+	
+	// Split command and arguments
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return false
+	}
+	
+	cmd := parts[0]
+	args := parts[1:]
+	
+	switch cmd {
+	case "w", "write":
+		// Save command
+		if len(args) == 0 {
+			// :w - save to current file
+			if e.currentFilename == "" {
+				// No current file, need filename
+				// For now, just show an error
+				fmt.Print("\nNo filename specified")
+				time.Sleep(1 * time.Second)
+				return false
+			}
+			err := e.saveDiagram(e.currentFilename)
+			if err != nil {
+				fmt.Printf("\nError saving: %v", err)
+				time.Sleep(2 * time.Second)
+			}
+		} else {
+			// :w filename - save to specific file
+			filename := args[0]
+			if !strings.HasSuffix(filename, ".edd") {
+				filename += ".edd"
+			}
+			err := e.saveDiagram(filename)
+			if err != nil {
+				fmt.Printf("\nError saving: %v", err)
+				time.Sleep(2 * time.Second)
+			} else {
+				fmt.Printf("\nSaved to %s", filename)
+				time.Sleep(1 * time.Second)
+			}
+		}
+	case "q", "quit":
+		// Quit command
+		return true
+	case "wq":
+		// Save and quit
+		if e.currentFilename != "" {
+			err := e.saveDiagram(e.currentFilename)
+			if err != nil {
+				fmt.Printf("\nError saving: %v", err)
+				time.Sleep(2 * time.Second)
+				return false
+			}
+		}
+		return true
+	default:
+		fmt.Printf("\nUnknown command: %s", cmd)
+		time.Sleep(1 * time.Second)
+	}
+	
 	return false
 }
 
@@ -3278,6 +3430,11 @@ func (e *Editor) Render() {
 	fmt.Print(e.modeIndicator.String())
 	fmt.Print("\033[0m") // Reset
 	
+	// Display command buffer if in command mode
+	if e.mode == ModeCommand {
+		fmt.Printf("\n%s", e.commandBuffer)
+	}
+	
 	// Position cursor if in insert mode
 	e.positionCursor()
 }
@@ -3297,6 +3454,7 @@ func (e *Editor) renderHelp() {
 	fmt.Println("    c      - Connect nodes (enter select mode)")
 	fmt.Println("    d      - Delete nodes/connections")
 	fmt.Println("    r      - Resize buffer to fit terminal")
+	fmt.Println("    :      - Enter command mode")
 	fmt.Println("    ?      - Show this help (you are here!)")
 	fmt.Println("    q      - Quit application")
 	fmt.Println("    Q      - Debug quit (show graph structure)")
@@ -3319,6 +3477,13 @@ func (e *Editor) renderHelp() {
 	fmt.Println("           - Connections: immediate deletion")
 	fmt.Println("           - Stays in delete mode for multiple deletions")
 	fmt.Println("    ESC    - Return to normal mode")
+	fmt.Println()
+	fmt.Println("  Command Mode:")
+	fmt.Println("    :w filename - Save diagram to .edd file")
+	fmt.Println("    :w          - Save to current file")
+	fmt.Println("    :q          - Quit application")
+	fmt.Println("    :wq         - Save and quit")
+	fmt.Println("    ESC         - Return to normal mode")
 	fmt.Println()
 	fmt.Println("🎨 FEATURES:")
 	fmt.Println("  • Unicode box drawing with rounded corners")
