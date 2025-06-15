@@ -2469,7 +2469,7 @@ func (e *Editor) renderJumpLabels() {
 	layout := NewLayeredLayout()
 	positioned := layout.CalculateLayout(e.diagram.Nodes, e.diagram.Connections)
 	
-	// Print yellow labels directly after the canvas
+	// Print labels directly after the canvas
 	fmt.Print("\033[s") // Save cursor position
 	for _, node := range positioned {
 		if e.mode == ModeDeleteConfirm && node.ID == e.connectionFrom {
@@ -2477,6 +2477,11 @@ func (e *Editor) renderJumpLabels() {
 			labelX := node.X + 1
 			labelY := node.Y
 			fmt.Printf("\033[%d;%dH\033[33my/N?\033[0m", labelY+1, labelX+1)
+		} else if e.mode == ModeSelectTo && node.ID == e.connectionFrom {
+			// Mark selected "from" node in green
+			labelX := node.X + 1
+			labelY := node.Y
+			fmt.Printf("\033[%d;%dH\033[32mFROM\033[0m", labelY+1, labelX+1)
 		} else if label, exists := e.jumpLabels[node.ID]; exists {
 			// Position cursor and print yellow label
 			labelX := node.X + 1
