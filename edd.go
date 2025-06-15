@@ -2454,11 +2454,11 @@ func (e *Editor) selectNode(nodeID int) bool {
 // selectConnection handles connection selection for deletion
 func (e *Editor) selectConnection(connIndex int) bool {
 	if e.mode == ModeDelete && connIndex < len(e.diagram.Connections) {
-		e.stopJump()
 		// Directly delete the connection (no confirmation needed for connections)
 		e.eddCharacter.TriggerTableFlip()
 		e.deleteConnection(connIndex)
-		e.SetMode(ModeNormal)
+		// Stay in delete mode - restart jump selection
+		e.startJump()
 	}
 	return false
 }
@@ -3013,12 +3013,15 @@ func (e *Editor) handleDeleteConfirmKey(key rune) bool {
 			e.eddCharacter.TriggerTableFlip()
 			e.deleteNode(e.connectionFrom)
 		}
-		e.SetMode(ModeNormal)
+		// Stay in delete mode after deletion - restart jump selection
+		e.SetMode(ModeDelete)
 		e.connectionFrom = -1
+		e.startJump()
 	case 'n', 'N', 27: // N, n, or ESC to cancel
-		// Cancel delete
-		e.SetMode(ModeNormal)
+		// Cancel delete - go back to delete mode jump selection
+		e.SetMode(ModeDelete)
 		e.connectionFrom = -1
+		e.startJump()
 	case 3: // Ctrl+C
 		return true
 	}
