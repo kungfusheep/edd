@@ -1827,6 +1827,48 @@ func (e *Editor) saveDiagram(filename string) error {
 	return nil
 }
 
+// loadDiagram loads a diagram from a .edd file
+func (e *Editor) loadDiagram(filename string) error {
+	// Read file
+	jsonData, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %v", err)
+	}
+	
+	// Parse JSON
+	var saved SavedDiagram
+	err = json.Unmarshal(jsonData, &saved)
+	if err != nil {
+		return fmt.Errorf("failed to parse diagram: %v", err)
+	}
+	
+	// Load diagram data
+	e.diagram = saved.Diagram
+	
+	// Recalculate node sizes and positions since they weren't saved
+	for i := range e.diagram.Nodes {
+		node := &e.diagram.Nodes[i]
+		// Recalculate width and height from text
+		node.Width, node.Height = CalculateNodeSize(node.Text)
+	}
+	
+	// Update editor state
+	e.currentFilename = filename
+	e.currentNode = -1 // Reset current node selection
+	e.cursorPos = 0
+	
+	// Update nextNodeID to avoid conflicts
+	maxID := -1
+	for _, node := range e.diagram.Nodes {
+		if node.ID > maxID {
+			maxID = node.ID
+		}
+	}
+	e.nextNodeID = maxID + 1
+	
+	return nil
+}
+
 // SetMode changes the current editing mode
 func (e *Editor) SetMode(mode Mode) {
 	oldMode := e.mode
@@ -3262,6 +3304,27 @@ func (e *Editor) executeCommand(command string) bool {
 				time.Sleep(1 * time.Second)
 			}
 		}
+	case "r", "read":
+		// Load command
+		if len(args) == 0 {
+			fmt.Print("\nNo filename specified")
+			time.Sleep(1 * time.Second)
+			return false
+		}
+		
+		filename := args[0]
+		if !strings.HasSuffix(filename, ".edd") {
+			filename += ".edd"
+		}
+		
+		err := e.loadDiagram(filename)
+		if err != nil {
+			fmt.Printf("\nError loading: %v", err)
+			time.Sleep(2 * time.Second)
+		} else {
+			fmt.Printf("\nLoaded %s", filename)
+			time.Sleep(1 * time.Second)
+		}
 	case "q", "quit":
 		// Quit command
 		return true
@@ -3481,6 +3544,7 @@ func (e *Editor) renderHelp() {
 	fmt.Println("  Command Mode:")
 	fmt.Println("    :w filename - Save diagram to .edd file")
 	fmt.Println("    :w          - Save to current file")
+	fmt.Println("    :r filename - Load diagram from .edd file")
 	fmt.Println("    :q          - Quit application")
 	fmt.Println("    :wq         - Save and quit")
 	fmt.Println("    ESC         - Return to normal mode")
@@ -3491,6 +3555,11 @@ func (e *Editor) renderHelp() {
 	fmt.Println("  • Jump-based selection (like ace-jump)")
 	fmt.Println("  • Living character 'ed' with mode-specific animations")
 	fmt.Println("  • Auto-resizing terminal support")
+	fmt.Println("  • Save/load .edd files")
+	fmt.Println()
+	fmt.Println("💡 USAGE:")
+	fmt.Println("  Start: ./edd [filename.edd]")
+	fmt.Println("  Load existing diagram or start fresh")
 	fmt.Println()
 	fmt.Println("Press ESC, ?, or q to return to normal mode")
 	
@@ -3499,14 +3568,27 @@ func (e *Editor) renderHelp() {
 }
 
 func main() {
-	fmt.Println("Starting edd...")
-
-	// Play startup animation
-	// startup := CreateStartupAnimation()
-	// PlayAnimation(startup)
-
 	// Start the editor
 	editor := NewEditor()
+	
+	// Check for command line argument (filename to load)
+	if len(os.Args) > 1 {
+		filename := os.Args[1]
+		if !strings.HasSuffix(filename, ".edd") {
+			filename += ".edd"
+		}
+		
+		fmt.Printf("Loading %s...\n", filename)
+		err := editor.loadDiagram(filename)
+		if err != nil {
+			fmt.Printf("Error loading file: %v\n", err)
+			fmt.Println("Starting with empty diagram...")
+		} else {
+			fmt.Printf("Loaded %s successfully\n", filename)
+		}
+	} else {
+		fmt.Println("Starting edd...")
+	}
 
 	// fmt.Println("\nStarting editor...")
 	// time.Sleep(1 * time.Second)
