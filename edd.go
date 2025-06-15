@@ -1670,8 +1670,8 @@ func getTerminalSize() (width, height int) {
 		width = 80
 	}
 	
-	// Reserve space for ed character, help text, status, and padding
-	height = height - 9 // Leave room for ed, help text, status, padding
+	// Reserve space for ed character and padding
+	height = height - 7 // Just leave room for ed and some padding
 	if height < 10 {
 		height = 10 // Minimum usable height
 	}
@@ -1691,7 +1691,7 @@ func NewEditor() *Editor {
 		currentNode:      -1, // No node selected initially
 		nextNodeID:       0,
 		canvas:           NewCanvas(width, height),
-		modeIndicator:    NewCanvas(15, 5), // Small indicator box
+		modeIndicator:    NewCanvas(18, 5), // Wide enough for table flip animation
 		eddCharacter:     NewEddCharacter(), // Meet ed!
 		animationRunning: false,
 		jumpActive:       false,
@@ -1752,6 +1752,12 @@ func (e *Editor) DisplayCharacter() {
 // UpdateLivingModeIndicator updates the indicator with the living character
 func (e *Editor) UpdateLivingModeIndicator() {
 	e.modeIndicator.Clear()
+
+	// Handle table flip animation separately
+	if e.eddCharacter.tableFlipFrames > 0 {
+		e.drawTableFlipAnimation()
+		return
+	}
 
 	// Get current living frame
 	face := e.eddCharacter.GetCurrentFrame(e.mode)
@@ -1851,6 +1857,108 @@ func (e *Editor) drawLivingEdd(face, cursor string, connections map[string]rune)
 	}
 }
 
+// drawTableFlipAnimation draws ed doing a table flip with the table outside his box
+func (e *Editor) drawTableFlipAnimation() {
+	frames := e.eddCharacter.tableFlipFrames
+	
+	// Always draw ed's box first
+	e.modeIndicator.Set(2, 1, '╭')
+	e.modeIndicator.Set(7, 1, '╮')
+	e.modeIndicator.Set(2, 3, '╰')
+	e.modeIndicator.Set(7, 3, '╯')
+	for x := 3; x < 7; x++ {
+		e.modeIndicator.Set(x, 1, '─')
+		e.modeIndicator.Set(x, 3, '─')
+	}
+	e.modeIndicator.Set(2, 2, '│')
+	e.modeIndicator.Set(7, 2, '│')
+	
+	switch frames {
+	case 5:
+		// Realization - narrowing eyes
+		e.modeIndicator.Set(3, 2, '>')
+		e.modeIndicator.Set(4, 2, '‿')
+		e.modeIndicator.Set(5, 2, ' ')
+		e.modeIndicator.Set(6, 2, '<')
+		// Table sitting peacefully to the right
+		e.modeIndicator.Set(10, 3, '┬')
+		e.modeIndicator.Set(11, 3, '─')
+		e.modeIndicator.Set(12, 3, '─')
+		e.modeIndicator.Set(13, 3, '┬')
+		
+	case 4:
+		// Building rage - wide angry eyes
+		e.modeIndicator.Set(3, 2, '◉')
+		e.modeIndicator.Set(4, 2, 'Д')
+		e.modeIndicator.Set(5, 2, ' ')
+		e.modeIndicator.Set(6, 2, '◉')
+		// Arms starting to rise
+		e.modeIndicator.Set(1, 2, '/')
+		e.modeIndicator.Set(8, 2, '\\')
+		// Table still there
+		e.modeIndicator.Set(10, 3, '┬')
+		e.modeIndicator.Set(11, 3, '─')
+		e.modeIndicator.Set(12, 3, '─')
+		e.modeIndicator.Set(13, 3, '┬')
+		
+	case 3:
+		// Full rage - arms up, grabbing table
+		e.modeIndicator.Set(3, 2, '◉')
+		e.modeIndicator.Set(4, 2, 'Д')
+		e.modeIndicator.Set(5, 2, '◉')
+		// Arms raised high
+		e.modeIndicator.Set(0, 1, '(')
+		e.modeIndicator.Set(1, 1, '╯')
+		e.modeIndicator.Set(8, 1, '╯')
+		e.modeIndicator.Set(9, 1, ')')
+		// Table being grabbed
+		e.modeIndicator.Set(10, 2, '┬')
+		e.modeIndicator.Set(11, 2, '─')
+		e.modeIndicator.Set(12, 2, '─')
+		e.modeIndicator.Set(13, 2, '┬')
+		
+	case 2:
+		// Mid flip - maximum effort
+		e.modeIndicator.Set(3, 2, '>')
+		e.modeIndicator.Set(4, 2, 'Д')
+		e.modeIndicator.Set(5, 2, '<')
+		// Arms in throwing motion
+		e.modeIndicator.Set(0, 0, '(')
+		e.modeIndicator.Set(1, 0, '╯')
+		e.modeIndicator.Set(8, 0, '╯')
+		e.modeIndicator.Set(9, 0, ')')
+		// Table mid-flip
+		e.modeIndicator.Set(10, 1, '︵')
+		e.modeIndicator.Set(11, 1, ' ')
+		e.modeIndicator.Set(12, 1, '┻')
+		e.modeIndicator.Set(13, 1, '━')
+		e.modeIndicator.Set(14, 1, '┻')
+		
+	case 1:
+		// Satisfied - table gone, ed happy
+		e.modeIndicator.Set(3, 2, '◉')
+		e.modeIndicator.Set(4, 2, '‿')
+		e.modeIndicator.Set(5, 2, ' ')
+		e.modeIndicator.Set(6, 2, '◉')
+		// Arms down, dusting off hands
+		e.modeIndicator.Set(1, 2, '‾')
+		e.modeIndicator.Set(8, 2, '‾')
+		// Table far away
+		e.modeIndicator.Set(12, 0, '︵')
+		e.modeIndicator.Set(14, 0, '┻')
+		e.modeIndicator.Set(15, 0, '┻')
+	}
+	
+	// Mode label
+	text := "TABLE FLIP!"
+	startX := 2
+	for i, ch := range text {
+		if startX+i < 15 { // Don't overflow canvas
+			e.modeIndicator.Set(startX+i, 4, ch)
+		}
+	}
+}
+
 // EddCharacter methods for living animation
 
 // NextFrame advances to the next frame in the current mode's animation
@@ -1873,20 +1981,9 @@ func (edd *EddCharacter) NextFrame(mode Mode) {
 
 // GetCurrentFrame returns the current animation frame for the given mode
 func (edd *EddCharacter) GetCurrentFrame(mode Mode) string {
-	// Show table flip animation if active
-	if edd.tableFlipFrames > 0 {
-		switch edd.tableFlipFrames {
-		case 5:
-			return ">‿ <"              // Getting angry
-		case 4:
-			return "◉Д ◉"              // Wide eyes
-		case 3:
-			return "(╯◉Д◉)╯"           // Preparing to flip
-		case 2, 1:
-			return "(╯°□°)╯ ︵ ┻━┻"     // TABLE FLIP!
-		}
-	}
-
+	// Table flip is handled separately in drawTableFlipAnimation
+	// Don't return table flip frames here
+	
 	frames := edd.idleAnimations[mode]
 	if len(frames) == 0 {
 		return "◉_◉" // Default
@@ -2950,31 +3047,6 @@ func (e *Editor) Render() {
 	fmt.Print(e.modeIndicator.String())
 	fmt.Print("\033[0m") // Reset
 	fmt.Print("\n")
-
-	// Status line
-	fmt.Printf("Nodes: %d | Connections: %d\n",
-		len(e.diagram.Nodes), len(e.diagram.Connections))
-
-	// Mode-specific help
-	var helpText string
-	switch e.mode {
-	case ModeNormal:
-		helpText = "Normal: 'a' add node, 'c' connect, 'd' delete, 'r' resize, 'q' quit, 'Q' debug quit"
-	case ModeInsert:
-		helpText = "Insert: Type text, Enter for new node, ESC to finish"
-	case ModeSelectFrom:
-		helpText = "Select FROM node: Press letter on node, ESC to cancel"
-	case ModeSelectTo:
-		helpText = "Select TO node: Press letter on node, ESC to cancel"
-	case ModeDelete:
-		helpText = "Delete mode: Press letter on node to delete, ESC to cancel"
-	case ModeDeleteConfirm:
-		helpText = "Confirm delete: press y/N"
-	}
-	if e.jumpActive {
-		helpText += " | Jump active: Press highlighted letters"
-	}
-	fmt.Printf("\033[36m%s\033[0m\n", helpText) // Cyan
 }
 
 func main() {
