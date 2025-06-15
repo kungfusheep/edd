@@ -1573,6 +1573,7 @@ type Editor struct {
 	// Jump selection state
 	jumpActive       bool
 	jumpLabels       map[int]rune // Map from node ID to jump label
+	connectionLabels map[int]rune // Map from connection index to jump label  
 	connectionFrom   int          // Source node for connection (when in SelectTo mode)
 }
 
@@ -1696,6 +1697,7 @@ func NewEditor() *Editor {
 		animationRunning: false,
 		jumpActive:       false,
 		jumpLabels:       make(map[int]rune),
+		connectionLabels: make(map[int]rune),
 		connectionFrom:   -1,
 	}
 }
@@ -2354,21 +2356,33 @@ func (e *Editor) printDebugInfo() {
 
 // startJump activates jump mode and assigns labels to nodes
 func (e *Editor) startJump() {
-	if len(e.diagram.Nodes) == 0 {
-		return // No nodes to select
+	if len(e.diagram.Nodes) == 0 && (e.mode != ModeDelete || len(e.diagram.Connections) == 0) {
+		return // No nodes/connections to select
 	}
 	
 	e.jumpActive = true
 	e.jumpLabels = make(map[int]rune)
+	e.connectionLabels = make(map[int]rune)
 	
 	// Generate labels using home row keys first, then other letters
 	labels := "asdfghjklqwertyuiopzxcvbnm"
 	labelIndex := 0
 	
+	// Assign labels to nodes
 	for _, node := range e.diagram.Nodes {
 		if labelIndex < len(labels) {
 			e.jumpLabels[node.ID] = rune(labels[labelIndex])
 			labelIndex++
+		}
+	}
+	
+	// In delete mode, also assign labels to connections
+	if e.mode == ModeDelete {
+		for i := range e.diagram.Connections {
+			if labelIndex < len(labels) {
+				e.connectionLabels[i] = rune(labels[labelIndex])
+				labelIndex++
+			}
 		}
 	}
 }
@@ -2377,6 +2391,7 @@ func (e *Editor) startJump() {
 func (e *Editor) stopJump() {
 	e.jumpActive = false
 	e.jumpLabels = make(map[int]rune)
+	e.connectionLabels = make(map[int]rune)
 }
 
 // handleJumpSelection processes jump character selection
@@ -2387,6 +2402,16 @@ func (e *Editor) handleJumpSelection(key rune) bool {
 			return e.selectNode(nodeID)
 		}
 	}
+	
+	// Find connection with this label (only in delete mode)
+	if e.mode == ModeDelete {
+		for connIndex, label := range e.connectionLabels {
+			if label == key {
+				return e.selectConnection(connIndex)
+			}
+		}
+	}
+	
 	return false // Key not found
 }
 
@@ -2422,6 +2447,25 @@ func (e *Editor) selectNode(nodeID int) bool {
 		e.stopJump()
 		e.SetMode(ModeNormal)
 		return false
+	}
+}
+
+// selectConnection handles connection selection for deletion
+func (e *Editor) selectConnection(connIndex int) bool {
+	if e.mode == ModeDelete && connIndex < len(e.diagram.Connections) {
+		e.stopJump()
+		// Directly delete the connection (no confirmation needed for connections)
+		e.eddCharacter.TriggerTableFlip()
+		e.deleteConnection(connIndex)
+		e.SetMode(ModeNormal)
+	}
+	return false
+}
+
+// deleteConnection removes a connection by index
+func (e *Editor) deleteConnection(connIndex int) {
+	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
+		e.diagram.Connections = append(e.diagram.Connections[:connIndex], e.diagram.Connections[connIndex+1:]...)
 	}
 }
 
@@ -2463,7 +2507,7 @@ func (e *Editor) deleteNode(nodeID int) {
 }
 
 
-// renderJumpLabels overlays jump labels on nodes
+// renderJumpLabels overlays jump labels on nodes and connections
 func (e *Editor) renderJumpLabels() {
 	// Get positioned nodes
 	layout := NewLayeredLayout()
@@ -2471,6 +2515,8 @@ func (e *Editor) renderJumpLabels() {
 	
 	// Print labels directly after the canvas
 	fmt.Print("\033[s") // Save cursor position
+	
+	// Render node labels
 	for _, node := range positioned {
 		if e.mode == ModeDeleteConfirm && node.ID == e.connectionFrom {
 			// Show y/N prompt for the node being deleted
@@ -2489,6 +2535,30 @@ func (e *Editor) renderJumpLabels() {
 			fmt.Printf("\033[%d;%dH\033[33m%c\033[0m", labelY+1, labelX+1, label)
 		}
 	}
+	
+	// Render connection labels (only in delete mode)
+	if e.mode == ModeDelete {
+		// Create node map for connection rendering
+		nodeMap := make(map[int]Node)
+		for _, node := range positioned {
+			nodeMap[node.ID] = node
+		}
+		
+		for i, conn := range e.diagram.Connections {
+			if label, exists := e.connectionLabels[i]; exists {
+				fromNode := nodeMap[conn.From]
+				toNode := nodeMap[conn.To]
+				
+				// Calculate midpoint of connection
+				midX := (fromNode.X + fromNode.Width/2 + toNode.X + toNode.Width/2) / 2
+				midY := (fromNode.Y + fromNode.Height/2 + toNode.Y + toNode.Height/2) / 2
+				
+				// Print red label for connection
+				fmt.Printf("\033[%d;%dH\033[31m%c\033[0m", midY+1, midX+1, label)
+			}
+		}
+	}
+	
 	fmt.Print("\033[u") // Restore cursor position
 }
 
