@@ -1581,6 +1581,9 @@ type Editor struct {
 	jumpLabels       map[int]rune // Map from node ID to jump label
 	connectionLabels map[int]rune // Map from connection index to jump label  
 	connectionFrom   int          // Source node for connection (when in SelectTo mode)
+	
+	// Insert mode cursor position
+	cursorPos        int          // Character position within current node's text
 }
 
 // EddCharacter represents the living animated character
@@ -1717,6 +1720,7 @@ func NewEditor() *Editor {
 		jumpLabels:       make(map[int]rune),
 		connectionLabels: make(map[int]rune),
 		connectionFrom:   -1,
+		cursorPos:        0,
 	}
 }
 
@@ -1724,6 +1728,53 @@ func NewEditor() *Editor {
 func (e *Editor) ResizeBuffer() {
 	width, height := getTerminalSize()
 	e.canvas.Resize(width, height)
+}
+
+// positionCursor moves the terminal cursor to the correct position within the current node
+func (e *Editor) positionCursor() {
+	if e.mode != ModeInsert || e.currentNode < 0 {
+		return
+	}
+
+	// Find the current node and get its positioned coordinates
+	layout := NewLayeredLayout()
+	positioned := layout.CalculateLayout(e.diagram.Nodes, e.diagram.Connections)
+	
+	var currentNode *Node
+	for _, node := range positioned {
+		if node.ID == e.currentNode {
+			currentNode = &node
+			break
+		}
+	}
+	
+	if currentNode == nil {
+		return
+	}
+	
+	// Get current text
+	var currentText string
+	if len(currentNode.Text) > 0 {
+		currentText = currentNode.Text[0]
+	}
+	textLength := len(currentText)
+	
+	// Ensure cursor position is within bounds
+	if e.cursorPos > textLength {
+		e.cursorPos = textLength
+	}
+	
+	// Calculate text start position using same logic as DrawBox
+	availableWidth := currentNode.Width - 2*NodePadding - 2 // -2 for borders
+	textStartX := currentNode.X + 1 + NodePadding + (availableWidth-textLength)/2
+	textY := currentNode.Y + 1
+	
+	// Position cursor at the current cursor position within the centered text
+	cursorX := textStartX + e.cursorPos
+	cursorY := textY
+	
+	// Move cursor and show it
+	fmt.Printf("\033[%d;%dH\033[?25h", cursorY+1, cursorX+1)
 }
 
 // SetMode changes the current editing mode
@@ -2459,6 +2510,13 @@ func (e *Editor) selectNode(nodeID int) bool {
 	case ModeInsertSelect:
 		// Selected node to edit - enter insert mode
 		e.currentNode = nodeID
+		// Set cursor position at end of existing text
+		for _, node := range e.diagram.Nodes {
+			if node.ID == nodeID && len(node.Text) > 0 {
+				e.cursorPos = len(node.Text[0])
+				break
+			}
+		}
 		e.SetMode(ModeInsert)
 		e.stopJump()
 		return false
@@ -2983,6 +3041,7 @@ func (e *Editor) handleNormalKey(key rune) bool {
 		e.SetMode(ModeInsert)
 		nodeID := e.AddNode([]string{""}) // Create empty node for editing
 		e.currentNode = nodeID
+		e.cursorPos = 0 // Start at beginning of empty node
 	case 'i':
 		// Edit existing node - show jump menu for selection
 		if len(e.diagram.Nodes) > 0 {
@@ -3014,6 +3073,7 @@ func (e *Editor) handleInsertKey(key rune) bool {
 		// Create another new node and stay in insert mode
 		nodeID := e.AddNode([]string{""})
 		e.currentNode = nodeID
+		e.cursorPos = 0 // Start at beginning of new node
 	case 3: // Ctrl+C
 		return true
 	default:
@@ -3126,18 +3186,30 @@ func (e *Editor) handleConnectionInput(input string) {
 	fmt.Printf("Connected node %d to node %d\n", from, to)
 }
 
-// addCharToCurrentNode adds a character to the current node's text
+// addCharToCurrentNode adds a character to the current node's text at cursor position
 func (e *Editor) addCharToCurrentNode(ch rune) {
 	if e.currentNode >= 0 {
 		// Find the node with the current ID
 		for i := range e.diagram.Nodes {
 			if e.diagram.Nodes[i].ID == e.currentNode {
-				// Add character to the first line of text
+				// Initialize text if empty
 				if len(e.diagram.Nodes[i].Text) == 0 {
-					e.diagram.Nodes[i].Text = []string{string(ch)}
-				} else {
-					e.diagram.Nodes[i].Text[0] += string(ch)
+					e.diagram.Nodes[i].Text = []string{""}
 				}
+				
+				text := e.diagram.Nodes[i].Text[0]
+				
+				// Insert character at cursor position
+				if e.cursorPos >= len(text) {
+					// Append to end
+					e.diagram.Nodes[i].Text[0] = text + string(ch)
+				} else {
+					// Insert in middle
+					e.diagram.Nodes[i].Text[0] = text[:e.cursorPos] + string(ch) + text[e.cursorPos:]
+				}
+				
+				// Move cursor forward
+				e.cursorPos++
 
 				// Recalculate node size
 				width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
@@ -3149,16 +3221,20 @@ func (e *Editor) addCharToCurrentNode(ch rune) {
 	}
 }
 
-// handleBackspace removes the last character from current node's text
+// handleBackspace removes character before cursor position
 func (e *Editor) handleBackspace() {
-	if e.currentNode >= 0 {
+	if e.currentNode >= 0 && e.cursorPos > 0 {
 		// Find the node with the current ID
 		for i := range e.diagram.Nodes {
 			if e.diagram.Nodes[i].ID == e.currentNode {
-				// Remove last character from the first line of text
 				if len(e.diagram.Nodes[i].Text) > 0 && len(e.diagram.Nodes[i].Text[0]) > 0 {
 					text := e.diagram.Nodes[i].Text[0]
-					e.diagram.Nodes[i].Text[0] = text[:len(text)-1]
+					
+					// Remove character before cursor
+					if e.cursorPos <= len(text) {
+						e.diagram.Nodes[i].Text[0] = text[:e.cursorPos-1] + text[e.cursorPos:]
+						e.cursorPos-- // Move cursor back
+					}
 
 					// Recalculate node size
 					width, height := CalculateNodeSize(e.diagram.Nodes[i].Text)
@@ -3201,6 +3277,9 @@ func (e *Editor) Render() {
 	fmt.Print("\033[33m") // Yellow
 	fmt.Print(e.modeIndicator.String())
 	fmt.Print("\033[0m") // Reset
+	
+	// Position cursor if in insert mode
+	e.positionCursor()
 }
 
 // renderHelp displays the help dialogue
