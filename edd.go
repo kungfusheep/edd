@@ -25,9 +25,9 @@ const (
 // Node represents a box in the diagram
 type Node struct {
 	ID     int      `json:"id"`
-	X, Y   int      `json:"-"` // Top-left position (calculated, not saved)
-	Width  int      `json:"-"` // Calculated from text + padding (not saved)
-	Height int      `json:"-"` // Calculated from text lines + padding (not saved)
+	X, Y   int      `json:"-"`    // Top-left position (calculated, not saved)
+	Width  int      `json:"-"`    // Calculated from text + padding (not saved)
+	Height int      `json:"-"`    // Calculated from text lines + padding (not saved)
 	Text   []string `json:"text"` // Lines of text
 }
 
@@ -53,7 +53,7 @@ type Diagram struct {
 // SavedDiagram represents the JSON structure for .edd files
 type SavedDiagram struct {
 	Diagram  `json:",inline"` // Embed the diagram directly
-	Metadata DiagramMetadata `json:"metadata"`
+	Metadata DiagramMetadata  `json:"metadata"`
 }
 
 // DiagramMetadata holds diagram metadata
@@ -672,7 +672,7 @@ func routeBackwardBelowWithContext(from, to Node, allNodes []Node) []Point {
 			maxY = nodeBottom
 		}
 	}
-	
+
 	// Route 3 lines below the lowest box to ensure clearance
 	routeY := maxY + 3
 
@@ -1128,14 +1128,14 @@ func (l *LayeredLayout) CalculateLayout(nodes []Node, connections []Connection) 
 
 	// Step 2: Find connected components
 	components := l.findConnectedComponents(nodes, connections)
-	
+
 	// Step 3: Layout each component separately and position side-by-side
 	currentX := 0
 	for _, component := range components {
 		componentWidth := l.layoutComponent(component, connections, nodeMap, currentX)
 		currentX += componentWidth + 4 // Add spacing between components
 	}
-	
+
 	return result
 }
 
@@ -1150,42 +1150,42 @@ func (l *LayeredLayout) findConnectedComponents(nodes []Node, connections []Conn
 		adjacent[conn.From] = append(adjacent[conn.From], conn.To)
 		adjacent[conn.To] = append(adjacent[conn.To], conn.From)
 	}
-	
+
 	// Find components using DFS
 	visited := make(map[int]bool)
 	components := [][]int{}
-	
+
 	for _, node := range nodes {
 		if !visited[node.ID] {
 			component := []int{}
 			stack := []int{node.ID}
-			
+
 			for len(stack) > 0 {
 				current := stack[len(stack)-1]
 				stack = stack[:len(stack)-1]
-				
+
 				if visited[current] {
 					continue
 				}
 				visited[current] = true
 				component = append(component, current)
-				
+
 				for _, neighbor := range adjacent[current] {
 					if !visited[neighbor] {
 						stack = append(stack, neighbor)
 					}
 				}
 			}
-			
+
 			// Sort component by ID for consistent ordering
 			sort.Slice(component, func(i, j int) bool {
 				return component[i] < component[j]
 			})
-			
+
 			components = append(components, component)
 		}
 	}
-	
+
 	return components
 }
 
@@ -1196,14 +1196,14 @@ func (l *LayeredLayout) layoutComponent(componentNodes []int, connections []Conn
 	for _, nodeID := range componentNodes {
 		componentSet[nodeID] = true
 	}
-	
+
 	componentConnections := []Connection{}
 	for _, conn := range connections {
 		if componentSet[conn.From] && componentSet[conn.To] {
 			componentConnections = append(componentConnections, conn)
 		}
 	}
-	
+
 	// Use the original layout algorithm for this component
 	return l.layoutSingleComponent(componentNodes, componentConnections, nodeMap, startX)
 }
@@ -1303,7 +1303,7 @@ func (l *LayeredLayout) layoutSingleComponent(nodeIDs []int, connections []Conne
 		// Check if this column has 1-to-1 connections (should align)
 		// vs hub-and-spoke connections (should distribute)
 		shouldAlign := make(map[int]bool)
-		
+
 		if colIdx > 0 {
 			// Count outgoing connections from previous column nodes
 			prevColumnOutgoing := make(map[int]int)
@@ -1314,7 +1314,7 @@ func (l *LayeredLayout) layoutSingleComponent(nodeIDs []int, connections []Conne
 					}
 				}
 			}
-			
+
 			// Check each node in current column
 			for _, nodeID := range column {
 				for _, conn := range connections {
@@ -1329,13 +1329,13 @@ func (l *LayeredLayout) layoutSingleComponent(nodeIDs []int, connections []Conne
 				}
 			}
 		}
-		
+
 		// Assign positions
 		unalignedIndex := 0
 		for _, nodeID := range column {
 			node := nodeMap[nodeID]
 			node.X = columnStartX[colIdx]
-			
+
 			if shouldAlign[nodeID] {
 				// Find the source node's Y position for alignment
 				for _, conn := range connections {
@@ -1388,13 +1388,13 @@ func SimpleOrthogonalRouteWithContext(from, to Node, allNodes []Node) []Point {
 				continue // Skip source and target nodes
 			}
 			// Check if the horizontal line at startY intersects with this box
-			if startY >= node.Y && startY < node.Y+node.Height && 
-			   startX < node.X+node.Width && endX > node.X {
+			if startY >= node.Y && startY < node.Y+node.Height &&
+				startX < node.X+node.Width && endX > node.X {
 				hasCollision = true
 				break
 			}
 		}
-		
+
 		if !hasCollision {
 			// No collision - straight horizontal
 			path = append(path, Point{X: startX, Y: startY, Rune: '├'})
@@ -1412,7 +1412,7 @@ func SimpleOrthogonalRouteWithContext(from, to Node, allNodes []Node) []Point {
 				}
 			}
 			safeY := maxY + 1
-			
+
 			// Go down to safe Y
 			path = append(path, Point{X: startX, Y: startY, Rune: '├'})
 			path = append(path, Point{X: startX + 1, Y: startY, Rune: '─'})
@@ -1421,12 +1421,12 @@ func SimpleOrthogonalRouteWithContext(from, to Node, allNodes []Node) []Point {
 				path = append(path, Point{X: startX + 2, Y: y, Rune: '│'})
 			}
 			path = append(path, Point{X: startX + 2, Y: safeY, Rune: '╰'})
-			
+
 			// Horizontal to target at safe Y
 			for x := startX + 3; x < endX; x++ {
 				path = append(path, Point{X: x, Y: safeY, Rune: '─'})
 			}
-			
+
 			// Go up to target Y
 			path = append(path, Point{X: endX, Y: safeY, Rune: '╮'})
 			for y := safeY - 1; y > endY; y-- {
@@ -1544,13 +1544,14 @@ type Mode int
 const (
 	ModeNormal Mode = iota
 	ModeInsert
-	ModeInsertSelect   // Selecting node to edit
+	ModeInsertSelect // Selecting node to edit
 	ModeCommand
-	ModeSelectFrom     // Selecting source node for connection
-	ModeSelectTo       // Selecting target node for connection
-	ModeDelete         // Selecting node to delete
-	ModeDeleteConfirm  // Confirming node deletion
-	ModeHelp           // Showing help dialogue
+	ModeSelectFrom    // Selecting source node for connection
+	ModeSelectTo      // Selecting target node for connection
+	ModeDelete        // Selecting node to delete
+	ModeDeleteConfirm // Confirming node deletion
+	ModeLoadConfirm   // Confirming file load (overwrite warning)
+	ModeHelp          // Showing help dialogue
 )
 
 // String returns the mode name for display
@@ -1572,6 +1573,8 @@ func (m Mode) String() string {
 		return "DELETE"
 	case ModeDeleteConfirm:
 		return "DELETE CONFIRM"
+	case ModeLoadConfirm:
+		return "LOAD CONFIRM"
 	case ModeHelp:
 		return "HELP"
 	default:
@@ -1589,21 +1592,22 @@ type Editor struct {
 	modeIndicator    *Canvas       // Small canvas for mode animation
 	eddCharacter     *EddCharacter // The living edd character
 	animationRunning bool          // Whether the living animation is active
-	
+
 	// Jump selection state
 	jumpActive       bool
 	jumpLabels       map[int]rune // Map from node ID to jump label
-	connectionLabels map[int]rune // Map from connection index to jump label  
+	connectionLabels map[int]rune // Map from connection index to jump label
 	connectionFrom   int          // Source node for connection (when in SelectTo mode)
-	
+
 	// Insert mode cursor position
-	cursorPos        int          // Character position within current node's text
-	
+	cursorPos int // Character position within current node's text
+
 	// File management
-	currentFilename  string       // Current .edd file being edited
-	
+	currentFilename string // Current .edd file being edited
+
 	// Command mode
-	commandBuffer    string       // Command being typed in command mode
+	commandBuffer    string // Command being typed in command mode
+	pendingFilename  string // Filename waiting for load confirmation
 }
 
 // EddCharacter represents the living animated character
@@ -1693,31 +1697,31 @@ func getTerminalSize() (width, height int) {
 	if err != nil {
 		return 80, 30 // fallback to reasonable defaults
 	}
-	
+
 	parts := strings.Fields(string(output))
 	if len(parts) != 2 {
 		return 80, 30 // fallback on parse error
 	}
-	
+
 	// stty returns "rows columns"
 	if h, err := strconv.Atoi(parts[0]); err == nil {
 		height = h
 	} else {
 		height = 30
 	}
-	
+
 	if w, err := strconv.Atoi(parts[1]); err == nil {
 		width = w
 	} else {
 		width = 80
 	}
-	
+
 	// Reserve space for ed character and padding
 	height = height - 7 // Just leave room for ed and some padding
 	if height < 10 {
 		height = 10 // Minimum usable height
 	}
-	
+
 	return width, height
 }
 
@@ -1733,7 +1737,7 @@ func NewEditor() *Editor {
 		currentNode:      -1, // No node selected initially
 		nextNodeID:       0,
 		canvas:           NewCanvas(width, height),
-		modeIndicator:    NewCanvas(18, 5), // Wide enough for table flip animation
+		modeIndicator:    NewCanvas(18, 5),  // Wide enough for table flip animation
 		eddCharacter:     NewEddCharacter(), // Meet ed!
 		animationRunning: false,
 		jumpActive:       false,
@@ -1743,6 +1747,7 @@ func NewEditor() *Editor {
 		cursorPos:        0,
 		currentFilename:  "",
 		commandBuffer:    "",
+		pendingFilename:  "",
 	}
 }
 
@@ -1761,7 +1766,7 @@ func (e *Editor) positionCursor() {
 	// Find the current node and get its positioned coordinates
 	layout := NewLayeredLayout()
 	positioned := layout.CalculateLayout(e.diagram.Nodes, e.diagram.Connections)
-	
+
 	var currentNode *Node
 	for _, node := range positioned {
 		if node.ID == e.currentNode {
@@ -1769,32 +1774,32 @@ func (e *Editor) positionCursor() {
 			break
 		}
 	}
-	
+
 	if currentNode == nil {
 		return
 	}
-	
+
 	// Get current text
 	var currentText string
 	if len(currentNode.Text) > 0 {
 		currentText = currentNode.Text[0]
 	}
 	textLength := len(currentText)
-	
+
 	// Ensure cursor position is within bounds
 	if e.cursorPos > textLength {
 		e.cursorPos = textLength
 	}
-	
+
 	// Calculate text start position using same logic as DrawBox
 	availableWidth := currentNode.Width - 2*NodePadding - 2 // -2 for borders
 	textStartX := currentNode.X + 1 + NodePadding + (availableWidth-textLength)/2
 	textY := currentNode.Y + 1
-	
+
 	// Position cursor at the current cursor position within the centered text
 	cursorX := textStartX + e.cursorPos
 	cursorY := textY
-	
+
 	// Move cursor and show it
 	fmt.Printf("\033[%d;%dH\033[?25h", cursorY+1, cursorX+1)
 }
@@ -1809,19 +1814,19 @@ func (e *Editor) saveDiagram(filename string) error {
 			Created: time.Now().Format("2006-01-02 15:04:05"),
 		},
 	}
-	
+
 	// Marshal to JSON with indentation for readability
 	jsonData, err := json.MarshalIndent(saved, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal diagram: %v", err)
 	}
-	
+
 	// Write to file
 	err = os.WriteFile(filename, jsonData, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %v", err)
 	}
-	
+
 	// Update current filename
 	e.currentFilename = filename
 	return nil
@@ -1834,29 +1839,29 @@ func (e *Editor) loadDiagram(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read file: %v", err)
 	}
-	
+
 	// Parse JSON
 	var saved SavedDiagram
 	err = json.Unmarshal(jsonData, &saved)
 	if err != nil {
 		return fmt.Errorf("failed to parse diagram: %v", err)
 	}
-	
+
 	// Load diagram data
 	e.diagram = saved.Diagram
-	
+
 	// Recalculate node sizes and positions since they weren't saved
 	for i := range e.diagram.Nodes {
 		node := &e.diagram.Nodes[i]
 		// Recalculate width and height from text
 		node.Width, node.Height = CalculateNodeSize(node.Text)
 	}
-	
+
 	// Update editor state
 	e.currentFilename = filename
 	e.currentNode = -1 // Reset current node selection
 	e.cursorPos = 0
-	
+
 	// Update nextNodeID to avoid conflicts
 	maxID := -1
 	for _, node := range e.diagram.Nodes {
@@ -1865,8 +1870,13 @@ func (e *Editor) loadDiagram(filename string) error {
 		}
 	}
 	e.nextNodeID = maxID + 1
-	
+
 	return nil
+}
+
+// hasContent returns true if the diagram has any nodes or connections
+func (e *Editor) hasContent() bool {
+	return len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0
 }
 
 // SetMode changes the current editing mode
@@ -2023,7 +2033,7 @@ func (e *Editor) drawLivingEdd(face, cursor string, connections map[string]rune)
 // drawTableFlipAnimation draws ed doing a table flip with the table outside his box
 func (e *Editor) drawTableFlipAnimation() {
 	frames := e.eddCharacter.tableFlipFrames
-	
+
 	// Always draw ed's box first
 	e.modeIndicator.Set(2, 1, '╭')
 	e.modeIndicator.Set(7, 1, '╮')
@@ -2035,7 +2045,7 @@ func (e *Editor) drawTableFlipAnimation() {
 	}
 	e.modeIndicator.Set(2, 2, '│')
 	e.modeIndicator.Set(7, 2, '│')
-	
+
 	switch frames {
 	case 5:
 		// Realization - narrowing eyes
@@ -2048,7 +2058,7 @@ func (e *Editor) drawTableFlipAnimation() {
 		e.modeIndicator.Set(11, 3, '─')
 		e.modeIndicator.Set(12, 3, '─')
 		e.modeIndicator.Set(13, 3, '┬')
-		
+
 	case 4:
 		// Building rage - wide angry eyes
 		e.modeIndicator.Set(3, 2, '◉')
@@ -2063,7 +2073,7 @@ func (e *Editor) drawTableFlipAnimation() {
 		e.modeIndicator.Set(11, 3, '─')
 		e.modeIndicator.Set(12, 3, '─')
 		e.modeIndicator.Set(13, 3, '┬')
-		
+
 	case 3:
 		// Full rage - arms up, grabbing table
 		e.modeIndicator.Set(3, 2, '◉')
@@ -2079,7 +2089,7 @@ func (e *Editor) drawTableFlipAnimation() {
 		e.modeIndicator.Set(11, 2, '─')
 		e.modeIndicator.Set(12, 2, '─')
 		e.modeIndicator.Set(13, 2, '┬')
-		
+
 	case 2:
 		// Mid flip - maximum effort
 		e.modeIndicator.Set(3, 2, '>')
@@ -2096,7 +2106,7 @@ func (e *Editor) drawTableFlipAnimation() {
 		e.modeIndicator.Set(12, 1, '┻')
 		e.modeIndicator.Set(13, 1, '━')
 		e.modeIndicator.Set(14, 1, '┻')
-		
+
 	case 1:
 		// Satisfied - table gone, ed happy
 		e.modeIndicator.Set(3, 2, '◉')
@@ -2111,7 +2121,7 @@ func (e *Editor) drawTableFlipAnimation() {
 		e.modeIndicator.Set(14, 0, '┻')
 		e.modeIndicator.Set(15, 0, '┻')
 	}
-	
+
 	// Mode label
 	text := "TABLE FLIP!"
 	startX := 2
@@ -2146,7 +2156,7 @@ func (edd *EddCharacter) NextFrame(mode Mode) {
 func (edd *EddCharacter) GetCurrentFrame(mode Mode) string {
 	// Table flip is handled separately in drawTableFlipAnimation
 	// Don't return table flip frames here
-	
+
 	frames := edd.idleAnimations[mode]
 	if len(frames) == 0 {
 		return "◉_◉" // Default
@@ -2481,14 +2491,14 @@ func (e *Editor) printDebugInfo() {
 	fmt.Printf("Mode: %s\n", e.mode)
 	fmt.Printf("Current Node: %d\n", e.currentNode)
 	fmt.Printf("Next Node ID: %d\n", e.nextNodeID)
-	
+
 	fmt.Println("\nNodes:")
 	for _, node := range e.diagram.Nodes {
-		fmt.Printf("  Node %d: pos(%d,%d) size(%dx%d) text=%q\n", 
-			node.ID, node.X, node.Y, node.Width, node.Height, 
+		fmt.Printf("  Node %d: pos(%d,%d) size(%dx%d) text=%q\n",
+			node.ID, node.X, node.Y, node.Width, node.Height,
 			strings.Join(node.Text, " "))
 	}
-	
+
 	fmt.Println("\nConnections:")
 	for i, conn := range e.diagram.Connections {
 		fmt.Printf("  [%d] %d -> %d", i, conn.From, conn.To)
@@ -2506,7 +2516,7 @@ func (e *Editor) printDebugInfo() {
 		fmt.Printf("  Node %d: pos(%d,%d) size(%dx%d) text=%q\n",
 			node.ID, node.X, node.Y, node.Width, node.Height, strings.Join(node.Text, " "))
 	}
-	
+
 	fmt.Println("\n=== END DEBUG INFO ===")
 	fmt.Println("\nCopy the above output when reporting issues!")
 }
@@ -2520,15 +2530,15 @@ func (e *Editor) startJump() {
 	if len(e.diagram.Nodes) == 0 && (e.mode != ModeDelete || len(e.diagram.Connections) == 0) {
 		return // No nodes/connections to select
 	}
-	
+
 	e.jumpActive = true
 	e.jumpLabels = make(map[int]rune)
 	e.connectionLabels = make(map[int]rune)
-	
+
 	// Generate labels using home row keys first, then other letters
 	labels := "asdfghjklqwertyuiopzxcvbnm"
 	labelIndex := 0
-	
+
 	// Assign labels to nodes
 	for _, node := range e.diagram.Nodes {
 		if labelIndex < len(labels) {
@@ -2536,7 +2546,7 @@ func (e *Editor) startJump() {
 			labelIndex++
 		}
 	}
-	
+
 	// In delete mode, also assign labels to connections
 	if e.mode == ModeDelete {
 		for i := range e.diagram.Connections {
@@ -2563,7 +2573,7 @@ func (e *Editor) handleJumpSelection(key rune) bool {
 			return e.selectNode(nodeID)
 		}
 	}
-	
+
 	// Find connection with this label (only in delete mode)
 	if e.mode == ModeDelete {
 		for connIndex, label := range e.connectionLabels {
@@ -2572,7 +2582,7 @@ func (e *Editor) handleJumpSelection(key rune) bool {
 			}
 		}
 	}
-	
+
 	return false // Key not found
 }
 
@@ -2585,7 +2595,7 @@ func (e *Editor) selectNode(nodeID int) bool {
 		e.SetMode(ModeSelectTo)
 		e.startJump() // Start new jump for target selection
 		return false
-		
+
 	case ModeSelectTo:
 		// Selected target node, create connection
 		if e.connectionFrom >= 0 {
@@ -2598,7 +2608,7 @@ func (e *Editor) selectNode(nodeID int) bool {
 		e.connectionFrom = -1
 		e.startJump() // Start new jump for next connection
 		return false
-		
+
 	case ModeInsertSelect:
 		// Selected node to edit - enter insert mode
 		e.currentNode = nodeID
@@ -2612,11 +2622,11 @@ func (e *Editor) selectNode(nodeID int) bool {
 		e.SetMode(ModeInsert)
 		e.stopJump()
 		return false
-		
+
 	case ModeDelete:
 		// Selected node to delete - prompt for confirmation
 		return e.confirmDelete(nodeID)
-		
+
 	default:
 		// Just select the node
 		e.currentNode = nodeID
@@ -2649,11 +2659,11 @@ func (e *Editor) deleteConnection(connIndex int) {
 func (e *Editor) confirmDelete(nodeID int) bool {
 	// Keep jump active but store the node to delete
 	e.connectionFrom = nodeID // Reuse this field to store pending delete
-	e.stopJump() // Stop showing jump labels but keep node highlighted
-	
+	e.stopJump()              // Stop showing jump labels but keep node highlighted
+
 	// Switch to delete confirm mode - this triggers ed's table flip animation
 	e.SetMode(ModeDeleteConfirm)
-	
+
 	return false
 }
 
@@ -2666,7 +2676,7 @@ func (e *Editor) deleteNode(nodeID int) {
 			break
 		}
 	}
-	
+
 	// Remove all connections involving this node
 	var remainingConnections []Connection
 	for _, conn := range e.diagram.Connections {
@@ -2675,23 +2685,22 @@ func (e *Editor) deleteNode(nodeID int) {
 		}
 	}
 	e.diagram.Connections = remainingConnections
-	
+
 	// Update current node if it was deleted
 	if e.currentNode == nodeID {
 		e.currentNode = -1
 	}
 }
 
-
 // renderJumpLabels overlays jump labels on nodes and connections
 func (e *Editor) renderJumpLabels() {
 	// Get positioned nodes
 	layout := NewLayeredLayout()
 	positioned := layout.CalculateLayout(e.diagram.Nodes, e.diagram.Connections)
-	
+
 	// Print labels directly after the canvas
 	fmt.Print("\033[s") // Save cursor position
-	
+
 	// Render node labels
 	for _, node := range positioned {
 		if e.mode == ModeDeleteConfirm && node.ID == e.connectionFrom {
@@ -2711,7 +2720,7 @@ func (e *Editor) renderJumpLabels() {
 			fmt.Printf("\033[%d;%dH\033[33m%c\033[0m", labelY+1, labelX+1, label)
 		}
 	}
-	
+
 	// Render connection labels (only in delete mode)
 	if e.mode == ModeDelete {
 		// Create node map for connection rendering
@@ -2719,24 +2728,24 @@ func (e *Editor) renderJumpLabels() {
 		for _, node := range positioned {
 			nodeMap[node.ID] = node
 		}
-		
+
 		for i, conn := range e.diagram.Connections {
 			if label, exists := e.connectionLabels[i]; exists {
 				fromNode := nodeMap[conn.From]
 				toNode := nodeMap[conn.To]
-				
+
 				// Route the connection to find the arrow position
 				path := SimpleOrthogonalRouteWithContext(fromNode, toNode, positioned)
-				
+
 				if len(path) >= 2 {
 					// Place label near the arrow (which is at the end of the path)
 					// Use the second-to-last point to avoid overlapping with arrow
 					labelPoint := path[len(path)-2]
-					
+
 					// Adjust position based on arrow direction
 					labelX := labelPoint.X
 					labelY := labelPoint.Y
-					
+
 					// If the arrow is horizontal, place label above/below
 					if len(path) >= 3 {
 						prevPoint := path[len(path)-3]
@@ -2754,17 +2763,16 @@ func (e *Editor) renderJumpLabels() {
 							}
 						}
 					}
-					
+
 					// Print red label for connection
 					fmt.Printf("\033[%d;%dH\033[31m%c\033[0m", labelY+1, labelX+1, label)
 				}
 			}
 		}
 	}
-	
+
 	fmt.Print("\033[u") // Restore cursor position
 }
-
 
 // ========================================
 // ANIMATION SYSTEM
@@ -3105,7 +3113,7 @@ func (e *Editor) handleKey(key rune) bool {
 	if e.jumpActive {
 		return e.handleJumpKey(key)
 	}
-	
+
 	switch e.mode {
 	case ModeNormal:
 		return e.handleNormalKey(key)
@@ -3115,6 +3123,8 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleSelectKey(key)
 	case ModeDeleteConfirm:
 		return e.handleDeleteConfirmKey(key)
+	case ModeLoadConfirm:
+		return e.handleLoadConfirmKey(key)
 	case ModeHelp:
 		return e.handleHelpKey(key)
 	case ModeCommand:
@@ -3181,7 +3191,6 @@ func (e *Editor) handleInsertKey(key rune) bool {
 	return false
 }
 
-
 // handleSelectKey processes keys in selection modes
 func (e *Editor) handleSelectKey(key rune) bool {
 	switch key {
@@ -3220,6 +3229,33 @@ func (e *Editor) handleDeleteConfirmKey(key rune) bool {
 	return false
 }
 
+// handleLoadConfirmKey processes y/N confirmation for file load
+func (e *Editor) handleLoadConfirmKey(key rune) bool {
+	switch key {
+	case 'y', 'Y':
+		// Confirm load - proceed with overwriting current diagram
+		if e.pendingFilename != "" {
+			err := e.loadDiagram(e.pendingFilename)
+			if err != nil {
+				fmt.Printf("\nError loading: %v", err)
+				time.Sleep(2 * time.Second)
+			} else {
+				fmt.Printf("\nLoaded %s", e.pendingFilename)
+				time.Sleep(1 * time.Second)
+			}
+			e.pendingFilename = ""
+		}
+		e.SetMode(ModeNormal)
+	case 'n', 'N', 27: // N, n, or ESC to cancel
+		// Cancel load
+		e.pendingFilename = ""
+		e.SetMode(ModeNormal)
+	case 3: // Ctrl+C
+		return true
+	}
+	return false
+}
+
 // handleHelpKey processes keys in help mode
 func (e *Editor) handleHelpKey(key rune) bool {
 	switch key {
@@ -3240,8 +3276,14 @@ func (e *Editor) handleCommandKey(key rune) bool {
 		if result {
 			return true // Exit requested
 		}
-		e.SetMode(ModeNormal)
-		e.commandBuffer = ""
+		// Only return to normal mode if we're not in a confirmation mode
+		if e.mode != ModeLoadConfirm {
+			e.SetMode(ModeNormal)
+			e.commandBuffer = ""
+		} else {
+			// In LoadConfirm mode, keep command buffer for display
+			e.commandBuffer = ""
+		}
 	case 127, 8: // Backspace
 		if len(e.commandBuffer) > 1 { // Keep the ':'
 			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
@@ -3258,20 +3300,23 @@ func (e *Editor) handleCommandKey(key rune) bool {
 
 // executeCommand processes and executes vim-style commands
 func (e *Editor) executeCommand(command string) bool {
+	fmt.Printf("\nDEBUG: executeCommand called with: '%s'", command)
 	// Remove leading ':'
 	if strings.HasPrefix(command, ":") {
 		command = command[1:]
 	}
-	
+
 	// Split command and arguments
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
+		fmt.Printf("\nDEBUG: No parts found")
 		return false
 	}
-	
+
 	cmd := parts[0]
 	args := parts[1:]
-	
+	fmt.Printf("\nDEBUG: cmd='%s', args=%v", cmd, args)
+
 	switch cmd {
 	case "w", "write":
 		// Save command
@@ -3306,24 +3351,37 @@ func (e *Editor) executeCommand(command string) bool {
 		}
 	case "r", "read":
 		// Load command
+		fmt.Printf("\nDEBUG: r command triggered with %d args", len(args))
 		if len(args) == 0 {
 			fmt.Print("\nNo filename specified")
 			time.Sleep(1 * time.Second)
 			return false
 		}
-		
+
 		filename := args[0]
 		if !strings.HasSuffix(filename, ".edd") {
 			filename += ".edd"
 		}
-		
-		err := e.loadDiagram(filename)
-		if err != nil {
-			fmt.Printf("\nError loading: %v", err)
-			time.Sleep(2 * time.Second)
+		fmt.Printf("\nDEBUG: Loading %s, hasContent: %v", filename, e.hasContent())
+
+		// Check if we need to confirm overwrite
+		if e.hasContent() {
+			// Store filename and ask for confirmation
+			fmt.Printf("\nDEBUG: Setting pending filename to %s", filename)
+			e.pendingFilename = filename
+			e.SetMode(ModeLoadConfirm)
+			fmt.Printf("\nDEBUG: Mode set to LoadConfirm")
+			return false
 		} else {
-			fmt.Printf("\nLoaded %s", filename)
-			time.Sleep(1 * time.Second)
+			// Safe to load directly
+			err := e.loadDiagram(filename)
+			if err != nil {
+				fmt.Printf("\nError loading: %v", err)
+				time.Sleep(2 * time.Second)
+			} else {
+				fmt.Printf("\nLoaded %s", filename)
+				time.Sleep(1 * time.Second)
+			}
 		}
 	case "q", "quit":
 		// Quit command
@@ -3343,7 +3401,7 @@ func (e *Editor) executeCommand(command string) bool {
 		fmt.Printf("\nUnknown command: %s", cmd)
 		time.Sleep(1 * time.Second)
 	}
-	
+
 	return false
 }
 
@@ -3411,9 +3469,9 @@ func (e *Editor) addCharToCurrentNode(ch rune) {
 				if len(e.diagram.Nodes[i].Text) == 0 {
 					e.diagram.Nodes[i].Text = []string{""}
 				}
-				
+
 				text := e.diagram.Nodes[i].Text[0]
-				
+
 				// Insert character at cursor position
 				if e.cursorPos >= len(text) {
 					// Append to end
@@ -3422,7 +3480,7 @@ func (e *Editor) addCharToCurrentNode(ch rune) {
 					// Insert in middle
 					e.diagram.Nodes[i].Text[0] = text[:e.cursorPos] + string(ch) + text[e.cursorPos:]
 				}
-				
+
 				// Move cursor forward
 				e.cursorPos++
 
@@ -3444,7 +3502,7 @@ func (e *Editor) handleBackspace() {
 			if e.diagram.Nodes[i].ID == e.currentNode {
 				if len(e.diagram.Nodes[i].Text) > 0 && len(e.diagram.Nodes[i].Text[0]) > 0 {
 					text := e.diagram.Nodes[i].Text[0]
-					
+
 					// Remove character before cursor
 					if e.cursorPos <= len(text) {
 						e.diagram.Nodes[i].Text[0] = text[:e.cursorPos-1] + text[e.cursorPos:]
@@ -3479,12 +3537,12 @@ func (e *Editor) Render() {
 
 		// Display main canvas
 		fmt.Print(e.canvas.String())
-		
+
 		// Add jump labels if active or in delete confirm mode (overlay on top)
 		if e.jumpActive || e.mode == ModeDeleteConfirm {
 			e.renderJumpLabels()
 		}
-		
+
 		fmt.Print("\n\n\n")
 	}
 
@@ -3492,12 +3550,17 @@ func (e *Editor) Render() {
 	fmt.Print("\033[33m") // Yellow
 	fmt.Print(e.modeIndicator.String())
 	fmt.Print("\033[0m") // Reset
-	
+
 	// Display command buffer if in command mode
 	if e.mode == ModeCommand {
 		fmt.Printf("\n%s", e.commandBuffer)
 	}
 	
+	// Display load confirmation if in load confirm mode
+	if e.mode == ModeLoadConfirm {
+		fmt.Printf("\nOverwrite current diagram with %s? (y/N): ", e.pendingFilename)
+	}
+
 	// Position cursor if in insert mode
 	e.positionCursor()
 }
@@ -3505,7 +3568,7 @@ func (e *Editor) Render() {
 // renderHelp displays the help dialogue
 func (e *Editor) renderHelp() {
 	fmt.Print("\033[36m") // Cyan color for help text
-	
+
 	fmt.Println("════════════════════════════════════════════════════════════")
 	fmt.Println("                     EDD - Elegant Diagram Drawer")
 	fmt.Println("════════════════════════════════════════════════════════════")
@@ -3562,7 +3625,7 @@ func (e *Editor) renderHelp() {
 	fmt.Println("  Load existing diagram or start fresh")
 	fmt.Println()
 	fmt.Println("Press ESC, ?, or q to return to normal mode")
-	
+
 	fmt.Print("\033[0m") // Reset color
 	fmt.Print("\n\n")
 }
@@ -3570,14 +3633,14 @@ func (e *Editor) renderHelp() {
 func main() {
 	// Start the editor
 	editor := NewEditor()
-	
+
 	// Check for command line argument (filename to load)
 	if len(os.Args) > 1 {
 		filename := os.Args[1]
 		if !strings.HasSuffix(filename, ".edd") {
 			filename += ".edd"
 		}
-		
+
 		fmt.Printf("Loading %s...\n", filename)
 		err := editor.loadDiagram(filename)
 		if err != nil {
