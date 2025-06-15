@@ -1535,13 +1535,14 @@ const (
 	ModeSelectTo       // Selecting target node for connection
 	ModeDelete         // Selecting node to delete
 	ModeDeleteConfirm  // Confirming node deletion
+	ModeHelp           // Showing help dialogue
 )
 
 // String returns the mode name for display
 func (m Mode) String() string {
 	switch m {
 	case ModeNormal:
-		return "NORMAL"
+		return "NORMAL (help: ?)"
 	case ModeInsert:
 		return "INSERT"
 	case ModeCommand:
@@ -1554,6 +1555,8 @@ func (m Mode) String() string {
 		return "DELETE"
 	case ModeDeleteConfirm:
 		return "DELETE CONFIRM"
+	case ModeHelp:
+		return "HELP"
 	default:
 		return "UNKNOWN"
 	}
@@ -1633,6 +1636,13 @@ func NewEddCharacter() *EddCharacter {
 	ed.idleAnimations[ModeDeleteConfirm] = []string{
 		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Serious, waiting
 		"◉‿ ◉", "◉‿ ◉", ">‿ <", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Focused concentration
+	}
+
+	ed.idleAnimations[ModeHelp] = []string{
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Scholarly contemplation
+		"◎‿ ◎", "◎‿ ◎", "◉‿ ◉", "◉‿ ◉", "◎‿ ◎", "◉‿ ◉", // Academic focus (glasses effect)
+		"◉‿ ◉", "◉‿ ◉", "-‿ -", "◉‿ ◉", "◉‿ ◉", "◉‿ ◉", // Wise pondering blink
+		"◉‿ ◉", "◉‿ ◉", "◉‿ ◉", "⊙‿ ⊙", "◉‿ ◉", "◉‿ ◉", // Deep thought
 	}
 
 	ed.idleAnimations[ModeCommand] = []string{
@@ -2940,6 +2950,8 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleSelectKey(key)
 	case ModeDeleteConfirm:
 		return e.handleDeleteConfirmKey(key)
+	case ModeHelp:
+		return e.handleHelpKey(key)
 	}
 	return false
 }
@@ -2964,6 +2976,8 @@ func (e *Editor) handleNormalKey(key rune) bool {
 		e.startJump()
 	case 'r': // Resize buffer to fit terminal
 		e.ResizeBuffer()
+	case '?': // Show help
+		e.SetMode(ModeHelp)
 	}
 	return false
 }
@@ -3024,6 +3038,15 @@ func (e *Editor) handleDeleteConfirmKey(key rune) bool {
 		e.startJump()
 	case 3: // Ctrl+C
 		return true
+	}
+	return false
+}
+
+// handleHelpKey processes keys in help mode
+func (e *Editor) handleHelpKey(key rune) bool {
+	switch key {
+	case 27, '?', 'q', 3: // ESC, ?, q, or Ctrl+C to exit help
+		e.SetMode(ModeNormal)
 	}
 	return false
 }
@@ -3132,26 +3155,81 @@ func (e *Editor) Render() {
 	// Clear screen and hide cursor
 	fmt.Print("\033[2J\033[H\033[?25l")
 
-	// Clear canvas
-	e.canvas.Clear()
+	if e.mode == ModeHelp {
+		// Show help screen instead of diagram
+		e.renderHelp()
+	} else {
+		// Clear canvas
+		e.canvas.Clear()
 
-	// Render diagram
-	e.canvas.Render(e.diagram)
+		// Render diagram
+		e.canvas.Render(e.diagram)
 
-	// Display main canvas
-	fmt.Print(e.canvas.String())
-	
-	// Add jump labels if active or in delete confirm mode (overlay on top)
-	if e.jumpActive || e.mode == ModeDeleteConfirm {
-		e.renderJumpLabels()
+		// Display main canvas
+		fmt.Print(e.canvas.String())
+		
+		// Add jump labels if active or in delete confirm mode (overlay on top)
+		if e.jumpActive || e.mode == ModeDeleteConfirm {
+			e.renderJumpLabels()
+		}
+		
+		fmt.Print("\n\n\n")
 	}
-	
-	fmt.Print("\n\n\n")
 
 	// Display ed character with color
 	fmt.Print("\033[33m") // Yellow
 	fmt.Print(e.modeIndicator.String())
 	fmt.Print("\033[0m") // Reset
+}
+
+// renderHelp displays the help dialogue
+func (e *Editor) renderHelp() {
+	fmt.Print("\033[36m") // Cyan color for help text
+	
+	fmt.Println("════════════════════════════════════════════════════════════")
+	fmt.Println("                     EDD - Elegant Diagram Drawer")
+	fmt.Println("════════════════════════════════════════════════════════════")
+	fmt.Println()
+	fmt.Println("📚 MODES & NAVIGATION:")
+	fmt.Println("  Normal Mode:")
+	fmt.Println("    a      - Add new node (enter insert mode)")
+	fmt.Println("    c      - Connect nodes (enter select mode)")
+	fmt.Println("    d      - Delete nodes/connections")
+	fmt.Println("    r      - Resize buffer to fit terminal")
+	fmt.Println("    ?      - Show this help (you are here!)")
+	fmt.Println("    q      - Quit application")
+	fmt.Println("    Q      - Debug quit (show graph structure)")
+	fmt.Println()
+	fmt.Println("  Insert Mode:")
+	fmt.Println("    Type   - Add text to current node")
+	fmt.Println("    Enter  - Create another new node")
+	fmt.Println("    ESC    - Return to normal mode")
+	fmt.Println()
+	fmt.Println("  Connect Mode:")
+	fmt.Println("    Letter - Select node (yellow labels)")
+	fmt.Println("           - First: source node (FROM)")
+	fmt.Println("           - Second: target node (TO)")
+	fmt.Println("           - Stays in connect mode for multiple connections")
+	fmt.Println("    ESC    - Return to normal mode")
+	fmt.Println()
+	fmt.Println("  Delete Mode:")
+	fmt.Println("    Letter - Select node (yellow) or connection (red)")
+	fmt.Println("           - Nodes: y/N confirmation required")
+	fmt.Println("           - Connections: immediate deletion")
+	fmt.Println("           - Stays in delete mode for multiple deletions")
+	fmt.Println("    ESC    - Return to normal mode")
+	fmt.Println()
+	fmt.Println("🎨 FEATURES:")
+	fmt.Println("  • Unicode box drawing with rounded corners")
+	fmt.Println("  • Automatic layout and routing")
+	fmt.Println("  • Jump-based selection (like ace-jump)")
+	fmt.Println("  • Living character 'ed' with mode-specific animations")
+	fmt.Println("  • Auto-resizing terminal support")
+	fmt.Println()
+	fmt.Println("Press ESC, ?, or q to return to normal mode")
+	
+	fmt.Print("\033[0m") // Reset color
+	fmt.Print("\n\n")
 }
 
 func main() {
