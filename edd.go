@@ -2432,9 +2432,10 @@ func (e *Editor) selectNode(nodeID int) bool {
 			e.diagram.Connections = append(e.diagram.Connections, conn)
 			fmt.Printf("Connected node %d to node %d\n", e.connectionFrom, nodeID)
 		}
-		e.stopJump()
-		e.SetMode(ModeNormal)
+		// Stay in connect mode - go back to FROM selection
+		e.SetMode(ModeSelectFrom)
 		e.connectionFrom = -1
+		e.startJump() // Start new jump for next connection
 		return false
 		
 	case ModeDelete:
@@ -2549,12 +2550,39 @@ func (e *Editor) renderJumpLabels() {
 				fromNode := nodeMap[conn.From]
 				toNode := nodeMap[conn.To]
 				
-				// Calculate midpoint of connection
-				midX := (fromNode.X + fromNode.Width/2 + toNode.X + toNode.Width/2) / 2
-				midY := (fromNode.Y + fromNode.Height/2 + toNode.Y + toNode.Height/2) / 2
+				// Route the connection to find the arrow position
+				path := SimpleOrthogonalRouteWithContext(fromNode, toNode, positioned)
 				
-				// Print red label for connection
-				fmt.Printf("\033[%d;%dH\033[31m%c\033[0m", midY+1, midX+1, label)
+				if len(path) >= 2 {
+					// Place label near the arrow (which is at the end of the path)
+					// Use the second-to-last point to avoid overlapping with arrow
+					labelPoint := path[len(path)-2]
+					
+					// Adjust position based on arrow direction
+					labelX := labelPoint.X
+					labelY := labelPoint.Y
+					
+					// If the arrow is horizontal, place label above/below
+					if len(path) >= 3 {
+						prevPoint := path[len(path)-3]
+						if prevPoint.Y == labelPoint.Y {
+							// Horizontal approach to arrow
+							labelY = labelPoint.Y - 1 // Place above the line
+							if labelY < 0 {
+								labelY = labelPoint.Y + 1 // Place below if no room above
+							}
+						} else {
+							// Vertical approach to arrow
+							labelX = labelPoint.X - 2 // Place to the left
+							if labelX < 0 {
+								labelX = labelPoint.X + 2 // Place to the right if no room
+							}
+						}
+					}
+					
+					// Print red label for connection
+					fmt.Printf("\033[%d;%dH\033[31m%c\033[0m", labelY+1, labelX+1, label)
+				}
 			}
 		}
 	}
