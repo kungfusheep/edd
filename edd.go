@@ -1551,6 +1551,7 @@ const (
 	ModeDelete        // Selecting node to delete
 	ModeDeleteConfirm // Confirming node deletion
 	ModeLoadConfirm   // Confirming file load (overwrite warning)
+	ModeSaveConfirm   // Confirming file save (overwrite warning)
 	ModeHelp          // Showing help dialogue
 )
 
@@ -1575,6 +1576,8 @@ func (m Mode) String() string {
 		return "DELETE CONFIRM"
 	case ModeLoadConfirm:
 		return "LOAD CONFIRM"
+	case ModeSaveConfirm:
+		return "SAVE CONFIRM"
 	case ModeHelp:
 		return "HELP"
 	default:
@@ -1877,6 +1880,12 @@ func (e *Editor) loadDiagram(filename string) error {
 // hasContent returns true if the diagram has any nodes or connections
 func (e *Editor) hasContent() bool {
 	return len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0
+}
+
+// fileExists returns true if the file exists
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
 }
 
 // SetMode changes the current editing mode
@@ -3125,6 +3134,8 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleDeleteConfirmKey(key)
 	case ModeLoadConfirm:
 		return e.handleLoadConfirmKey(key)
+	case ModeSaveConfirm:
+		return e.handleSaveConfirmKey(key)
 	case ModeHelp:
 		return e.handleHelpKey(key)
 	case ModeCommand:
@@ -3256,6 +3267,33 @@ func (e *Editor) handleLoadConfirmKey(key rune) bool {
 	return false
 }
 
+// handleSaveConfirmKey processes y/N confirmation for file save
+func (e *Editor) handleSaveConfirmKey(key rune) bool {
+	switch key {
+	case 'y', 'Y':
+		// Confirm save - proceed with overwriting existing file
+		if e.pendingFilename != "" {
+			err := e.saveDiagram(e.pendingFilename)
+			if err != nil {
+				fmt.Printf("\nError saving: %v", err)
+				time.Sleep(2 * time.Second)
+			} else {
+				fmt.Printf("\nSaved to %s", e.pendingFilename)
+				time.Sleep(1 * time.Second)
+			}
+			e.pendingFilename = ""
+		}
+		e.SetMode(ModeNormal)
+	case 'n', 'N', 27: // N, n, or ESC to cancel
+		// Cancel save
+		e.pendingFilename = ""
+		e.SetMode(ModeNormal)
+	case 3: // Ctrl+C
+		return true
+	}
+	return false
+}
+
 // handleHelpKey processes keys in help mode
 func (e *Editor) handleHelpKey(key rune) bool {
 	switch key {
@@ -3277,11 +3315,11 @@ func (e *Editor) handleCommandKey(key rune) bool {
 			return true // Exit requested
 		}
 		// Only return to normal mode if we're not in a confirmation mode
-		if e.mode != ModeLoadConfirm {
+		if e.mode != ModeLoadConfirm && e.mode != ModeSaveConfirm {
 			e.SetMode(ModeNormal)
 			e.commandBuffer = ""
 		} else {
-			// In LoadConfirm mode, keep command buffer for display
+			// In confirm mode, clear command buffer but stay in confirm mode
 			e.commandBuffer = ""
 		}
 	case 127, 8: // Backspace
@@ -3300,7 +3338,6 @@ func (e *Editor) handleCommandKey(key rune) bool {
 
 // executeCommand processes and executes vim-style commands
 func (e *Editor) executeCommand(command string) bool {
-	fmt.Printf("\nDEBUG: executeCommand called with: '%s'", command)
 	// Remove leading ':'
 	if strings.HasPrefix(command, ":") {
 		command = command[1:]
@@ -3309,13 +3346,11 @@ func (e *Editor) executeCommand(command string) bool {
 	// Split command and arguments
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
-		fmt.Printf("\nDEBUG: No parts found")
 		return false
 	}
 
 	cmd := parts[0]
 	args := parts[1:]
-	fmt.Printf("\nDEBUG: cmd='%s', args=%v", cmd, args)
 
 	switch cmd {
 	case "w", "write":
@@ -3340,18 +3375,27 @@ func (e *Editor) executeCommand(command string) bool {
 			if !strings.HasSuffix(filename, ".edd") {
 				filename += ".edd"
 			}
-			err := e.saveDiagram(filename)
-			if err != nil {
-				fmt.Printf("\nError saving: %v", err)
-				time.Sleep(2 * time.Second)
+			
+			// Check if file exists and ask for confirmation
+			if fileExists(filename) {
+				// Store filename and ask for confirmation
+				e.pendingFilename = filename
+				e.SetMode(ModeSaveConfirm)
+				return false
 			} else {
-				fmt.Printf("\nSaved to %s", filename)
-				time.Sleep(1 * time.Second)
+				// Safe to save directly
+				err := e.saveDiagram(filename)
+				if err != nil {
+					fmt.Printf("\nError saving: %v", err)
+					time.Sleep(2 * time.Second)
+				} else {
+					fmt.Printf("\nSaved to %s", filename)
+					time.Sleep(1 * time.Second)
+				}
 			}
 		}
 	case "r", "read":
 		// Load command
-		fmt.Printf("\nDEBUG: r command triggered with %d args", len(args))
 		if len(args) == 0 {
 			fmt.Print("\nNo filename specified")
 			time.Sleep(1 * time.Second)
@@ -3362,15 +3406,12 @@ func (e *Editor) executeCommand(command string) bool {
 		if !strings.HasSuffix(filename, ".edd") {
 			filename += ".edd"
 		}
-		fmt.Printf("\nDEBUG: Loading %s, hasContent: %v", filename, e.hasContent())
 
 		// Check if we need to confirm overwrite
 		if e.hasContent() {
 			// Store filename and ask for confirmation
-			fmt.Printf("\nDEBUG: Setting pending filename to %s", filename)
 			e.pendingFilename = filename
 			e.SetMode(ModeLoadConfirm)
-			fmt.Printf("\nDEBUG: Mode set to LoadConfirm")
 			return false
 		} else {
 			// Safe to load directly
@@ -3559,6 +3600,11 @@ func (e *Editor) Render() {
 	// Display load confirmation if in load confirm mode
 	if e.mode == ModeLoadConfirm {
 		fmt.Printf("\nOverwrite current diagram with %s? (y/N): ", e.pendingFilename)
+	}
+	
+	// Display save confirmation if in save confirm mode
+	if e.mode == ModeSaveConfirm {
+		fmt.Printf("\nOverwrite existing file %s? (y/N): ", e.pendingFilename)
 	}
 
 	// Position cursor if in insert mode
