@@ -3040,13 +3040,12 @@ func (e *Editor) Render() {
 		e.renderJumpLabels()
 	}
 	
-	fmt.Print("\n\n")
+	fmt.Print("\n\n\n")
 
 	// Display ed character with color
 	fmt.Print("\033[33m") // Yellow
 	fmt.Print(e.modeIndicator.String())
 	fmt.Print("\033[0m") // Reset
-	fmt.Print("\n")
 }
 
 func main() {
