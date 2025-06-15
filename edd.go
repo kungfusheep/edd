@@ -1530,6 +1530,7 @@ type Mode int
 const (
 	ModeNormal Mode = iota
 	ModeInsert
+	ModeInsertSelect   // Selecting node to edit
 	ModeCommand
 	ModeSelectFrom     // Selecting source node for connection
 	ModeSelectTo       // Selecting target node for connection
@@ -1545,6 +1546,8 @@ func (m Mode) String() string {
 		return "NORMAL (help: ?)"
 	case ModeInsert:
 		return "INSERT"
+	case ModeInsertSelect:
+		return "SELECT TO EDIT"
 	case ModeCommand:
 		return "COMMAND"
 	case ModeSelectFrom:
@@ -1616,6 +1619,11 @@ func NewEddCharacter() *EddCharacter {
 		"○‿ ○", "○‿ ○", "○‿ ○", "○‿ ○", "○‿ ○", "○‿ ○", // Wide alert eyes
 		"-‿ ○", "-‿ -", "○‿ -", "○‿ ○", "○‿ ○", "-‿ ○", // Out-of-sync blinks
 		"○‿ ○", "-‿ -", "○‿ ○", "○‿ ○", "◉‿ ◉", "○‿ ○", // Full blink and focus burst
+	}
+
+	ed.idleAnimations[ModeInsertSelect] = []string{
+		"◉‿ ◉", "⊙‿ ⊙", "◉‿ ◉", "⊙‿ ⊙", "◉‿ ◉", "⊙‿ ⊙", // Contemplative selection - what to edit?
+		"⊙‿ ⊙", "-‿ -", "⊙‿ ⊙", "◉‿ ◉", "⊙‿ ⊙", "◉‿ ◉", // Thoughtful scanning
 	}
 
 	ed.idleAnimations[ModeSelectFrom] = []string{
@@ -2448,6 +2456,13 @@ func (e *Editor) selectNode(nodeID int) bool {
 		e.startJump() // Start new jump for next connection
 		return false
 		
+	case ModeInsertSelect:
+		// Selected node to edit - enter insert mode
+		e.currentNode = nodeID
+		e.SetMode(ModeInsert)
+		e.stopJump()
+		return false
+		
 	case ModeDelete:
 		// Selected node to delete - prompt for confirmation
 		return e.confirmDelete(nodeID)
@@ -2946,7 +2961,7 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleNormalKey(key)
 	case ModeInsert:
 		return e.handleInsertKey(key)
-	case ModeSelectFrom, ModeSelectTo, ModeDelete:
+	case ModeInsertSelect, ModeSelectFrom, ModeSelectTo, ModeDelete:
 		return e.handleSelectKey(key)
 	case ModeDeleteConfirm:
 		return e.handleDeleteConfirmKey(key)
@@ -2968,6 +2983,12 @@ func (e *Editor) handleNormalKey(key rune) bool {
 		e.SetMode(ModeInsert)
 		nodeID := e.AddNode([]string{""}) // Create empty node for editing
 		e.currentNode = nodeID
+	case 'i':
+		// Edit existing node - show jump menu for selection
+		if len(e.diagram.Nodes) > 0 {
+			e.SetMode(ModeInsertSelect)
+			e.startJump()
+		}
 	case 'c':
 		e.SetMode(ModeSelectFrom)
 		e.startJump()
@@ -3193,6 +3214,7 @@ func (e *Editor) renderHelp() {
 	fmt.Println("📚 MODES & NAVIGATION:")
 	fmt.Println("  Normal Mode:")
 	fmt.Println("    a      - Add new node (enter insert mode)")
+	fmt.Println("    i      - Edit existing node (select node to edit)")
 	fmt.Println("    c      - Connect nodes (enter select mode)")
 	fmt.Println("    d      - Delete nodes/connections")
 	fmt.Println("    r      - Resize buffer to fit terminal")
