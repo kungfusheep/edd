@@ -1542,7 +1542,8 @@ func SimpleOrthogonalRoute(from, to Node) []Point {
 type Mode int
 
 const (
-	ModeNormal Mode = iota
+	ModeStartPage Mode = iota
+	ModeNormal
 	ModeInsert
 	ModeInsertSelect // Selecting node to edit
 	ModeCommand
@@ -1558,6 +1559,8 @@ const (
 // String returns the mode name for display
 func (m Mode) String() string {
 	switch m {
+	case ModeStartPage:
+		return "WELCOME"
 	case ModeNormal:
 		return "NORMAL (help: ?)"
 	case ModeInsert:
@@ -1736,7 +1739,7 @@ func NewEditor() *Editor {
 			Nodes:       []Node{},
 			Connections: []Connection{},
 		},
-		mode:             ModeNormal,
+		mode:             ModeStartPage,
 		currentNode:      -1, // No node selected initially
 		nextNodeID:       0,
 		canvas:           NewCanvas(width, height),
@@ -1896,6 +1899,11 @@ func (e *Editor) SetMode(mode Mode) {
 	// Handle living character transition
 	if oldMode != mode {
 		e.eddCharacter.TransitionToMode(mode)
+		
+		// TODO: Add opening animation when leaving start page
+		// if oldMode == ModeStartPage && mode != ModeStartPage {
+		//     e.eddCharacter.TriggerOpeningAnimation()
+		// }
 	}
 
 	e.UpdateLivingModeIndicator()
@@ -1920,8 +1928,8 @@ func (e *Editor) StopLivingAnimation() {
 func (e *Editor) livingAnimationLoop() {
 	for e.animationRunning {
 		e.eddCharacter.NextFrame(e.mode)
-		e.UpdateLivingModeIndicator()
-		e.DisplayCharacter()               // Show the character
+		// Note: UpdateLivingModeIndicator is called by main render loop
+		// to avoid unsynchronized updates and flashing
 		time.Sleep(400 * time.Millisecond) // ~2.5 FPS for subtle animation
 	}
 }
@@ -3074,8 +3082,10 @@ func (e *Editor) RunEditor() error {
 		case err := <-errChan:
 			return err
 		case <-ticker.C:
-			// Regular animation refresh
-			e.Render()
+			// Regular animation refresh (skip for start page to reduce flashing)
+			if e.mode != ModeStartPage {
+				e.Render()
+			}
 		case sig := <-sigChan:
 			switch sig {
 			case syscall.SIGWINCH:
@@ -3124,6 +3134,8 @@ func (e *Editor) handleKey(key rune) bool {
 	}
 
 	switch e.mode {
+	case ModeStartPage:
+		return e.handleStartPageKey(key)
 	case ModeNormal:
 		return e.handleNormalKey(key)
 	case ModeInsert:
@@ -3140,6 +3152,22 @@ func (e *Editor) handleKey(key rune) bool {
 		return e.handleHelpKey(key)
 	case ModeCommand:
 		return e.handleCommandKey(key)
+	}
+	return false
+}
+
+// handleStartPageKey processes keys in start page mode
+func (e *Editor) handleStartPageKey(key rune) bool {
+	switch key {
+	case 'q', 3: // q or Ctrl+C
+		return true // Exit
+	case 'n': // New diagram
+		e.SetMode(ModeNormal)
+	case 'l': // Load diagram
+		e.SetMode(ModeCommand)
+		e.commandBuffer = "r "
+	case '?': // Show help
+		e.SetMode(ModeHelp)
 	}
 	return false
 }
@@ -3569,6 +3597,9 @@ func (e *Editor) Render() {
 	if e.mode == ModeHelp {
 		// Show help screen instead of diagram
 		e.renderHelp()
+	} else if e.mode == ModeStartPage {
+		// Show start page instead of diagram
+		e.renderStartPage()
 	} else {
 		// Clear canvas
 		e.canvas.Clear()
@@ -3587,10 +3618,13 @@ func (e *Editor) Render() {
 		fmt.Print("\n\n\n")
 	}
 
-	// Display ed character with color
-	fmt.Print("\033[33m") // Yellow
-	fmt.Print(e.modeIndicator.String())
-	fmt.Print("\033[0m") // Reset
+	// Update and display ed character with color (but not on start page)
+	if e.mode != ModeStartPage {
+		e.UpdateLivingModeIndicator()
+		fmt.Print("\033[33m") // Yellow
+		fmt.Print(e.modeIndicator.String())
+		fmt.Print("\033[0m") // Reset
+	}
 
 	// Display command buffer if in command mode
 	if e.mode == ModeCommand {
@@ -3676,6 +3710,58 @@ func (e *Editor) renderHelp() {
 	fmt.Print("\n\n")
 }
 
+// renderStartPage displays the welcoming start page
+func (e *Editor) renderStartPage() {
+	// Get terminal dimensions for centering
+	width, height := getTerminalSize()
+	
+	// Calculate vertical centering - show content in center
+	startY := (height - 10) / 2 // 10 lines of content
+	if startY < 0 {
+		startY = 0
+	}
+	
+	// Print empty lines to center vertically
+	for i := 0; i < startY; i++ {
+		fmt.Println()
+	}
+	
+	// Center the title
+	title := "QUICK START"
+	titleX := (width - len(title)) / 2
+	fmt.Printf("%*s\033[1m%s\033[0m\n\n", titleX, "", title)
+	
+	// Commands block - find the longest line for consistent alignment
+	commands := []string{
+		"n          Start a new diagram",
+		"l          Load existing diagram",  
+		"?          Show help",
+		"q          Quit",
+	}
+	
+	// Find longest command line
+	maxLen := 0
+	for _, cmd := range commands {
+		if len(cmd) > maxLen {
+			maxLen = len(cmd)
+		}
+	}
+	
+	// Center the command block as a unit
+	blockX := (width - maxLen) / 2
+	for _, cmd := range commands {
+		fmt.Printf("%*s\033[36m%s\033[0m\n", blockX, "", cmd)
+	}
+	
+	fmt.Println()
+	fmt.Println()
+	
+	// Center the tip
+	tip := "TIP: You can also start with ./edd filename.edd"
+	tipX := (width - len(tip)) / 2
+	fmt.Printf("%*s\033[90m%s\033[0m\n", tipX, "", tip)
+}
+
 func main() {
 	// Start the editor
 	editor := NewEditor()
@@ -3695,8 +3781,9 @@ func main() {
 		} else {
 			fmt.Printf("Loaded %s successfully\n", filename)
 		}
-	} else {
-		fmt.Println("Starting edd...")
+		
+		// Bypass start page when loading from command line
+		editor.SetMode(ModeNormal)
 	}
 
 	// fmt.Println("\nStarting editor...")
