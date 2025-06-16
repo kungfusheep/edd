@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 // Design constants for balanced, aesthetic spacing
@@ -1612,8 +1613,12 @@ type Editor struct {
 	currentFilename string // Current .edd file being edited
 
 	// Command mode
-	commandBuffer    string // Command being typed in command mode
-	pendingFilename  string // Filename waiting for load confirmation
+	commandBuffer    string     // Command being typed in command mode
+	pendingFilename  string     // Filename waiting for load confirmation
+	startupAnimation *Animation // The startup animation
+	animationFrame   int        // Current animation frame
+	animationTimer   int        // Timer for animation frame timing
+	isAnimating      bool       // Whether animation is playing
 }
 
 // EddCharacter represents the living animated character
@@ -1734,7 +1739,7 @@ func getTerminalSize() (width, height int) {
 // NewEditor creates a new editor instance
 func NewEditor() *Editor {
 	width, height := getTerminalSize()
-	return &Editor{
+	editor := &Editor{
 		diagram: Diagram{
 			Nodes:       []Node{},
 			Connections: []Connection{},
@@ -1754,7 +1759,13 @@ func NewEditor() *Editor {
 		currentFilename:  "",
 		commandBuffer:    "",
 		pendingFilename:  "",
+		startupAnimation: nil,
+		animationFrame:   0,
+		animationTimer:   0,
+		isAnimating:      false,
 	}
+
+	return editor
 }
 
 // ResizeBuffer resizes the canvas to match current terminal size
@@ -1899,14 +1910,43 @@ func (e *Editor) SetMode(mode Mode) {
 	// Handle living character transition
 	if oldMode != mode {
 		e.eddCharacter.TransitionToMode(mode)
-		
-		// TODO: Add opening animation when leaving start page
-		// if oldMode == ModeStartPage && mode != ModeStartPage {
-		//     e.eddCharacter.TriggerOpeningAnimation()
-		// }
+
+		// Start opening animation when entering start page
+		if mode == ModeStartPage && oldMode != ModeStartPage {
+			e.startStartupAnimation()
+		}
 	}
 
 	e.UpdateLivingModeIndicator()
+}
+
+// startStartupAnimation begins the startup animation sequence
+func (e *Editor) startStartupAnimation() {
+	anim := CreateStartupAnimation()
+	e.startupAnimation = &anim
+	e.animationFrame = 0
+	e.isAnimating = true
+	e.animationTimer = 0
+}
+
+// updateStartupAnimation advances the startup animation
+func (e *Editor) updateStartupAnimation() {
+	if !e.isAnimating || e.startupAnimation == nil {
+		return
+	}
+
+	// Each ticker is 200ms, so increment timer
+	e.animationTimer += 200
+
+	// Check if it's time to advance to next frame
+	if e.animationFrame < len(e.startupAnimation.Frames) {
+		currentFrame := e.startupAnimation.Frames[e.animationFrame]
+		if e.animationTimer >= currentFrame.Delay {
+			e.animationFrame++
+			e.animationTimer = 0
+			e.Render() // Render the new frame
+		}
+	}
 }
 
 // StartLivingAnimation begins the continuous character animation
@@ -3072,6 +3112,9 @@ func (e *Editor) RunEditor() error {
 		}
 	}()
 
+	// Initial render to show the start page animation
+	e.Render()
+
 	for {
 		select {
 		case key := <-inputChan:
@@ -3082,8 +3125,10 @@ func (e *Editor) RunEditor() error {
 		case err := <-errChan:
 			return err
 		case <-ticker.C:
-			// Regular animation refresh (skip for start page to reduce flashing)
-			if e.mode != ModeStartPage {
+			// Regular animation refresh
+			if e.mode == ModeStartPage && e.isAnimating {
+				e.updateStartupAnimation()
+			} else if e.mode != ModeStartPage {
 				e.Render()
 			}
 		case sig := <-sigChan:
@@ -3158,6 +3203,11 @@ func (e *Editor) handleKey(key rune) bool {
 
 // handleStartPageKey processes keys in start page mode
 func (e *Editor) handleStartPageKey(key rune) bool {
+	// Cancel animation on any key press
+	if e.isAnimating {
+		e.isAnimating = false
+	}
+
 	switch key {
 	case 'q', 3: // q or Ctrl+C
 		return true // Exit
@@ -3403,7 +3453,7 @@ func (e *Editor) executeCommand(command string) bool {
 			if !strings.HasSuffix(filename, ".edd") {
 				filename += ".edd"
 			}
-			
+
 			// Check if file exists and ask for confirmation
 			if fileExists(filename) {
 				// Store filename and ask for confirmation
@@ -3630,12 +3680,12 @@ func (e *Editor) Render() {
 	if e.mode == ModeCommand {
 		fmt.Printf("\n%s", e.commandBuffer)
 	}
-	
+
 	// Display load confirmation if in load confirm mode
 	if e.mode == ModeLoadConfirm {
 		fmt.Printf("\nOverwrite current diagram with %s? (y/N): ", e.pendingFilename)
 	}
-	
+
 	// Display save confirmation if in save confirm mode
 	if e.mode == ModeSaveConfirm {
 		fmt.Printf("\nOverwrite existing file %s? (y/N): ", e.pendingFilename)
@@ -3712,33 +3762,115 @@ func (e *Editor) renderHelp() {
 
 // renderStartPage displays the welcoming start page
 func (e *Editor) renderStartPage() {
+	width, height := getTerminalSize()
+
+	// Ed character (center individually)
+	edLines := []string{
+		" ╭────╮",
+		" │◉‿◉ │",
+		" ╰────╯",
+		"",
+		"edd - elegant diagram drawer",
+	}
+
+	// Menu commands only (for block alignment)
+	commands := []string{
+		"n          Start a new diagram",
+		"l          Load existing diagram",
+		"?          Show help",
+		"q          Quit",
+	}
+
+	// Calculate total height for vertical centering
+	totalHeight := len(edLines) + 1 + 1 + 1 + len(commands) + 1 + 1 // ed + gap + quickstart + gap + commands + gap + tip
+	startY := (height - totalHeight) / 2
+	if startY < 0 {
+		startY = 0
+	}
+
+	// Print vertical spacing
+	for i := 0; i < startY; i++ {
+		fmt.Println()
+	}
+
+	// Print ed character (each line centered)
+	for _, line := range edLines {
+		lineOffset := (width - utf8.RuneCountInString(line)) / 2
+		if lineOffset < 0 {
+			lineOffset = 0
+		}
+
+		if line == "edd - elegant diagram drawer" {
+			fmt.Printf("%*s\033[36m%s\033[0m\n", lineOffset, "", line)
+		} else {
+			fmt.Printf("%*s%s\n", lineOffset, "", line)
+		}
+	}
+
+	// Gap
+	fmt.Println()
+
+	// Find longest command for block positioning
+	maxCommandLen := 0
+	for _, cmd := range commands {
+		if len(cmd) > maxCommandLen {
+			maxCommandLen = len(cmd)
+		}
+	}
+
+	// Center the command block
+	commandBlockOffset := (width - maxCommandLen) / 2
+	if commandBlockOffset < 0 {
+		commandBlockOffset = 0
+	}
+
+	// Center QUICK START above the command block
+	quickStartOffset := commandBlockOffset + (maxCommandLen-len("QUICK START"))/2
+	fmt.Printf("%*s\033[1m%s\033[0m\n", quickStartOffset, "", "QUICK START")
+	fmt.Println()
+
+	// Print commands (left-aligned within the centered block)
+	for _, cmd := range commands {
+		fmt.Printf("%*s\033[36m%s\033[0m\n", commandBlockOffset, "", cmd)
+	}
+
+	fmt.Println()
+
+	// Center TIP independently
+	tip := "TIP: You can also start with ./edd filename.edd"
+	tipOffset := (width - len(tip)) / 2
+	fmt.Printf("%*s\033[90m%s\033[0m\n", tipOffset, "", tip)
+}
+
+// renderStartMenu displays the quick start menu
+func (e *Editor) renderStartMenu() {
 	// Get terminal dimensions for centering
 	width, height := getTerminalSize()
-	
+
 	// Calculate vertical centering - show content in center
 	startY := (height - 10) / 2 // 10 lines of content
 	if startY < 0 {
 		startY = 0
 	}
-	
+
 	// Print empty lines to center vertically
 	for i := 0; i < startY; i++ {
 		fmt.Println()
 	}
-	
+
 	// Center the title
 	title := "QUICK START"
 	titleX := (width - len(title)) / 2
 	fmt.Printf("%*s\033[1m%s\033[0m\n\n", titleX, "", title)
-	
+
 	// Commands block - find the longest line for consistent alignment
 	commands := []string{
 		"n          Start a new diagram",
-		"l          Load existing diagram",  
+		"l          Load existing diagram",
 		"?          Show help",
 		"q          Quit",
 	}
-	
+
 	// Find longest command line
 	maxLen := 0
 	for _, cmd := range commands {
@@ -3746,23 +3878,139 @@ func (e *Editor) renderStartPage() {
 			maxLen = len(cmd)
 		}
 	}
-	
+
 	// Center the command block as a unit
 	blockX := (width - maxLen) / 2
 	for _, cmd := range commands {
 		fmt.Printf("%*s\033[36m%s\033[0m\n", blockX, "", cmd)
 	}
-	
+
 	fmt.Println()
 	fmt.Println()
-	
+
 	// Center the tip
 	tip := "TIP: You can also start with ./edd filename.edd"
 	tipX := (width - len(tip)) / 2
 	fmt.Printf("%*s\033[90m%s\033[0m\n", tipX, "", tip)
 }
 
+// renderFinalStartScreen displays the final start screen
+func (e *Editor) renderFinalStartScreen() {
+	width, height := getTerminalSize()
+
+	content := []string{
+		"╭────╮",
+		"│◉‿ ◉│",
+		"╰────╯",
+		"",
+		"edd - elegant diagram drawer",
+		"",
+		"QUICK START",
+		"",
+		"n          Start a new diagram",
+		"l          Load existing diagram",
+		"?          Show help",
+		"q          Quit",
+		"",
+		"TIP: You can also start with ./edd filename.edd",
+	}
+
+	// Center vertically
+	startY := (height - len(content)) / 2
+	if startY < 0 {
+		startY = 0
+	}
+
+	for i := 0; i < startY; i++ {
+		fmt.Println()
+	}
+
+	// Print each line centered
+	for i, line := range content {
+		startX := (width - len(line)) / 2
+		if startX < 0 {
+			startX = 0
+		}
+
+		if i <= 2 { // Ed character
+			fmt.Printf("%*s\033[33m%s\033[0m\n", startX, "", line)
+		} else if i == 4 { // Tagline
+			fmt.Printf("%*s\033[36m%s\033[0m\n", startX, "", line)
+		} else if i == 6 { // "QUICK START"
+			fmt.Printf("%*s\033[1m%s\033[0m\n", startX, "", line)
+		} else if i >= 8 && i <= 11 { // Commands
+			fmt.Printf("%*s\033[36m%s\033[0m\n", startX, "", line)
+		} else if i == 13 { // TIP
+			fmt.Printf("%*s\033[90m%s\033[0m\n", startX, "", line)
+		} else {
+			fmt.Printf("%*s%s\n", startX, "", line)
+		}
+	}
+}
+
+// testStartPageLayout tests the layout at a specific terminal size
+func testStartPageLayout(width, height int) {
+	// Static content
+	allContent := []string{
+		"╭────╮",
+		"│ ◉‿◉ │",
+		"╰────╯",
+		"",
+		"edd - elegant diagram drawer",
+		"",
+		"QUICK START",
+		"",
+		"n          Start a new diagram",
+		"l          Load existing diagram",
+		"?          Show help",
+		"q          Quit",
+		"",
+		"TIP: You can also start with ./edd filename.edd",
+	}
+
+	// Center the entire block vertically
+	totalHeight := len(allContent)
+	startY := (height - totalHeight) / 2
+	if startY < 0 {
+		startY = 0
+	}
+
+	// Print vertical spacing
+	for i := 0; i < startY; i++ {
+		fmt.Println()
+	}
+
+	// Print all content centered horizontally
+	for _, line := range allContent {
+		startX := (width - len(line)) / 2
+		if startX < 0 {
+			startX = 0
+		}
+
+		fmt.Printf("%*s%s\n", startX, "", line)
+	}
+}
+
+// testStartPageSizes tests the layout at different terminal sizes
+func testStartPageSizes() {
+	sizes := []struct{ w, h int }{
+		{80, 24},  // Small terminal
+		{120, 30}, // Medium terminal
+		{160, 40}, // Large terminal
+		{60, 20},  // Very small
+	}
+
+	for i, size := range sizes {
+		fmt.Printf("=== TEST %d: %dx%d ===\n", i+1, size.w, size.h)
+		testStartPageLayout(size.w, size.h)
+		fmt.Printf("\n")
+	}
+}
+
 func main() {
+	// Uncomment this line to test the start page layout:
+	// testStartPageSizes(); return
+
 	// Start the editor
 	editor := NewEditor()
 
@@ -3781,7 +4029,7 @@ func main() {
 		} else {
 			fmt.Printf("Loaded %s successfully\n", filename)
 		}
-		
+
 		// Bypass start page when loading from command line
 		editor.SetMode(ModeNormal)
 	}
