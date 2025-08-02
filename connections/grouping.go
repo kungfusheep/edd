@@ -59,20 +59,52 @@ func SpreadPoints(basePoint core.Point, count int, index int, node *core.Node, i
 		return basePoint
 	}
 	
-	// Calculate spacing between connection points
-	var spread int
+	const minSpacing = 2 // Minimum spacing between connections in characters
+	
+	// Calculate available edge length and required space
+	var edgeLength, requiredSpace int
 	if isHorizontal {
-		// Spread vertically along the node edge
-		spread = node.Height / (count + 1)
-		offset := spread * (index + 1) - node.Height/2
+		edgeLength = node.Height
+		requiredSpace = (count - 1) * minSpacing
+	} else {
+		edgeLength = node.Width
+		requiredSpace = (count - 1) * minSpacing
+	}
+	
+	// Determine spreading strategy based on available space
+	var offset int
+	if requiredSpace >= edgeLength {
+		// Not enough space - distribute evenly across entire edge
+		if count > 1 {
+			position := float64(index) / float64(count - 1)
+			offset = int(position * float64(edgeLength - 1)) - edgeLength/2
+		}
+	} else {
+		// Use 10-90% of edge with proper spacing
+		margin := edgeLength / 10
+		if margin < 1 {
+			margin = 1
+		}
+		usableSpace := edgeLength - (2 * margin)
+		
+		// Calculate spacing
+		var spacing float64
+		if count > 1 {
+			spacing = float64(usableSpace) / float64(count - 1)
+		}
+		
+		// Calculate offset from center
+		centerOffset := float64(index) * spacing - float64(usableSpace)/2
+		offset = int(centerOffset)
+	}
+	
+	// Apply offset based on direction
+	if isHorizontal {
 		return core.Point{
 			X: basePoint.X,
 			Y: basePoint.Y + offset,
 		}
 	} else {
-		// Spread horizontally along the node edge
-		spread = node.Width / (count + 1)
-		offset := spread * (index + 1) - node.Width/2
 		return core.Point{
 			X: basePoint.X + offset,
 			Y: basePoint.Y,
@@ -125,7 +157,7 @@ func OptimizeGroupedPaths(group ConnectionGroup, nodes []core.Node, router *Rout
 		targetPoint = SpreadPoints(targetPoint, len(group.Connections), i, targetNode, isHorizontal)
 		
 		// Find path between the spread points
-		obstacles := createObstaclesFunction(nodes, sourceNode.ID, targetNode.ID)
+		obstacles := createObstaclesFunctionWithPadding(nodes, sourceNode.ID, targetNode.ID, 2)
 		path, err := router.pathFinder.FindPath(sourcePoint, targetPoint, obstacles)
 		if err != nil {
 			return nil, err
@@ -140,23 +172,55 @@ func OptimizeGroupedPaths(group ConnectionGroup, nodes []core.Node, router *Rout
 // HandleSelfLoops handles connections where a node connects to itself.
 // These require special routing to create a visible loop.
 func HandleSelfLoops(conn core.Connection, node *core.Node) core.Path {
-	// Create a loop that goes out from the right side and comes back to the top
-	loopSize := 3 // Size of the loop extension
-	
-	// Start from right side (adjusted for proper connection)
-	start := core.Point{
-		X: node.X + node.Width - 1,
-		Y: node.Y + node.Height/2,
+	// Make loop size proportional to node size
+	minDimension := node.Width
+	if node.Height < minDimension {
+		minDimension = node.Height
 	}
 	
-	// Create loop points
-	points := []core.Point{
-		start,
-		{X: start.X + loopSize, Y: start.Y},
-		{X: start.X + loopSize, Y: node.Y - loopSize},
-		{X: node.X + node.Width/2, Y: node.Y - loopSize},
-		{X: node.X + node.Width/2, Y: node.Y},
+	// Loop size should be at least 3, but scale with node size
+	loopSize := minDimension / 3
+	if loopSize < 3 {
+		loopSize = 3
+	} else if loopSize > 8 {
+		loopSize = 8 // Cap at reasonable maximum
 	}
 	
-	return core.Path{Points: points}
+	// Determine best position based on node aspect ratio
+	// For wide nodes, prefer top loop; for tall nodes, prefer right loop
+	aspectRatio := float64(node.Width) / float64(node.Height)
+	
+	if aspectRatio > 1.5 {
+		// Wide node - use top loop
+		start := core.Point{
+			X: node.X + node.Width/2,
+			Y: node.Y,
+		}
+		
+		points := []core.Point{
+			start,
+			{X: start.X, Y: start.Y - loopSize},
+			{X: node.X + node.Width - 1, Y: start.Y - loopSize},
+			{X: node.X + node.Width - 1, Y: node.Y + node.Height/2},
+			{X: node.X + node.Width - 1, Y: node.Y + node.Height/2},
+		}
+		
+		return core.Path{Points: points}
+	} else {
+		// Default: right-side loop (original behavior but adaptive size)
+		start := core.Point{
+			X: node.X + node.Width - 1,
+			Y: node.Y + node.Height/2,
+		}
+		
+		points := []core.Point{
+			start,
+			{X: start.X + loopSize, Y: start.Y},
+			{X: start.X + loopSize, Y: node.Y - loopSize},
+			{X: node.X + node.Width/2, Y: node.Y - loopSize},
+			{X: node.X + node.Width/2, Y: node.Y},
+		}
+		
+		return core.Path{Points: points}
+	}
 }

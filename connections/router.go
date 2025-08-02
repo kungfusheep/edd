@@ -63,7 +63,17 @@ func (r *Router) RouteConnections(connections []core.Connection, nodes []core.No
 	
 	// Route each group
 	for _, group := range groups {
-		if len(group.Connections) > 1 {
+		if shouldBundle(group) {
+			// Many connections - use bundling
+			bundledPaths, err := BundleConnections(group, nodes, r)
+			if err != nil {
+				return nil, fmt.Errorf("failed to bundle group %s: %w", group.Key, err)
+			}
+			// Merge bundled paths into main map
+			for idx, path := range bundledPaths {
+				paths[idx] = path
+			}
+		} else if len(group.Connections) > 1 {
 			// Multiple connections between same nodes - optimize with spreading
 			optimizedPaths, err := OptimizeGroupedPaths(group, nodes, r)
 			if err != nil {
@@ -151,6 +161,11 @@ func abs(x int) int {
 // createObstaclesFunction creates an obstacle checking function that considers
 // node interiors as obstacles, except for the source and target nodes.
 func createObstaclesFunction(nodes []core.Node, sourceID, targetID int) func(core.Point) bool {
+	return createObstaclesFunctionWithPadding(nodes, sourceID, targetID, 2) // Default padding of 2
+}
+
+// createObstaclesFunctionWithPadding creates an obstacle checking function with configurable padding.
+func createObstaclesFunctionWithPadding(nodes []core.Node, sourceID, targetID int, padding int) func(core.Point) bool {
 	return func(p core.Point) bool {
 		for _, node := range nodes {
 			// Skip source and target nodes
@@ -158,9 +173,9 @@ func createObstaclesFunction(nodes []core.Node, sourceID, targetID int) func(cor
 				continue
 			}
 			
-			// Check if point is inside the node
-			if p.X >= node.X && p.X <= node.X+node.Width &&
-			   p.Y >= node.Y && p.Y <= node.Y+node.Height {
+			// Check if point is inside the node with padding
+			if p.X >= node.X-padding && p.X <= node.X+node.Width+padding &&
+			   p.Y >= node.Y-padding && p.Y <= node.Y+node.Height+padding {
 				return true
 			}
 		}

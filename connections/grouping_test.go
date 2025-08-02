@@ -79,7 +79,7 @@ func TestSpreadPoints(t *testing.T) {
 			count:        3,
 			index:        1,
 			isHorizontal: true,
-			wantOffset:   true,
+			wantOffset:   false, // Middle point has 0 offset
 		},
 		{
 			name:         "first of two vertical",
@@ -139,29 +139,26 @@ func TestHandleSelfLoops(t *testing.T) {
 		t.Errorf("Self-loop path too short: %d points", len(path.Points))
 	}
 	
-	// First point should be on right side of node
+	// Check that the loop uses adaptive sizing
+	// For a 10x6 node (aspect ratio 1.67), it should use top loop
 	first := path.Points[0]
-	if first.X != node.X+node.Width-1 {
-		t.Errorf("Self-loop should start from right side")
+	
+	// With aspect ratio > 1.5, it should use top loop starting from top center
+	if first.X != node.X+node.Width/2 || first.Y != node.Y {
+		t.Errorf("For wide node, self-loop should start from top center, got (%d,%d)", first.X, first.Y)
 	}
 	
-	// Last point should be on top of node
-	last := path.Points[len(path.Points)-1]
-	if last.Y != node.Y {
-		t.Errorf("Self-loop should end at top")
-	}
-	
-	// Should extend beyond node bounds
-	maxX := node.X + node.Width - 1
+	// Should extend above node bounds
+	minY := node.Y
 	hasExtension := false
 	for _, p := range path.Points {
-		if p.X > maxX {
+		if p.Y < minY {
 			hasExtension = true
 			break
 		}
 	}
 	if !hasExtension {
-		t.Error("Self-loop should extend beyond node bounds")
+		t.Error("Self-loop should extend above node bounds")
 	}
 }
 

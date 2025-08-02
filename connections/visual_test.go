@@ -93,6 +93,65 @@ func TestVisualConnectionRouting(t *testing.T) {
 			width:  48,
 			height: 18,
 		},
+		{
+			name: "Stress Test - Small Node Many Connections",
+			nodes: []core.Node{
+				{ID: 1, X: 5, Y: 8, Width: 4, Height: 3, Text: []string{"A"}},
+				{ID: 2, X: 15, Y: 8, Width: 4, Height: 3, Text: []string{"B"}},
+			},
+			connections: []core.Connection{
+				{From: 1, To: 2},
+				{From: 1, To: 2},
+				{From: 1, To: 2},
+				{From: 1, To: 2},
+				{From: 2, To: 1},
+				{From: 2, To: 1},
+			},
+			width:  25,
+			height: 16,
+		},
+		{
+			name: "Obstacle Padding Test",
+			nodes: []core.Node{
+				{ID: 1, X: 3, Y: 5, Width: 6, Height: 3, Text: []string{"Start"}},
+				{ID: 2, X: 15, Y: 2, Width: 6, Height: 3, Text: []string{"Block"}},
+				{ID: 3, X: 27, Y: 5, Width: 6, Height: 3, Text: []string{"End"}},
+			},
+			connections: []core.Connection{
+				{From: 1, To: 3}, // Should route around block with padding
+			},
+			width:  36,
+			height: 12,
+		},
+		{
+			name: "Adaptive Self-Loops",
+			nodes: []core.Node{
+				{ID: 1, X: 5, Y: 8, Width: 16, Height: 4, Text: []string{"Wide Node"}}, // Wide node
+				{ID: 2, X: 25, Y: 6, Width: 6, Height: 8, Text: []string{"Tall", "Node"}}, // Tall node
+			},
+			connections: []core.Connection{
+				{From: 1, To: 1}, // Self-loop on wide node
+				{From: 2, To: 2}, // Self-loop on tall node
+			},
+			width:  36,
+			height: 20,
+		},
+		{
+			name: "Connection Bundling Test",
+			nodes: []core.Node{
+				{ID: 1, X: 5, Y: 8, Width: 12, Height: 6, Text: []string{"Source", "System"}},
+				{ID: 2, X: 28, Y: 8, Width: 12, Height: 6, Text: []string{"Target", "System"}},
+			},
+			connections: []core.Connection{
+				{From: 1, To: 2},
+				{From: 1, To: 2},
+				{From: 1, To: 2},
+				{From: 1, To: 2},
+				{From: 1, To: 2}, // 5 connections should trigger bundling
+			},
+			width:  45,
+			height: 20,
+		},
 	}
 
 	for _, tt := range tests {
