@@ -120,31 +120,31 @@ func getConnectionPoint(fromNode, toNode *core.Node) core.Point {
 	if abs(dx) > abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
-			// Connect from right side
+			// Connect from right side (place point outside the node)
 			return core.Point{
-				X: fromNode.X + fromNode.Width - 1,
+				X: fromNode.X + fromNode.Width,
 				Y: fromNode.Y + fromNode.Height/2,
 			}
 		} else {
-			// Connect from left side
+			// Connect from left side (place point outside the node)
 			return core.Point{
-				X: fromNode.X,
+				X: fromNode.X - 1,
 				Y: fromNode.Y + fromNode.Height/2,
 			}
 		}
 	} else {
 		// Vertical connection
 		if dy > 0 {
-			// Connect from bottom
+			// Connect from bottom (place point outside the node)
 			return core.Point{
 				X: fromNode.X + fromNode.Width/2,
-				Y: fromNode.Y + fromNode.Height - 1,
+				Y: fromNode.Y + fromNode.Height,
 			}
 		} else {
-			// Connect from top
+			// Connect from top (place point outside the node)
 			return core.Point{
 				X: fromNode.X + fromNode.Width/2,
-				Y: fromNode.Y,
+				Y: fromNode.Y - 1,
 			}
 		}
 	}
@@ -168,14 +168,20 @@ func createObstaclesFunction(nodes []core.Node, sourceID, targetID int) func(cor
 func createObstaclesFunctionWithPadding(nodes []core.Node, sourceID, targetID int, padding int) func(core.Point) bool {
 	return func(p core.Point) bool {
 		for _, node := range nodes {
-			// Skip source and target nodes
+			// For source and target nodes, only block the interior (not edges)
 			if node.ID == sourceID || node.ID == targetID {
+				// Allow points on the edge but not inside
+				if p.X > node.X && p.X < node.X+node.Width-1 &&
+				   p.Y > node.Y && p.Y < node.Y+node.Height-1 {
+					return true
+				}
 				continue
 			}
 			
-			// Check if point is inside the node with padding
-			if p.X >= node.X-padding && p.X <= node.X+node.Width+padding &&
-			   p.Y >= node.Y-padding && p.Y <= node.Y+node.Height+padding {
+			// For other nodes, block with padding using proper boundaries
+			// Fixed: Use < instead of <= for upper bounds (half-open interval)
+			if p.X >= node.X-padding && p.X < node.X+node.Width+padding &&
+			   p.Y >= node.Y-padding && p.Y < node.Y+node.Height+padding {
 				return true
 			}
 		}
