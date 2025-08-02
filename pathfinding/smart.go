@@ -68,7 +68,7 @@ func (s *SmartPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 	
 	for _, strategy := range strategies {
 		s.directFinder.strategy = strategy
-		directPath, err := s.directFinder.FindPath(start, end, nil) // Don't pass obstacles to direct finder
+		directPath, err := s.directFinder.FindPath(start, end, obstacles) // FIXED: Pass obstacles to direct finder too
 		if err == nil && s.isPathClear(directPath, obstacles) {
 			// Direct path works!
 			optimized := s.optimizePath(directPath, obstacles)

@@ -13,6 +13,7 @@ func main() {
 	// Define command line flags
 	var (
 		validate = flag.Bool("validate", false, "Run validation on the output")
+		debug    = flag.Bool("debug", false, "Show debug visualization with obstacles")
 		help     = flag.Bool("help", false, "Show help")
 	)
 	
@@ -24,6 +25,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nExample:\n")
 		fmt.Fprintf(os.Stderr, "  %s diagram.json\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -validate diagram.json\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -debug diagram.json\n", os.Args[0])
 	}
 	
 	flag.Parse()
@@ -52,6 +54,16 @@ func main() {
 	// Create renderer
 	renderer := NewRenderer()
 	
+	// Enable validation if requested
+	if *validate {
+		renderer.EnableValidation()
+	}
+	
+	// Enable debug mode if requested
+	if *debug {
+		renderer.EnableDebug()
+	}
+	
 	// Render the diagram
 	output, err := renderer.Render(diagram)
 	if err != nil {
@@ -62,10 +74,15 @@ func main() {
 	// Output the result
 	fmt.Print(output)
 	
-	// Run validation if requested
+	// Run standalone validation if requested
 	if *validate {
-		// TODO: Add validation once validator is integrated
-		fmt.Fprintf(os.Stderr, "\nValidation: Not yet implemented\n")
+		// The renderer already validated during render and printed warnings
+		// Here we could do additional validation or exit with error code if needed
+		validator := NewLineValidator()
+		errors := validator.Validate(output)
+		if len(errors) > 0 {
+			os.Exit(2) // Exit with error code to indicate validation issues
+		}
 	}
 }
 

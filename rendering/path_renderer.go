@@ -66,6 +66,11 @@ func (r *PathRenderer) SetRenderMode(mode PathRenderMode) {
 
 // RenderPath draws a path on the canvas with appropriate line characters.
 func (r *PathRenderer) RenderPath(canvas canvas.Canvas, path core.Path, hasArrow bool) error {
+	return r.RenderPathWithOptions(canvas, path, hasArrow, false)
+}
+
+// RenderPathWithOptions draws a path with additional rendering options.
+func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Path, hasArrow bool, isConnection bool) error {
 	if path.IsEmpty() {
 		return nil
 	}
@@ -118,6 +123,14 @@ func (r *PathRenderer) RenderPath(canvas canvas.Canvas, path core.Path, hasArrow
 		return nil
 	}
 	
+	// For connection paths, mark endpoints for special handling
+	var connectionEndpoints map[core.Point]bool
+	if isConnection && len(points) >= 2 {
+		connectionEndpoints = map[core.Point]bool{
+			points[0]:              true,
+			points[len(points)-1]:  true,
+		}
+	}
 	
 	// Draw each segment
 	numSegments := len(points) - 1
@@ -215,6 +228,53 @@ func (r *PathRenderer) RenderPath(canvas canvas.Canvas, path core.Path, hasArrow
 		}
 	}
 	
+	// Handle connection endpoints specially - use T-junctions instead of crosses
+	if isConnection && connectionEndpoints != nil {
+		for point := range connectionEndpoints {
+			existing := canvas.Get(point)
+			
+			// Skip arrow characters - they should not be modified
+			if existing == '▶' || existing == '◀' || existing == '▲' || existing == '▼' ||
+			   existing == '>' || existing == '<' || existing == '^' || existing == 'v' {
+				continue
+			}
+			
+			// Check for junction characters that indicate a connection meeting a box edge
+			if existing == '┼' || existing == '├' || existing == '┤' || existing == '┬' || existing == '┴' {
+				// This is a junction created by our connection meeting a box edge
+				// Determine which direction the connection goes
+				isStart := point == points[0]
+				var direction core.Point
+				
+				if isStart && len(points) > 1 {
+					direction = points[1]
+				} else if !isStart && len(points) > 1 {
+					direction = points[len(points)-2]
+				}
+				
+				// Only handle start points - endpoints should keep their arrows
+				if isStart {
+					// Replace cross junctions with appropriate T-junctions at start points
+					if existing == '┼' {
+						// Cross junction - determine which T-junction to use
+						if direction.X > point.X {
+							canvas.Set(point, '├') // Connection goes right
+						} else if direction.X < point.X {
+							canvas.Set(point, '┤') // Connection goes left
+						} else if direction.Y > point.Y {
+							canvas.Set(point, '┬') // Connection goes down
+						} else if direction.Y < point.Y {
+							canvas.Set(point, '┴') // Connection goes up
+						}
+					}
+					// Other junctions (├, ┤, ┬, ┴) are already correct T-junctions
+				}
+				// Don't modify endpoints - they may have arrows
+			}
+			// Note: Corners (┌, ┐, └, ┘) are already correct T-junctions
+		}
+	}
+	
 	return nil
 }
 
@@ -234,24 +294,36 @@ func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.
 		for x := from.X; ; x += step {
 			p := core.Point{X: x, Y: from.Y}
 			
-			// Check if we should draw an arrow at the end
-			if drawArrow && x == to.X {
-				arrowChar := r.style.ArrowRight
-				if step < 0 {
-					arrowChar = r.style.ArrowLeft
-				}
-				// Check for existing character and resolve junction
-				if existing := canvas.Get(p); existing != ' ' && existing != 0 {
-					if junction := r.junction.Resolve(existing, arrowChar); junction != 0 {
-						canvas.Set(p, junction)
+			// If this is the endpoint and we need to draw an arrow, draw only the arrow
+			if x == to.X {
+				if drawArrow {
+					arrowChar := r.style.ArrowRight
+					if step < 0 {
+						arrowChar = r.style.ArrowLeft
+					}
+					// Check for existing content and resolve junctions if needed
+					if existing := canvas.Get(p); existing != ' ' && existing != 0 {
+						if junction := r.junction.Resolve(existing, arrowChar); junction != 0 {
+							canvas.Set(p, junction)
+						} else {
+							canvas.Set(p, arrowChar)
+						}
 					} else {
 						canvas.Set(p, arrowChar)
 					}
 				} else {
-					canvas.Set(p, arrowChar)
+					// No arrow - draw the line segment
+					if existing := canvas.Get(p); existing != ' ' && existing != 0 {
+						if junction := r.junction.Resolve(existing, r.style.Horizontal); junction != 0 {
+							canvas.Set(p, junction)
+						}
+					} else {
+						canvas.Set(p, r.style.Horizontal)
+					}
 				}
+				break
 			} else {
-				// Check if there's already a character here (junction)
+				// Not the endpoint - draw the line
 				if existing := canvas.Get(p); existing != ' ' && existing != 0 {
 					if junction := r.junction.Resolve(existing, r.style.Horizontal); junction != 0 {
 						canvas.Set(p, junction)
@@ -259,10 +331,6 @@ func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.
 				} else {
 					canvas.Set(p, r.style.Horizontal)
 				}
-			}
-			
-			if x == to.X {
-				break
 			}
 		}
 	}
@@ -277,35 +345,43 @@ func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.
 		for y := from.Y; ; y += step {
 			p := core.Point{X: from.X, Y: y}
 			
-			// Check if we should draw an arrow at the end
-			if drawArrow && y == to.Y {
-				arrowChar := r.style.ArrowDown
-				if step < 0 {
-					arrowChar = r.style.ArrowUp
-				}
-				// Check for existing character and resolve junction
-				if existing := canvas.Get(p); existing != ' ' && existing != 0 {
-					if junction := r.junction.Resolve(existing, arrowChar); junction != 0 {
-						canvas.Set(p, junction)
+			// If this is the endpoint and we need to draw an arrow, draw only the arrow
+			if y == to.Y {
+				if drawArrow {
+					arrowChar := r.style.ArrowDown
+					if step < 0 {
+						arrowChar = r.style.ArrowUp
+					}
+					// Check for existing content and resolve junctions if needed
+					if existing := canvas.Get(p); existing != ' ' && existing != 0 {
+						if junction := r.junction.Resolve(existing, arrowChar); junction != 0 {
+							canvas.Set(p, junction)
+						} else {
+							canvas.Set(p, arrowChar)
+						}
 					} else {
 						canvas.Set(p, arrowChar)
 					}
 				} else {
-					canvas.Set(p, arrowChar)
+					// No arrow - draw the line segment
+					if existing := canvas.Get(p); existing != ' ' && existing != 0 {
+						if junction := r.junction.Resolve(existing, r.style.Vertical); junction != 0 {
+							canvas.Set(p, junction)
+						}
+					} else {
+						canvas.Set(p, r.style.Vertical)
+					}
 				}
+				break
 			} else {
-				// Check if there's already a character here (junction)
+				// Not the endpoint - draw the line
 				if existing := canvas.Get(p); existing != ' ' && existing != 0 {
-				if junction := r.junction.Resolve(existing, r.style.Vertical); junction != 0 {
-					canvas.Set(p, junction)
-				}
+					if junction := r.junction.Resolve(existing, r.style.Vertical); junction != 0 {
+						canvas.Set(p, junction)
+					}
 				} else {
 					canvas.Set(p, r.style.Vertical)
 				}
-			}
-			
-			if y == to.Y {
-				break
 			}
 		}
 	}
@@ -392,7 +468,7 @@ func (r *PathRenderer) drawSegmentWithOptions(canvas canvas.Canvas, from, to cor
 			p := core.Point{X: x, Y: from.Y}
 			
 			// Check if we should draw an arrow at the end
-			if drawArrow && x+step == to.X {
+			if drawArrow && x == to.X-step {
 				arrowChar := r.style.ArrowRight
 				if step < 0 {
 					arrowChar = r.style.ArrowLeft
@@ -436,7 +512,7 @@ func (r *PathRenderer) drawSegmentWithOptions(canvas canvas.Canvas, from, to cor
 			p := core.Point{X: from.X, Y: y}
 			
 			// Check if we should draw an arrow at the end
-			if drawArrow && y+step == to.Y {
+			if drawArrow && y == to.Y-step {
 				arrowChar := r.style.ArrowDown
 				if step < 0 {
 					arrowChar = r.style.ArrowUp

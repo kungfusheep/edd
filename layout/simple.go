@@ -20,8 +20,8 @@ type SimpleLayout struct {
 // NewSimpleLayout creates a SimpleLayout with default settings.
 func NewSimpleLayout() *SimpleLayout {
 	return &SimpleLayout{
-		horizontalSpacing: 4,
-		verticalSpacing:   2,
+		horizontalSpacing: 8,
+		verticalSpacing:   4,
 		minNodeWidth:      3,
 		minNodeHeight:     3,
 		maxNodeWidth:      50,

@@ -50,8 +50,13 @@ func (jr *JunctionResolver) Resolve(existing, newLine rune) rune {
 		return junction
 	}
 	
+	// Special case: if new character is an arrow, it should take precedence
+	if isArrowChar(newLine) {
+		return newLine
+	}
+	
 	// Default behavior: if we can't resolve, use a cross
-	if isLineChar(existing) && isLineChar(newLine) {
+	if isLineChar(existing) && isLineChar(newLine) && !isArrowChar(existing) && !isArrowChar(newLine) {
 		return '┼' // or '+' for ASCII
 	}
 	
