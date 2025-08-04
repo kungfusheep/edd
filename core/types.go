@@ -74,8 +74,10 @@ func (n Node) Contains(p Point) bool {
 
 // Connection represents a directed edge between nodes.
 type Connection struct {
-	From int `json:"from"` // Source node ID
-	To   int `json:"to"`   // Target node ID
+	ID    int  `json:"id,omitempty"`    // Unique connection identifier  
+	From  int  `json:"from"`            // Source node ID
+	To    int  `json:"to"`              // Target node ID
+	Arrow bool `json:"arrow,omitempty"` // Whether this connection should have an arrow
 }
 
 // Diagram represents a complete diagram with nodes and connections.
@@ -94,8 +96,9 @@ type Metadata struct {
 
 // Path represents a route through the canvas.
 type Path struct {
-	Points []Point
-	Cost   int // Used by pathfinding algorithms
+	Points   []Point
+	Cost     int                    // Used by pathfinding algorithms
+	Metadata map[string]interface{} // Optional metadata (e.g., port information)
 }
 
 // Length returns the number of points in the path.

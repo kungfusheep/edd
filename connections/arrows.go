@@ -37,6 +37,12 @@ func NewArrowConfig() *ArrowConfig {
 
 // GetArrowType returns the arrow type for a specific connection.
 func (ac *ArrowConfig) GetArrowType(conn core.Connection) ArrowType {
+	// First check if connection has explicit arrow setting
+	if !conn.Arrow {
+		return ArrowNone
+	}
+	
+	// Then check for overrides
 	key := fmt.Sprintf("%d->%d", conn.From, conn.To)
 	if arrowType, exists := ac.TypeOverrides[key]; exists {
 		return arrowType

@@ -1,2 +1,39 @@
+# Binaries
 edd
+edd_*
+test_*
+debug_*
+*.exe
 
+# Test output
+*.log
+output.txt
+test_output.txt
+
+# Temporary files
+temp/
+*.tmp
+*.bak
+
+# Test data (unless in test_diagrams/)
+test_*.json
+debug_*.json
+
+# System files
+.DS_Store
+*.swp
+*~
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Go test cache
+*.test
+*.out
+
+# Screenshots
+*.png
+*.jpg
+*.jpeg

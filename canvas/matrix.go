@@ -61,6 +61,7 @@ type MatrixCanvas struct {
 	matrix [][]rune
 	width  int
 	height int
+	merger *CharacterMerger
 }
 
 // NewMatrixCanvas creates a new canvas with the specified dimensions.
@@ -82,6 +83,7 @@ func NewMatrixCanvas(width, height int) *MatrixCanvas {
 		matrix: matrix,
 		width:  width,
 		height: height,
+		merger: NewCharacterMerger(),
 	}
 }
 
@@ -204,15 +206,7 @@ func (c *MatrixCanvas) DrawHorizontalLine(x1, y, x2 int, char rune) error {
 	
 	for x := x1; x <= x2; x++ {
 		existing := c.matrix[y][x]
-		
-		// If there's an existing vertical line or junction, resolve junction
-		if isVerticalChar(existing) || hasConnection(existing, 'N') || hasConnection(existing, 'S') {
-			c.matrix[y][x] = c.resolveJunctionAt(x, y, false) // false = drawing horizontal
-		} else if existing == ' ' || existing == char || existing == '\x00' {
-			// Empty space, same char, or wide char continuation
-			c.matrix[y][x] = char
-		}
-		// else keep existing character
+		c.matrix[y][x] = c.merger.Merge(existing, char)
 	}
 	
 	return nil
@@ -239,15 +233,7 @@ func (c *MatrixCanvas) DrawVerticalLine(x, y1, y2 int, char rune) error {
 	
 	for y := y1; y <= y2; y++ {
 		existing := c.matrix[y][x]
-		
-		// If there's an existing horizontal line or junction, resolve junction
-		if isHorizontalChar(existing) || hasConnection(existing, 'E') || hasConnection(existing, 'W') {
-			c.matrix[y][x] = c.resolveJunctionAt(x, y, true) // true = drawing vertical
-		} else if existing == ' ' || existing == char || existing == '\x00' {
-			// Empty space, same char, or wide char continuation
-			c.matrix[y][x] = char
-		}
-		// else keep existing character
+		c.matrix[y][x] = c.merger.Merge(existing, char)
 	}
 	
 	return nil

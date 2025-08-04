@@ -13,7 +13,7 @@ func main() {
 	// Define command line flags
 	var (
 		validate = flag.Bool("validate", false, "Run validation on the output")
-		debug    = flag.Bool("debug", false, "Show debug visualization with obstacles")
+		debug    = flag.Bool("debug", false, "Show debug visualization with obstacles and ports")
 		help     = flag.Bool("help", false, "Show help")
 	)
 	
@@ -64,6 +64,7 @@ func main() {
 		renderer.EnableDebug()
 	}
 	
+	
 	// Render the diagram
 	output, err := renderer.Render(diagram)
 	if err != nil {
@@ -107,6 +108,17 @@ func loadDiagram(filename string) (*core.Diagram, error) {
 	// Basic validation
 	if len(diagram.Nodes) == 0 {
 		return nil, fmt.Errorf("diagram has no nodes")
+	}
+	
+	// Assign connection IDs if not present and default arrows to true
+	for i := range diagram.Connections {
+		if diagram.Connections[i].ID == 0 {
+			diagram.Connections[i].ID = i + 1
+		}
+		// Default arrows to true if not explicitly set to false
+		if !diagram.Connections[i].Arrow {
+			diagram.Connections[i].Arrow = true
+		}
 	}
 	
 	return &diagram, nil

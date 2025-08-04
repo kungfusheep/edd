@@ -5,6 +5,7 @@ import (
 	"edd/connections"
 	"edd/core"
 	"edd/layout"
+	"edd/obstacles"
 	"edd/pathfinding"
 	"edd/rendering"
 	"fmt"
@@ -68,6 +69,11 @@ func (r *Renderer) EnableValidation() {
 // EnableDebug enables debug mode to show obstacle visualization.
 func (r *Renderer) EnableDebug() {
 	r.debugMode = true
+}
+
+// GetRouter returns the router instance for external configuration
+func (r *Renderer) GetRouter() *connections.Router {
+	return r.router
 }
 
 // calculateNodeDimensions determines the width and height of nodes based on their text content.
@@ -220,6 +226,12 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	bounds := calculateBounds(layoutNodes)
 	c := canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
 	
+	// Step 3.5: Set up port manager (after layout is complete)
+	// Always use port manager for better connection routing
+	portWidth := 1 // Default port width
+	portManager := obstacles.NewPortManager(layoutNodes, portWidth)
+	r.router.SetPortManager(portManager)
+	
 	// Step 4: Render all nodes
 	for _, node := range layoutNodes {
 		if err := r.renderNode(c, node); err != nil {
@@ -314,6 +326,26 @@ func (r *Renderer) renderDebugObstacles(layoutNodes []core.Node, connections []c
 		debugViz.AddNode(node, label)
 	}
 	
+	// Show port information (always available now)
+	var portInfo string
+	if r.router.GetObstacleManager() != nil {
+		portInfo = r.renderPortDebugInfo(layoutNodes, paths)
+		
+		// Add port corridors to visualization
+		for _, path := range paths {
+			if path.Metadata != nil {
+				// Show source port
+				if sourcePort, ok := path.Metadata["sourcePort"].(obstacles.Port); ok {
+					debugViz.AddPoint(sourcePort.Point, 'P')
+				}
+				// Show target port
+				if targetPort, ok := path.Metadata["targetPort"].(obstacles.Port); ok {
+					debugViz.AddPoint(targetPort.Point, 'P')
+				}
+			}
+		}
+	}
+	
 	// Create the obstacle function used by the router to show exactly what it sees
 	for i, conn := range connections {
 		if path, exists := paths[i]; exists && len(path.Points) >= 2 {
@@ -338,10 +370,23 @@ func (r *Renderer) renderDebugObstacles(layoutNodes []core.Node, connections []c
 	result += fmt.Sprintf("===========================\n\n")
 	result += debugViz.String()
 	
+	// Add port information if available
+	if portInfo != "" {
+		result += fmt.Sprintf("\n\nPORT INFORMATION\n")
+		result += fmt.Sprintf("================\n")
+		result += portInfo
+	}
+	
 	// Add analysis for each connection
 	for i, conn := range connections {
 		if path, exists := paths[i]; exists {
-			obstacles := r.createObstaclesForConnection(layoutNodes, conn.From, conn.To)
+			// Use the same obstacle function that was used for routing this specific connection
+			var obstacles func(core.Point) bool
+			if r.router != nil && r.router.GetObstacleManager() != nil {
+				obstacles = r.router.GetObstacleManager().GetObstacleFuncForConnection(layoutNodes, conn)
+			} else {
+				obstacles = r.createObstaclesForConnection(layoutNodes, conn.From, conn.To)
+			}
 			analysis := debugViz.AnalyzePath(path, layoutNodes, obstacles)
 			result += fmt.Sprintf("\nConnection %d (%d -> %d):\n", i, conn.From, conn.To)
 			result += analysis
@@ -353,7 +398,18 @@ func (r *Renderer) renderDebugObstacles(layoutNodes []core.Node, connections []c
 
 // createObstaclesForConnection creates the same obstacle function used by the router.
 func (r *Renderer) createObstaclesForConnection(nodes []core.Node, sourceID, targetID int) func(core.Point) bool {
-	// This should match the logic in connections.createObstaclesFunction
+	// Use the same obstacle checker as the router for consistency
+	if r.router != nil && r.router.GetObstacleManager() != nil {
+		// Create a dummy connection to get the proper obstacle function
+		dummyConn := core.Connection{
+			ID:   -1,
+			From: sourceID,
+			To:   targetID,
+		}
+		return r.router.GetObstacleManager().GetObstacleFuncForConnection(nodes, dummyConn)
+	}
+	
+	// Fallback implementation
 	return func(p core.Point) bool {
 		for _, node := range nodes {
 			// For source and target nodes, only block the interior (not edges)
@@ -469,6 +525,125 @@ func (r *Renderer) isInVirtualObstacleZone(p core.Point, node core.Node, sourceI
 	// If we reach here, the point is in the approach zone but not in any allowed corridor
 	// Block it to force use of the orthogonal approach corridors
 	return true
+}
+
+// renderPortDebugInfo generates debug information about port usage
+func (r *Renderer) renderPortDebugInfo(nodes []core.Node, paths map[int]core.Path) string {
+	var result string
+	
+	// Get the port manager through the obstacle manager
+	obstacleManager := r.router.GetObstacleManager()
+	if obstacleManager == nil {
+		return "No obstacle manager available\n"
+	}
+	
+	// For each node, show port information
+	for _, node := range nodes {
+		result += fmt.Sprintf("\nNode %d (%dx%d at %d,%d):\n", 
+			node.ID, node.Width, node.Height, node.X, node.Y)
+		
+		// Show ports on each edge
+		edges := []obstacles.EdgeSide{
+			obstacles.North,
+			obstacles.East,
+			obstacles.South,
+			obstacles.West,
+		}
+		
+		for _, edge := range edges {
+			edgeName := getEdgeName(edge)
+			result += fmt.Sprintf("  %s edge: ", edgeName)
+			
+			// Get available and occupied ports info
+			// Since we can't directly access the port manager, we'll extract from paths
+			portsOnEdge := extractPortsFromPaths(node.ID, edge, paths)
+			
+			if len(portsOnEdge) > 0 {
+				for i, portInfo := range portsOnEdge {
+					if i > 0 {
+						result += ", "
+					}
+					result += fmt.Sprintf("Port at (%d,%d) used by conn %d", 
+						portInfo.point.X, portInfo.point.Y, portInfo.connID)
+				}
+			} else {
+				result += "No ports in use"
+			}
+			result += "\n"
+		}
+	}
+	
+	// Show port usage for each connection
+	result += "\nConnection Port Usage:\n"
+	for connID, path := range paths {
+		if path.Metadata != nil {
+			if sourcePort, ok := path.Metadata["sourcePort"].(obstacles.Port); ok {
+				if targetPort, ok2 := path.Metadata["targetPort"].(obstacles.Port); ok2 {
+					result += fmt.Sprintf("  Connection %d: ", connID)
+					result += fmt.Sprintf("Source node %d %s edge (%d,%d) -> ", 
+						sourcePort.NodeID, getEdgeName(sourcePort.Edge), 
+						sourcePort.Point.X, sourcePort.Point.Y)
+					result += fmt.Sprintf("Target node %d %s edge (%d,%d)\n", 
+						targetPort.NodeID, getEdgeName(targetPort.Edge),
+						targetPort.Point.X, targetPort.Point.Y)
+				}
+			}
+		}
+	}
+	
+	return result
+}
+
+// Helper to extract port information from paths
+func extractPortsFromPaths(nodeID int, edge obstacles.EdgeSide, paths map[int]core.Path) []struct{
+	point core.Point
+	connID int
+} {
+	var ports []struct{
+		point core.Point
+		connID int
+	}
+	
+	for connID, path := range paths {
+		if path.Metadata != nil {
+			// Check source port
+			if sourcePort, ok := path.Metadata["sourcePort"].(obstacles.Port); ok {
+				if sourcePort.NodeID == nodeID && sourcePort.Edge == edge {
+					ports = append(ports, struct{
+						point core.Point
+						connID int
+					}{sourcePort.Point, connID})
+				}
+			}
+			// Check target port
+			if targetPort, ok := path.Metadata["targetPort"].(obstacles.Port); ok {
+				if targetPort.NodeID == nodeID && targetPort.Edge == edge {
+					ports = append(ports, struct{
+						point core.Point
+						connID int
+					}{targetPort.Point, connID})
+				}
+			}
+		}
+	}
+	
+	return ports
+}
+
+// Helper to get edge name
+func getEdgeName(edge obstacles.EdgeSide) string {
+	switch edge {
+	case obstacles.North:
+		return "North"
+	case obstacles.East:
+		return "East"
+	case obstacles.South:
+		return "South"
+	case obstacles.West:
+		return "West"
+	default:
+		return "Unknown"
+	}
 }
 
 // abs returns the absolute value of an integer (helper function).
