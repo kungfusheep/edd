@@ -3,6 +3,7 @@ package rendering
 import (
 	"edd/canvas"
 	"edd/core"
+	"fmt"
 )
 
 // PathRenderMode controls how paths are rendered, particularly junction behavior.
@@ -80,7 +81,6 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 	// Handle single point
 	if len(points) == 1 {
 		if hasArrow {
-			// Draw a dot or small arrow
 			return canvas.Set(points[0], '•')
 		}
 		return nil
@@ -93,189 +93,105 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 		points = points[:len(points)-1]
 	}
 	
-	// Special handling for simple L-shaped paths (3 points forming an L)
-	if !isClosed && len(points) == 3 && isLShaped(points) {
-		// Draw the two segments without the middle point
-		if err := r.drawSegment(canvas, points[0], points[1], false); err != nil {
+	// Phase 1: Identify all corner positions
+	corners := r.identifyCorners(points, isClosed)
+	
+	// Phase 2: Draw all segments, skipping corner positions
+	for i := 0; i < len(points)-1; i++ {
+		from := points[i]
+		to := points[i+1]
+		
+		// For the last segment, check if we need an arrow
+		isLastSegment := (i == len(points)-2)
+		drawArrowOnSegment := isLastSegment && hasArrow && !isClosed
+		
+		if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
 			return err
 		}
-		// For the second segment of L-shape, include the endpoint
-		if hasArrow {
-			if err := r.drawSegmentInclusive(canvas, points[1], points[2], hasArrow); err != nil {
-				return err
-			}
-		} else {
-			// Draw up to but not including the last point, then add it separately
-			if err := r.drawSegment(canvas, points[1], points[2], false); err != nil {
-				return err
-			}
-			// Add the last point
-			if points[1].X == points[2].X {
-				canvas.Set(points[2], r.style.Vertical)
-			} else {
-				canvas.Set(points[2], r.style.Horizontal)
-			}
+	}
+	
+	// For closed paths, draw the closing segment
+	if isClosed && len(points) > 2 {
+		from := points[len(points)-1]
+		to := points[0]
+		if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, false); err != nil {
+			return err
 		}
-		// Place the corner at the middle point
-		if corner := r.getCornerChar(points[0], points[1], points[2]); corner != 0 {
-			canvas.Set(points[1], corner)
+	}
+	
+	// Phase 3: Place all corners
+	for pos, corner := range corners {
+		canvas.Set(pos, corner)
+	}
+	
+	return nil
+}
+
+// drawSegmentSkippingCorners draws a line segment while skipping any positions marked as corners
+func (r *PathRenderer) drawSegmentSkippingCorners(canvas canvas.Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool) error {
+	dx := to.X - from.X
+	dy := to.Y - from.Y
+	
+	// Horizontal line
+	if dy == 0 {
+		step := 1
+		if dx < 0 {
+			step = -1
+		}
+		
+		for x := from.X; x != to.X+step; x += step {
+			p := core.Point{X: x, Y: from.Y}
+			
+			// Skip if this is a corner position
+			if _, isCorner := corners[p]; isCorner {
+				continue
+			}
+			
+			// Handle endpoint with arrow
+			if x == to.X && drawArrow {
+				arrowChar := r.style.ArrowRight
+				if step < 0 {
+					arrowChar = r.style.ArrowLeft
+				}
+				canvas.Set(p, arrowChar)
+			} else {
+				canvas.Set(p, r.style.Horizontal)
+			}
 		}
 		return nil
 	}
 	
-	// For connection paths, mark endpoints for special handling
-	var connectionEndpoints map[core.Point]bool
-	if isConnection && len(points) >= 2 {
-		connectionEndpoints = map[core.Point]bool{
-			points[0]:              true,
-			points[len(points)-1]:  true,
-		}
-	}
-	
-	// Draw each segment
-	numSegments := len(points) - 1
-	if isClosed {
-		// For closed paths, we need one more segment to close the loop
-		numSegments = len(points)
-	}
-	
-	for i := 0; i < numSegments; i++ {
-		current := points[i]
-		next := points[(i+1)%len(points)] // Use modulo to wrap around for closed paths
-		
-		// Determine if this is the last segment
-		isLastSegment := (i == numSegments-1)
-		
-		// Draw the segment
-		// Special handling based on path type:
-		// - For simple 2-point paths with arrows: include endpoint so arrow is at the end
-		// - For simple 2-point paths without arrows: exclude endpoint (traditional line drawing)
-		// - For multi-segment paths: last segment includes endpoint, others exclude it
-		// - For closed paths: all segments exclude endpoints to avoid double-drawing
-		if isLastSegment && !isClosed && (len(points) > 2 || hasArrow) {
-			// Multi-segment open path or arrow path: include endpoint on last segment
-			if err := r.drawSegmentInclusive(canvas, current, next, hasArrow); err != nil {
-				return err
-			}
-		} else {
-			// Simple path, intermediate segment, or closed path: exclude endpoint
-			if isClosed && len(points) > 2 {
-				// For closed paths with corners, skip both endpoints to leave room for corners
-				if err := r.drawSegmentForClosedPath(canvas, current, next); err != nil {
-					return err
-				}
-			} else {
-				// For other cases, use normal segment drawing
-				if err := r.drawSegment(canvas, current, next, isLastSegment && hasArrow && !isClosed); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	
-	// Draw corners where direction changes
-	cornerCount := len(points) - 1
-	if isClosed {
-		// For closed paths, every point can be a corner
-		cornerCount = len(points)
-	}
-	
-	for i := 0; i < cornerCount; i++ {
-		// Skip corners for the first and last points of open paths
-		if !isClosed && (i == 0 || i == len(points)-1) {
-			continue
+	// Vertical line
+	if dx == 0 {
+		step := 1
+		if dy < 0 {
+			step = -1
 		}
 		
-		// Get the three points involved in the corner
-		var prev, current, next core.Point
-		if isClosed {
-			prev = points[(i+len(points)-1)%len(points)]
-			current = points[i]
-			next = points[(i+1)%len(points)]
-		} else {
-			if i == 0 || i >= len(points)-1 {
-				continue
-			}
-			prev = points[i-1]
-			current = points[i]
-			next = points[i+1]
-		}
-		
-		if corner := r.getCornerChar(prev, current, next); corner != 0 {
-			// Check render mode and existing character
-			if r.renderMode == RenderModePreserveCorners {
-				// In preserve corners mode, corners override simple lines but not junctions
-				if existing := canvas.Get(current); existing == ' ' || existing == 0 || 
-					existing == r.style.Horizontal || existing == r.style.Vertical {
-					canvas.Set(current, corner)
-				} else if IsJunctionChar(existing) && isClosed {
-					// For closed paths (like boxes), corners should override junctions too
-					canvas.Set(current, corner)
-				}
-				// Otherwise keep existing character (e.g., existing corners)
-			} else {
-				// Standard mode: resolve junctions
-				if existing := canvas.Get(current); existing != ' ' && existing != 0 {
-					if junction := r.junction.Resolve(existing, corner); junction != 0 {
-						canvas.Set(current, junction)
-					} else {
-						canvas.Set(current, corner)
-					}
-				} else {
-					canvas.Set(current, corner)
-				}
-			}
-		}
-	}
-	
-	// Handle connection endpoints specially - use T-junctions instead of crosses
-	if isConnection && connectionEndpoints != nil {
-		for point := range connectionEndpoints {
-			existing := canvas.Get(point)
+		for y := from.Y; y != to.Y+step; y += step {
+			p := core.Point{X: from.X, Y: y}
 			
-			// Skip arrow characters - they should not be modified
-			if existing == '▶' || existing == '◀' || existing == '▲' || existing == '▼' ||
-			   existing == '>' || existing == '<' || existing == '^' || existing == 'v' {
+			// Skip if this is a corner position
+			if _, isCorner := corners[p]; isCorner {
 				continue
 			}
 			
-			// Check for junction characters that indicate a connection meeting a box edge
-			if existing == '┼' || existing == '├' || existing == '┤' || existing == '┬' || existing == '┴' {
-				// This is a junction created by our connection meeting a box edge
-				// Determine which direction the connection goes
-				isStart := point == points[0]
-				var direction core.Point
-				
-				if isStart && len(points) > 1 {
-					direction = points[1]
-				} else if !isStart && len(points) > 1 {
-					direction = points[len(points)-2]
+			// Handle endpoint with arrow
+			if y == to.Y && drawArrow {
+				arrowChar := r.style.ArrowDown
+				if step < 0 {
+					arrowChar = r.style.ArrowUp
 				}
-				
-				// Only handle start points - endpoints should keep their arrows
-				if isStart {
-					// Replace cross junctions with appropriate T-junctions at start points
-					if existing == '┼' {
-						// Cross junction - determine which T-junction to use
-						if direction.X > point.X {
-							canvas.Set(point, '├') // Connection goes right
-						} else if direction.X < point.X {
-							canvas.Set(point, '┤') // Connection goes left
-						} else if direction.Y > point.Y {
-							canvas.Set(point, '┬') // Connection goes down
-						} else if direction.Y < point.Y {
-							canvas.Set(point, '┴') // Connection goes up
-						}
-					}
-					// Other junctions (├, ┤, ┬, ┴) are already correct T-junctions
-				}
-				// Don't modify endpoints - they may have arrows
+				canvas.Set(p, arrowChar)
+			} else {
+				canvas.Set(p, r.style.Vertical)
 			}
-			// Note: Corners (┌, ┐, └, ┘) are already correct T-junctions
 		}
+		return nil
 	}
 	
-	return nil
+	// Diagonal lines not supported in terminal rendering
+	return fmt.Errorf("diagonal lines not supported: from (%d,%d) to (%d,%d)", from.X, from.Y, to.X, to.Y)
 }
 
 // drawSegmentInclusive draws a line segment including the endpoint.
@@ -318,7 +234,7 @@ func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.
 							canvas.Set(p, junction)
 						}
 					} else {
-						canvas.Set(p, r.style.Horizontal)
+					canvas.Set(p, r.style.Horizontal)
 					}
 				}
 				break
@@ -369,7 +285,7 @@ func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.
 							canvas.Set(p, junction)
 						}
 					} else {
-						canvas.Set(p, r.style.Vertical)
+					canvas.Set(p, r.style.Vertical)
 					}
 				}
 				break
@@ -597,6 +513,48 @@ func (r *PathRenderer) getCornerChar(prev, current, next core.Point) rune {
 
 
 
+
+// identifyCorners analyzes a path and returns a map of corner positions to their characters
+func (r *PathRenderer) identifyCorners(points []core.Point, isClosed bool) map[core.Point]rune {
+	corners := make(map[core.Point]rune)
+	
+	// Need at least 3 points for a corner
+	if len(points) < 3 {
+		return corners
+	}
+	
+	// Determine the range of points to check for corners
+	startIdx := 1 // Skip first point unless closed
+	endIdx := len(points) - 1 // Skip last point unless closed
+	
+	if isClosed {
+		startIdx = 0
+		endIdx = len(points)
+	}
+	
+	for i := startIdx; i < endIdx; i++ {
+		var prev, current, next core.Point
+		
+		if isClosed {
+			// Handle wrap-around for closed paths
+			prev = points[(i-1+len(points))%len(points)]
+			current = points[i%len(points)]
+			next = points[(i+1)%len(points)]
+		} else {
+			// For open paths, we already skip first and last
+			prev = points[i-1]
+			current = points[i]
+			next = points[i+1]
+		}
+		
+		// Check if this point is a corner
+		if corner := r.getCornerChar(prev, current, next); corner != 0 {
+			corners[current] = corner
+		}
+	}
+	
+	return corners
+}
 
 // isLShaped checks if 3 points form an L shape (one horizontal and one vertical segment)
 func isLShaped(points []core.Point) bool {

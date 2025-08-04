@@ -109,11 +109,16 @@ func (c *MatrixCanvas) Get(p core.Point) rune {
 
 // Set places a character at the given position.
 // Returns error if position is out of bounds.
+// Uses the character merger to properly handle box-drawing character intersections.
 func (c *MatrixCanvas) Set(p core.Point, char rune) error {
 	if p.X < 0 || p.X >= c.width || p.Y < 0 || p.Y >= c.height {
 		return ErrOutOfBounds
 	}
-	c.matrix[p.Y][p.X] = char
+	existing := c.matrix[p.Y][p.X]
+	merged := c.merger.Merge(existing, char)
+	
+	
+	c.matrix[p.Y][p.X] = merged
 	return nil
 }
 

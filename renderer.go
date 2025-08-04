@@ -130,43 +130,6 @@ func calculateBounds(nodes []core.Node) core.Bounds {
 	}
 }
 
-// createBoxEdgeJunction creates a T-junction at the box edge where a connection meets it.
-func (r *Renderer) createBoxEdgeJunction(c *canvas.MatrixCanvas, connectionPoint core.Point, node core.Node, isStart bool) {
-	// Determine which edge of the box the connection point is near
-	cx, cy := connectionPoint.X, connectionPoint.Y
-	
-	// Check each edge
-	if cx == node.X-1 && cy >= node.Y && cy < node.Y+node.Height {
-		// Connection is to the left of the box
-		edgePoint := core.Point{X: node.X, Y: cy}
-		existing := c.Get(edgePoint)
-		if existing == '│' {
-			c.Set(edgePoint, '├') // T-junction pointing right
-		}
-	} else if cx == node.X+node.Width && cy >= node.Y && cy < node.Y+node.Height {
-		// Connection is to the right of the box
-		edgePoint := core.Point{X: node.X+node.Width-1, Y: cy}
-		existing := c.Get(edgePoint)
-		if existing == '│' {
-			c.Set(edgePoint, '┤') // T-junction pointing left
-		}
-	} else if cy == node.Y-1 && cx >= node.X && cx < node.X+node.Width {
-		// Connection is above the box
-		edgePoint := core.Point{X: cx, Y: node.Y}
-		existing := c.Get(edgePoint)
-		if existing == '─' {
-			c.Set(edgePoint, '┬') // T-junction pointing down
-		}
-	} else if cy == node.Y+node.Height && cx >= node.X && cx < node.X+node.Width {
-		// Connection is below the box
-		edgePoint := core.Point{X: cx, Y: node.Y+node.Height-1}
-		existing := c.Get(edgePoint)
-		if existing == '─' {
-			c.Set(edgePoint, '┴') // T-junction pointing up
-		}
-	}
-}
-
 // renderNode draws a single node on the canvas.
 func (r *Renderer) renderNode(c *canvas.MatrixCanvas, node core.Node) error {
 	// Draw the box
@@ -267,26 +230,11 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	}
 	
 	// Step 8: Render all connections (no endpoint adjustment needed)
-	for i, cwa := range connectionsWithArrows {
+	for _, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
 		
 		// Use RenderPathWithOptions to enable connection endpoint handling
 		r.pathRenderer.RenderPathWithOptions(c, cwa.Path, hasArrow, true)
-		
-		// Create T-junctions at box edges where connections start/end
-		if len(cwa.Path.Points) >= 2 {
-			// Handle start point junction
-			conn := diagram.Connections[i]
-			if fromNode, ok := nodeMap[conn.From]; ok {
-				r.createBoxEdgeJunction(c, cwa.Path.Points[0], fromNode, true)
-			}
-			
-			// Handle end point junction (but not if there's an arrow there)
-			if toNode, ok := nodeMap[conn.To]; ok && !hasArrow {
-				endPoint := cwa.Path.Points[len(cwa.Path.Points)-1]
-				r.createBoxEdgeJunction(c, endPoint, toNode, false)
-			}
-		}
 	}
 	
 	// Step 9: Convert canvas to string output
