@@ -72,15 +72,73 @@ func (r *TwoPhaseRouter) RouteConnectionWithPorts(conn core.Connection, nodes []
 		return core.Path{}, fmt.Errorf("failed to reserve target port: %w", err)
 	}
 	
-	// Phase 3: Route final path to exact port positions
+	// Phase 3: Route final path to exact port positions with perpendicular exit
 	obstacles := r.obstacleManager.GetObstacleFuncForConnection(nodes, conn)
-	finalPath, err := r.pathFinder.FindPath(sourcePort.Point, targetPort.Point, obstacles)
-	if err != nil {
-		// Release ports on failure
-		r.portManager.ReleasePort(sourcePort)
-		r.portManager.ReleasePort(targetPort)
-		return core.Path{}, fmt.Errorf("failed to find final path: %w", err)
+	
+	// Create waypoints to ensure perpendicular exit/entry
+	sourceWaypoint := r.createPerpendicularWaypoint(sourcePort, sourceNode, 3, obstacles)
+	targetWaypoint := r.createPerpendicularWaypoint(targetPort, targetNode, 3, obstacles)
+	
+	// Route through waypoints
+	var finalPath core.Path
+	
+	// If waypoints are same as ports (no clear perpendicular path), route directly
+	if sourceWaypoint == sourcePort.Point && targetWaypoint == targetPort.Point {
+		finalPath, err = r.pathFinder.FindPath(sourcePort.Point, targetPort.Point, obstacles)
+		if err != nil {
+			r.portManager.ReleasePort(sourcePort)
+			r.portManager.ReleasePort(targetPort)
+			return core.Path{}, fmt.Errorf("failed to find direct path: %w", err)
+		}
+	} else {
+		// Route through waypoints: source -> sourceWaypoint -> targetWaypoint -> target
+		// Build path segments
+		segments := []struct {
+			from, to core.Point
+			name     string
+		}{
+			{sourcePort.Point, sourceWaypoint, "source to waypoint"},
+			{sourceWaypoint, targetWaypoint, "between waypoints"},
+			{targetWaypoint, targetPort.Point, "waypoint to target"},
+		}
+		
+		// Remove unnecessary segments
+		if sourceWaypoint == sourcePort.Point {
+			segments = segments[1:] // Skip first segment
+		}
+		if targetWaypoint == targetPort.Point {
+			segments = segments[:len(segments)-1] // Skip last segment
+		}
+		if sourceWaypoint == targetWaypoint {
+			// Direct connection between ports through single waypoint
+			segments = []struct {
+				from, to core.Point
+				name     string
+			}{
+				{sourcePort.Point, sourceWaypoint, "source to waypoint"},
+				{targetWaypoint, targetPort.Point, "waypoint to target"},
+			}
+		}
+		
+		// Route each segment
+		for i, seg := range segments {
+			path, err := r.pathFinder.FindPath(seg.from, seg.to, obstacles)
+			if err != nil {
+				r.portManager.ReleasePort(sourcePort)
+				r.portManager.ReleasePort(targetPort)
+				return core.Path{}, fmt.Errorf("failed to find path %s: %w", seg.name, err)
+			}
+			
+			// Append path, avoiding duplicates at joins
+			if i == 0 {
+				finalPath.Points = append(finalPath.Points, path.Points...)
+			} else if len(path.Points) > 1 {
+				finalPath.Points = append(finalPath.Points, path.Points[1:]...)
+			}
+		}
 	}
+	
+	// Note: Path simplification removed - we should generate clean paths from the start
 	
 	// Add port metadata to path
 	if finalPath.Metadata == nil {
@@ -145,11 +203,78 @@ func (r *TwoPhaseRouter) determineExitEdge(node *core.Node, pathPoints []core.Po
 	
 	// Find first point that's clearly outside the node
 	var exitPoint core.Point
-	for _, p := range pathPoints[1:] {
-		if p.X < node.X-1 || p.X > node.X+node.Width ||
-		   p.Y < node.Y-1 || p.Y > node.Y+node.Height {
+	exitIndex := -1
+	
+	// First, find where the path actually exits the node boundary
+	for i, p := range pathPoints {
+		// Skip points inside the node
+		if p.X >= node.X && p.X < node.X+node.Width && 
+		   p.Y >= node.Y && p.Y < node.Y+node.Height {
+			continue
+		}
+		
+		// Check if point is on or just outside the node boundary
+		onNorthEdge := p.Y == node.Y-1 && p.X >= node.X && p.X < node.X+node.Width
+		onSouthEdge := p.Y == node.Y+node.Height && p.X >= node.X && p.X < node.X+node.Width
+		onEastEdge := p.X == node.X+node.Width && p.Y >= node.Y && p.Y < node.Y+node.Height
+		onWestEdge := p.X == node.X-1 && p.Y >= node.Y && p.Y < node.Y+node.Height
+		
+		if onNorthEdge || onSouthEdge || onEastEdge || onWestEdge {
 			exitPoint = p
+			exitIndex = i
+			
+			if onNorthEdge {
+				return obstacles.North
+			} else if onSouthEdge {
+				return obstacles.South
+			} else if onEastEdge {
+				// Check if path turns down soon after exiting east
+				turnsDown := false
+				for j := i+1; j < len(pathPoints) && j <= i+10; j++ {
+					if pathPoints[j].Y > p.Y+1 {
+						turnsDown = true
+						break
+					}
+					// Stop if path goes too far horizontally (more than 10 units)
+					if pathPoints[j].X > p.X+10 {
+						break
+					}
+				}
+				if turnsDown {
+					return obstacles.South
+				}
+				return obstacles.East
+			} else if onWestEdge {
+				// Check if path turns down soon after exiting west
+				turnsDown := false
+				for j := i+1; j < len(pathPoints) && j <= i+10; j++ {
+					if pathPoints[j].Y > p.Y+1 {
+						turnsDown = true
+						break
+					}
+					// Stop if path goes too far horizontally
+					if abs(pathPoints[j].X - p.X) > 10 {
+						break
+					}
+				}
+				if turnsDown {
+					return obstacles.South
+				}
+				return obstacles.West
+			}
 			break
+		}
+	}
+	
+	// Fallback: find first point clearly outside
+	if exitIndex == -1 {
+		for i, p := range pathPoints[1:] {
+			if p.X < node.X-1 || p.X > node.X+node.Width ||
+			   p.Y < node.Y-1 || p.Y > node.Y+node.Height {
+				exitPoint = p
+				exitIndex = i + 1
+				break
+			}
 		}
 	}
 	
@@ -157,19 +282,83 @@ func (r *TwoPhaseRouter) determineExitEdge(node *core.Node, pathPoints []core.Po
 	dx := exitPoint.X - nodeCenter.X
 	dy := exitPoint.Y - nodeCenter.Y
 	
-	// Use aspect ratio aware comparison
-	if abs(dx) > abs(dy)*2 {
-		// Horizontal exit
+	// Calculate aspect ratio for more balanced edge selection
+	// Add 1 to avoid division by zero
+	aspectRatio := float64(abs(dx)) / float64(abs(dy)+1)
+	
+	// Use more balanced thresholds
+	if aspectRatio > 1.5 {
+		// Clearly horizontal exit
 		if dx > 0 {
 			return obstacles.East
 		}
 		return obstacles.West
-	} else {
-		// Vertical exit
+	} else if aspectRatio < 0.67 { // Reciprocal of 1.5
+		// Clearly vertical exit
 		if dy > 0 {
 			return obstacles.South
 		}
 		return obstacles.North
+	} else {
+		// Diagonal path - use congestion as tie-breaker
+		if r.portManager != nil {
+			// Count occupied ports on each edge
+			occupiedPorts := r.portManager.GetOccupiedPorts(node.ID)
+			eastCount, southCount, westCount, northCount := 0, 0, 0, 0
+			
+			for _, port := range occupiedPorts {
+				switch port.Edge {
+				case obstacles.East:
+					eastCount++
+				case obstacles.South:
+					southCount++
+				case obstacles.West:
+					westCount++
+				case obstacles.North:
+					northCount++
+				}
+			}
+			
+			// For diagonal paths, prefer the less congested edge
+			if dx > 0 && dy > 0 {
+				// Southeast direction - choose between East and South
+				if southCount < eastCount {
+					return obstacles.South
+				}
+				return obstacles.East
+			} else if dx < 0 && dy > 0 {
+				// Southwest direction - choose between West and South
+				if southCount < westCount {
+					return obstacles.South
+				}
+				return obstacles.West
+			} else if dx < 0 && dy < 0 {
+				// Northwest direction - choose between West and North
+				if northCount < westCount {
+					return obstacles.North
+				}
+				return obstacles.West
+			} else {
+				// Northeast direction - choose between East and North
+				if northCount < eastCount {
+					return obstacles.North
+				}
+				return obstacles.East
+			}
+		}
+		
+		// Fallback to simple horizontal/vertical decision
+		if abs(dx) > abs(dy) {
+			if dx > 0 {
+				return obstacles.East
+			}
+			return obstacles.West
+		} else {
+			if dy > 0 {
+				return obstacles.South
+			}
+			return obstacles.North
+		}
 	}
 }
 
@@ -200,19 +389,83 @@ func (r *TwoPhaseRouter) determineEntryEdge(node *core.Node, pathPoints []core.P
 	dx := entryPoint.X - nodeCenter.X
 	dy := entryPoint.Y - nodeCenter.Y
 	
-	// Use aspect ratio aware comparison
-	if abs(dx) > abs(dy)*2 {
-		// Horizontal entry
+	// Calculate aspect ratio for more balanced edge selection
+	// Add 1 to avoid division by zero
+	aspectRatio := float64(abs(dx)) / float64(abs(dy)+1)
+	
+	// Use more balanced thresholds
+	if aspectRatio > 1.5 {
+		// Clearly horizontal entry
 		if dx > 0 {
 			return obstacles.East
 		}
 		return obstacles.West
-	} else {
-		// Vertical entry
+	} else if aspectRatio < 0.67 { // Reciprocal of 1.5
+		// Clearly vertical entry
 		if dy > 0 {
 			return obstacles.South
 		}
 		return obstacles.North
+	} else {
+		// Diagonal path - use congestion as tie-breaker
+		if r.portManager != nil {
+			// Count occupied ports on each edge
+			occupiedPorts := r.portManager.GetOccupiedPorts(node.ID)
+			eastCount, southCount, westCount, northCount := 0, 0, 0, 0
+			
+			for _, port := range occupiedPorts {
+				switch port.Edge {
+				case obstacles.East:
+					eastCount++
+				case obstacles.South:
+					southCount++
+				case obstacles.West:
+					westCount++
+				case obstacles.North:
+					northCount++
+				}
+			}
+			
+			// For diagonal paths, prefer the less congested edge
+			if dx > 0 && dy > 0 {
+				// Southeast direction - choose between East and South
+				if southCount < eastCount {
+					return obstacles.South
+				}
+				return obstacles.East
+			} else if dx < 0 && dy > 0 {
+				// Southwest direction - choose between West and South
+				if southCount < westCount {
+					return obstacles.South
+				}
+				return obstacles.West
+			} else if dx < 0 && dy < 0 {
+				// Northwest direction - choose between West and North
+				if northCount < westCount {
+					return obstacles.North
+				}
+				return obstacles.West
+			} else {
+				// Northeast direction - choose between East and North
+				if northCount < eastCount {
+					return obstacles.North
+				}
+				return obstacles.East
+			}
+		}
+		
+		// Fallback to simple horizontal/vertical decision
+		if abs(dx) > abs(dy) {
+			if dx > 0 {
+				return obstacles.East
+			}
+			return obstacles.West
+		} else {
+			if dy > 0 {
+				return obstacles.South
+			}
+			return obstacles.North
+		}
 	}
 }
 
@@ -254,6 +507,36 @@ func (r *TwoPhaseRouter) createRoughPathObstacles(nodes []core.Node, conn core.C
 		return false
 	}
 }
+
+// createPerpendicularWaypoint creates a waypoint that forces perpendicular exit/entry
+func (r *TwoPhaseRouter) createPerpendicularWaypoint(port obstacles.Port, node *core.Node, maxDistance int, obstacleFunc func(core.Point) bool) core.Point {
+	// Try different distances to find a clear waypoint
+	for distance := maxDistance; distance > 0; distance-- {
+		var waypoint core.Point
+		switch port.Edge {
+		case obstacles.North:
+			waypoint = core.Point{X: port.Point.X, Y: port.Point.Y - distance}
+		case obstacles.South:
+			waypoint = core.Point{X: port.Point.X, Y: port.Point.Y + distance}
+		case obstacles.East:
+			waypoint = core.Point{X: port.Point.X + distance, Y: port.Point.Y}
+		case obstacles.West:
+			waypoint = core.Point{X: port.Point.X - distance, Y: port.Point.Y}
+		default:
+			return port.Point
+		}
+		
+		// Check if waypoint is clear
+		if !obstacleFunc(waypoint) {
+			return waypoint
+		}
+	}
+	
+	// If no clear waypoint found, just return the port point
+	// This will fall back to direct routing
+	return port.Point
+}
+
 
 // HandleSelfLoops handles connections where a node connects to itself.
 // These require special routing to create a visible loop.
