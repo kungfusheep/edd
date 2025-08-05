@@ -75,9 +75,19 @@ func (r *TwoPhaseRouter) RouteConnectionWithPorts(conn core.Connection, nodes []
 	// Phase 3: Route final path to exact port positions with perpendicular exit
 	obstacles := r.obstacleManager.GetObstacleFuncForConnection(nodes, conn)
 	
-	// Create waypoints to ensure perpendicular exit/entry
-	sourceWaypoint := r.createPerpendicularWaypoint(sourcePort, sourceNode, 3, obstacles)
-	targetWaypoint := r.createPerpendicularWaypoint(targetPort, targetNode, 3, obstacles)
+	// Determine if waypoints are needed based on port positions
+	needsSourceWaypoint := r.needsPerpendicularWaypoint(sourcePort, targetPort.Point)
+	needsTargetWaypoint := r.needsPerpendicularWaypoint(targetPort, sourcePort.Point)
+	
+	sourceWaypoint := sourcePort.Point
+	if needsSourceWaypoint {
+		sourceWaypoint = r.createPerpendicularWaypoint(sourcePort, sourceNode, 3, obstacles)
+	}
+	
+	targetWaypoint := targetPort.Point
+	if needsTargetWaypoint {
+		targetWaypoint = r.createPerpendicularWaypoint(targetPort, targetNode, 3, obstacles)
+	}
 	
 	// Route through waypoints
 	var finalPath core.Path
@@ -506,6 +516,24 @@ func (r *TwoPhaseRouter) createRoughPathObstacles(nodes []core.Node, conn core.C
 		}
 		return false
 	}
+}
+
+// needsPerpendicularWaypoint checks if a waypoint is needed to ensure perpendicular exit
+func (r *TwoPhaseRouter) needsPerpendicularWaypoint(port obstacles.Port, targetPoint core.Point) bool {
+	// Calculate the direction from port to target
+	dx := targetPoint.X - port.Point.X
+	dy := targetPoint.Y - port.Point.Y
+	
+	// Check if the path would run parallel to the edge
+	switch port.Edge {
+	case obstacles.North, obstacles.South:
+		// Vertical edges - check if path is mostly horizontal
+		return abs(dx) > abs(dy)*2 // Path is more than 2:1 horizontal
+	case obstacles.East, obstacles.West:
+		// Horizontal edges - check if path is mostly vertical  
+		return abs(dy) > abs(dx)*2 // Path is more than 2:1 vertical
+	}
+	return false
 }
 
 // createPerpendicularWaypoint creates a waypoint that forces perpendicular exit/entry
