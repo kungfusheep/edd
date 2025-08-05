@@ -510,6 +510,7 @@ func (r *TwoPhaseRouter) createRoughPathObstacles(nodes []core.Node, conn core.C
 }
 
 
+
 // createPerpendicularWaypoint creates a waypoint that forces perpendicular exit/entry
 func (r *TwoPhaseRouter) createPerpendicularWaypoint(port obstacles.Port, node *core.Node, maxDistance int, obstacleFunc func(core.Point) bool) core.Point {
 	// Try different distances to find a clear waypoint

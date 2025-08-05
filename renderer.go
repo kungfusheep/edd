@@ -98,8 +98,8 @@ func calculateNodeDimensions(nodes []core.Node) []core.Node {
 	return result
 }
 
-// calculateBounds determines the canvas size needed to fit all nodes.
-func calculateBounds(nodes []core.Node) core.Bounds {
+// calculateBounds determines the canvas size needed to fit all nodes and paths.
+func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
 	if len(nodes) == 0 {
 		return core.Bounds{Min: core.Point{X: 0, Y: 0}, Max: core.Point{X: 10, Y: 10}}
 	}
@@ -107,6 +107,7 @@ func calculateBounds(nodes []core.Node) core.Bounds {
 	minX, minY := nodes[0].X, nodes[0].Y
 	maxX, maxY := nodes[0].X+nodes[0].Width, nodes[0].Y+nodes[0].Height
 	
+	// Consider all nodes
 	for _, node := range nodes[1:] {
 		if node.X < minX {
 			minX = node.X
@@ -122,6 +123,24 @@ func calculateBounds(nodes []core.Node) core.Bounds {
 		}
 	}
 	
+	// Also consider all path points
+	for _, path := range paths {
+		for _, point := range path.Points {
+			if point.X < minX {
+				minX = point.X
+			}
+			if point.Y < minY {
+				minY = point.Y
+			}
+			if point.X > maxX {
+				maxX = point.X
+			}
+			if point.Y > maxY {
+				maxY = point.Y
+			}
+		}
+	}
+	
 	// Add some padding around the diagram
 	padding := 2
 	return core.Bounds{
@@ -131,7 +150,7 @@ func calculateBounds(nodes []core.Node) core.Bounds {
 }
 
 // renderNode draws a single node on the canvas.
-func (r *Renderer) renderNode(c *canvas.MatrixCanvas, node core.Node) error {
+func (r *Renderer) renderNode(c canvas.Canvas, node core.Node) error {
 	// Draw the box
 	boxPath := core.Path{
 		Points: []core.Point{
@@ -185,27 +204,30 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 		return "", fmt.Errorf("layout failed: %w", err)
 	}
 	
-	// Step 3: Calculate bounds and create canvas
-	bounds := calculateBounds(layoutNodes)
-	c := canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
-	
-	// Step 3.5: Set up port manager (after layout is complete)
+	// Step 3: Set up port manager (after layout is complete)
 	// Always use port manager for better connection routing
 	portWidth := 1 // Default port width
 	portManager := obstacles.NewPortManager(layoutNodes, portWidth)
 	r.router.SetPortManager(portManager)
 	
-	// Step 4: Render all nodes
-	for _, node := range layoutNodes {
-		if err := r.renderNode(c, node); err != nil {
-			return "", fmt.Errorf("failed to render node %d: %w", node.ID, err)
-		}
-	}
-	
-	// Step 5: Route connections between nodes
+	// Step 4: Route connections between nodes
 	paths, err := r.router.RouteConnections(diagram.Connections, layoutNodes)
 	if err != nil {
 		return "", fmt.Errorf("connection routing failed: %w", err)
+	}
+	
+	// Step 5: Calculate bounds including paths and create canvas
+	bounds := calculateBounds(layoutNodes, paths)
+	c := canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
+	
+	// Create offset canvas that handles coordinate translation
+	offsetCanvas := newOffsetCanvas(c, bounds.Min)
+	
+	// Step 6: Render all nodes
+	for _, node := range layoutNodes {
+		if err := r.renderNode(offsetCanvas, node); err != nil {
+			return "", fmt.Errorf("failed to render node %d: %w", node.ID, err)
+		}
 	}
 	
 	// Step 5.1: Debug mode - visualize obstacles if enabled
@@ -234,7 +256,7 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
 		
 		// Use RenderPathWithOptions to enable connection endpoint handling
-		r.pathRenderer.RenderPathWithOptions(c, cwa.Path, hasArrow, true)
+		r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
 	}
 	
 	// Step 9: Convert canvas to string output
@@ -600,4 +622,47 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// offsetCanvas wraps a MatrixCanvas and translates coordinates by an offset
+type offsetCanvas struct {
+	canvas *canvas.MatrixCanvas
+	offset core.Point
+}
+
+func newOffsetCanvas(c *canvas.MatrixCanvas, offset core.Point) *offsetCanvas {
+	return &offsetCanvas{
+		canvas: c,
+		offset: offset,
+	}
+}
+
+func (oc *offsetCanvas) Set(p core.Point, char rune) error {
+	// Translate coordinates
+	translated := core.Point{
+		X: p.X - oc.offset.X,
+		Y: p.Y - oc.offset.Y,
+	}
+	return oc.canvas.Set(translated, char)
+}
+
+func (oc *offsetCanvas) Get(p core.Point) rune {
+	// Translate coordinates
+	translated := core.Point{
+		X: p.X - oc.offset.X,
+		Y: p.Y - oc.offset.Y,
+	}
+	return oc.canvas.Get(translated)
+}
+
+func (oc *offsetCanvas) Size() (int, int) {
+	return oc.canvas.Size()
+}
+
+func (oc *offsetCanvas) Clear() {
+	oc.canvas.Clear()
+}
+
+func (oc *offsetCanvas) String() string {
+	return oc.canvas.String()
 }

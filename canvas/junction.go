@@ -31,6 +31,14 @@ func (m *CharacterMerger) Merge(existing, new rune) rune {
 		return existing
 	}
 	
+	// Arrow preservation: arrows should never be overwritten
+	if isArrow(existing) {
+		return existing
+	}
+	if isArrow(new) {
+		return new
+	}
+	
 	// Check the merge map
 	if merged, ok := m.mergeMap[mergePair{existing, new}]; ok {
 		return merged
@@ -43,6 +51,13 @@ func (m *CharacterMerger) Merge(existing, new rune) rune {
 	
 	// Default: keep existing character
 	return existing
+}
+
+// isArrow checks if a character is an arrow
+func isArrow(r rune) bool {
+	return r == '▶' || r == '◀' || r == '▲' || r == '▼' ||
+	       r == '>' || r == '<' || r == '^' || r == 'v' ||
+	       r == '→' || r == '←' || r == '↑' || r == '↓'
 }
 
 // initializeMergeRules sets up the character merge mappings

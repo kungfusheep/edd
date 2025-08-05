@@ -105,6 +105,7 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 		isLastSegment := (i == len(points)-2)
 		drawArrowOnSegment := isLastSegment && hasArrow && !isClosed
 		
+		
 		if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
 			return err
 		}
@@ -153,6 +154,8 @@ func (r *PathRenderer) drawSegmentSkippingCorners(canvas canvas.Canvas, from, to
 				if step < 0 {
 					arrowChar = r.style.ArrowLeft
 				}
+				// Debug: print when placing arrows
+				//fmt.Printf("Placing arrow %c at (%d,%d)\n", arrowChar, p.X, p.Y)
 				canvas.Set(p, arrowChar)
 			} else {
 				canvas.Set(p, r.style.Horizontal)
