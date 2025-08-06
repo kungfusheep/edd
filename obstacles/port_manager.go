@@ -104,8 +104,34 @@ func (pm *portManagerImpl) ReservePort(nodeID int, edge EdgeSide, connectionID i
 		return Port{}, fmt.Errorf("node %d not found", nodeID)
 	}
 	
-	// Find available port closest to center
+	// Find available port closest to center with minimum separation
 	availablePorts := pm.getAvailablePortsUnsafe(nodeID, edge)
+	
+	// Filter ports to ensure minimum separation from already allocated ports
+	const minSeparation = 3 // Minimum units between ports
+	filteredPorts := []Port{}
+	
+	for _, port := range availablePorts {
+		tooClose := false
+		// Check distance from all occupied ports on this edge
+		for _, existingPort := range pm.ports {
+			if existingPort.NodeID == nodeID && existingPort.Edge == edge && 
+			   existingPort.ConnectionID != -1 && existingPort.StackLevel == 0 {
+				if abs(port.Position - existingPort.Position) < minSeparation {
+					tooClose = true
+					break
+				}
+			}
+		}
+		if !tooClose {
+			filteredPorts = append(filteredPorts, port)
+		}
+	}
+	
+	// Use filtered ports if any available, otherwise fall back to all available ports
+	if len(filteredPorts) > 0 {
+		availablePorts = filteredPorts
+	}
 	
 	// If no ports are available, try stacking on existing ports
 	if len(availablePorts) == 0 {

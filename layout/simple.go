@@ -3,6 +3,7 @@ package layout
 import (
 	"edd/core"
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -86,11 +87,26 @@ func (s *SimpleLayout) Layout(nodes []core.Node, connections []core.Connection) 
 			componentNodes[i] = result[nodeMap[nodeID]]
 		}
 		
-		// Assign layers for this component
-		layers := s.assignLayers(componentNodes, outgoing, incoming)
+		// Check if this is a hub-spoke pattern
+		isHubSpoke, hubID := s.isHubSpokePattern(component, outgoing, incoming)
+		
+		// Use different layout strategies based on graph properties
+		var layers [][]int
+		if isHubSpoke {
+			// For hub-spoke patterns, use radial layout
+			layers = s.assignRadialLayout(componentNodes, hubID, outgoing, incoming)
+		} else {
+			// For all other graphs (including cycles), use layered layout
+			// The layered layout handles cycles by finding strongly connected components
+			layers = s.assignLayers(componentNodes, outgoing, incoming)
+		}
 		
 		// Position nodes within component
-		s.positionNodesWithOffset(result, layers, xOffset)
+		if isHubSpoke {
+			s.positionRadialNodesWithOffset(result, layers, xOffset, hubID)
+		} else {
+			s.positionNodesWithOffset(result, layers, xOffset)
+		}
 		
 		// Calculate component width for next offset
 		maxX := xOffset
@@ -142,7 +158,84 @@ func (s *SimpleLayout) calculateNodeDimensions(node *core.Node) {
 
 // assignLayers determines which vertical layer each node belongs to.
 // Uses a modified topological sort for O(n + e) complexity.
+// For graphs with cycles, it identifies back-edges and ignores them during layout.
 func (s *SimpleLayout) assignLayers(nodes []core.Node, outgoing, incoming map[int][]int) [][]int {
+	// First, identify back-edges that create cycles
+	backEdges := s.findBackEdges(nodes, outgoing)
+	
+	// Create modified adjacency lists without back-edges
+	outgoingNoCycles := make(map[int][]int)
+	incomingNoCycles := make(map[int][]int)
+	
+	for nodeID, neighbors := range outgoing {
+		outgoingNoCycles[nodeID] = make([]int, 0)
+		for _, neighbor := range neighbors {
+			// Skip if this is a back-edge
+			isBackEdge := false
+			for _, edge := range backEdges {
+				if edge.from == nodeID && edge.to == neighbor {
+					isBackEdge = true
+					break
+				}
+			}
+			if !isBackEdge {
+				outgoingNoCycles[nodeID] = append(outgoingNoCycles[nodeID], neighbor)
+			}
+		}
+	}
+	
+	// Rebuild incoming without back-edges
+	for nodeID := range nodes {
+		incomingNoCycles[nodes[nodeID].ID] = make([]int, 0)
+	}
+	for nodeID, neighbors := range outgoingNoCycles {
+		for _, neighbor := range neighbors {
+			incomingNoCycles[neighbor] = append(incomingNoCycles[neighbor], nodeID)
+		}
+	}
+	
+	// Now run normal topological sort on the DAG (without cycles)
+	return s.assignLayersDAG(nodes, outgoingNoCycles, incomingNoCycles)
+}
+
+// backEdge represents an edge that creates a cycle
+type backEdge struct {
+	from, to int
+}
+
+// findBackEdges identifies edges that create cycles using DFS
+func (s *SimpleLayout) findBackEdges(nodes []core.Node, outgoing map[int][]int) []backEdge {
+	backEdges := make([]backEdge, 0)
+	visited := make(map[int]int) // 0=unvisited, 1=visiting, 2=visited
+	
+	var dfs func(nodeID int)
+	dfs = func(nodeID int) {
+		visited[nodeID] = 1 // Mark as visiting
+		
+		for _, neighbor := range outgoing[nodeID] {
+			if visited[neighbor] == 1 {
+				// Found a back-edge (cycle)
+				backEdges = append(backEdges, backEdge{from: nodeID, to: neighbor})
+			} else if visited[neighbor] == 0 {
+				dfs(neighbor)
+			}
+		}
+		
+		visited[nodeID] = 2 // Mark as visited
+	}
+	
+	// Run DFS from each unvisited node
+	for _, node := range nodes {
+		if visited[node.ID] == 0 {
+			dfs(node.ID)
+		}
+	}
+	
+	return backEdges
+}
+
+// assignLayersDAG is the original assignLayers logic for acyclic graphs
+func (s *SimpleLayout) assignLayersDAG(nodes []core.Node, outgoing, incoming map[int][]int) [][]int {
 	// Calculate in-degrees
 	inDegree := make(map[int]int)
 	nodeSet := make(map[int]bool)
@@ -215,16 +308,78 @@ func (s *SimpleLayout) assignLayers(nodes []core.Node, outgoing, incoming map[in
 				remaining = append(remaining, node.ID)
 			}
 		}
-		sort.Ints(remaining)
 		
-		// For cycles, break them by placing one node arbitrarily
-		// For disconnected nodes, they go in their own layer
-		if len(remaining) > 0 {
-			layers = append(layers, remaining)
+		// Try to assign remaining nodes to existing layers based on their connections
+		for len(remaining) > 0 {
+			placed := false
+			for i, nodeID := range remaining {
+				// Find the best layer for this node based on its connections
+				bestLayer := s.findBestLayerForNode(nodeID, layers, assigned, outgoing, incoming)
+				if bestLayer >= 0 && bestLayer < len(layers) {
+					layers[bestLayer] = append(layers[bestLayer], nodeID)
+					assigned[nodeID] = bestLayer
+					remaining = append(remaining[:i], remaining[i+1:]...)
+					placed = true
+					break
+				}
+			}
+			
+			// If we couldn't place any nodes, create a new layer
+			if !placed && len(remaining) > 0 {
+				// Take the first remaining node and start a new layer
+				newLayer := []int{remaining[0]}
+				assigned[remaining[0]] = len(layers)
+				remaining = remaining[1:]
+				layers = append(layers, newLayer)
+			}
 		}
 	}
 	
 	return layers
+}
+
+// findBestLayerForNode determines the best layer for a node based on its connections
+func (s *SimpleLayout) findBestLayerForNode(nodeID int, layers [][]int, assigned map[int]int, outgoing, incoming map[int][]int) int {
+	// Count connections to nodes in each layer
+	layerScores := make(map[int]int)
+	
+	// Check incoming connections
+	for _, predID := range incoming[nodeID] {
+		if layer, ok := assigned[predID]; ok {
+			// Prefer to be after predecessors
+			if layer+1 < len(layers) {
+				layerScores[layer+1]++
+			}
+		}
+	}
+	
+	// Check outgoing connections
+	for _, succID := range outgoing[nodeID] {
+		if layer, ok := assigned[succID]; ok {
+			// Prefer to be before successors
+			if layer > 0 {
+				layerScores[layer-1]++
+			}
+		}
+	}
+	
+	// Find layer with highest score
+	bestLayer := -1
+	bestScore := 0
+	for layer, score := range layerScores {
+		if score > bestScore {
+			bestScore = score
+			bestLayer = layer
+		}
+	}
+	
+	// If no connections to existing layers, try to find a reasonable position
+	if bestLayer == -1 && len(layers) > 0 {
+		// Default to middle layer to avoid extreme positions
+		bestLayer = len(layers) / 2
+	}
+	
+	return bestLayer
 }
 
 
@@ -275,9 +430,252 @@ func (s *SimpleLayout) detectComponents(nodes []core.Node, outgoing, incoming ma
 	return components
 }
 
+// hasCycle detects if the given component contains cycles using DFS
+func (s *SimpleLayout) hasCycle(component []int, outgoing map[int][]int) bool {
+	// Track visit states: 0 = unvisited, 1 = visiting, 2 = visited
+	state := make(map[int]int)
+	
+	// DFS to detect cycles
+	var dfs func(nodeID int) bool
+	dfs = func(nodeID int) bool {
+		state[nodeID] = 1 // Mark as visiting
+		
+		for _, neighbor := range outgoing[nodeID] {
+			// Only check neighbors within this component
+			inComponent := false
+			for _, compNode := range component {
+				if compNode == neighbor {
+					inComponent = true
+					break
+				}
+			}
+			if !inComponent {
+				continue
+			}
+			
+			if state[neighbor] == 1 {
+				// Found a back edge - cycle detected
+				return true
+			}
+			if state[neighbor] == 0 {
+				if dfs(neighbor) {
+					return true
+				}
+			}
+		}
+		
+		state[nodeID] = 2 // Mark as visited
+		return false
+	}
+	
+	// Check each node in the component
+	for _, nodeID := range component {
+		if state[nodeID] == 0 {
+			if dfs(nodeID) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
+// assignGridLayout arranges nodes in a grid pattern for small cyclic graphs
+func (s *SimpleLayout) assignGridLayout(nodes []core.Node) [][]int {
+	if len(nodes) == 0 {
+		return [][]int{}
+	}
+	
+	// Calculate grid dimensions
+	// Aim for a roughly square grid, slightly wider than tall
+	cols := int(math.Sqrt(float64(len(nodes)))) + 1
+	// rows := (len(nodes) + cols - 1) / cols // not needed for column-based layout
+	
+	// Create layers (each layer is a column in the grid)
+	layers := make([][]int, cols)
+	
+	// Sort nodes by ID for consistent ordering
+	nodeIDs := make([]int, len(nodes))
+	for i, node := range nodes {
+		nodeIDs[i] = node.ID
+	}
+	sort.Ints(nodeIDs)
+	
+	// Distribute nodes across columns
+	for i, nodeID := range nodeIDs {
+		col := i % cols
+		layers[col] = append(layers[col], nodeID)
+	}
+	
+	return layers
+}
+
+// isHubSpokePattern detects if the component forms a hub-spoke pattern
+// Returns true and the hub node ID if pattern is detected
+func (s *SimpleLayout) isHubSpokePattern(component []int, outgoing, incoming map[int][]int) (bool, int) {
+	// A hub-spoke pattern has one node with many connections and other nodes mostly connected to it
+	// Criteria:
+	// 1. One node has significantly more connections than others
+	// 2. Most other nodes are primarily connected to the hub
+	
+	if len(component) < 4 {
+		return false, -1
+	}
+	
+	// Count connections for each node
+	connectionCounts := make(map[int]int)
+	for _, nodeID := range component {
+		count := len(outgoing[nodeID]) + len(incoming[nodeID])
+		connectionCounts[nodeID] = count
+	}
+	
+	// Find node with most connections
+	maxConnections := 0
+	hubCandidate := -1
+	for nodeID, count := range connectionCounts {
+		if count > maxConnections {
+			maxConnections = count
+			hubCandidate = nodeID
+		}
+	}
+	
+	// Check if this node has significantly more connections than average
+	avgConnections := 0
+	for _, count := range connectionCounts {
+		avgConnections += count
+	}
+	avgConnections /= len(component)
+	
+	// Hub should have at least 3x average connections and connect to >60% of nodes
+	minHubConnections := len(component) * 6 / 10 // 60% of nodes
+	if maxConnections < avgConnections*3 || maxConnections < minHubConnections {
+		return false, -1
+	}
+	
+	// Verify most nodes connect to the hub
+	connectedToHub := 0
+	for _, nodeID := range component {
+		if nodeID == hubCandidate {
+			continue
+		}
+		// Check if this node connects to hub
+		isConnected := false
+		for _, neighbor := range outgoing[nodeID] {
+			if neighbor == hubCandidate {
+				isConnected = true
+				break
+			}
+		}
+		if !isConnected {
+			for _, neighbor := range incoming[nodeID] {
+				if neighbor == hubCandidate {
+					isConnected = true
+					break
+				}
+			}
+		}
+		if isConnected {
+			connectedToHub++
+		}
+	}
+	
+	// At least 70% of non-hub nodes should connect to hub
+	if float64(connectedToHub) >= float64(len(component)-1)*0.7 {
+		return true, hubCandidate
+	}
+	
+	return false, -1
+}
+
+// assignRadialLayout arranges nodes in a radial pattern around a hub
+func (s *SimpleLayout) assignRadialLayout(nodes []core.Node, hubID int, outgoing, incoming map[int][]int) [][]int {
+	// Create layers: hub in center, spokes around it
+	layers := make([][]int, 3)
+	
+	// Find hub index
+	hubIndex := -1
+	for i, node := range nodes {
+		if node.ID == hubID {
+			hubIndex = i
+			break
+		}
+	}
+	
+	if hubIndex == -1 {
+		// Fallback to grid layout
+		return s.assignGridLayout(nodes)
+	}
+	
+	// Layer 0: empty (for spacing)
+	layers[0] = []int{}
+	
+	// Layer 1: hub in the middle
+	layers[1] = []int{hubID}
+	
+	// Layer 2: all spoke nodes
+	layers[2] = []int{}
+	for _, node := range nodes {
+		if node.ID != hubID {
+			layers[2] = append(layers[2], node.ID)
+		}
+	}
+	
+	// Sort spoke nodes for consistent ordering
+	sort.Ints(layers[2])
+	
+	return layers
+}
+
 // positionNodes assigns X,Y coordinates to nodes based on their layers.
 func (s *SimpleLayout) positionNodes(nodes []core.Node, layers [][]int) {
 	s.positionNodesWithOffset(nodes, layers, 0)
+}
+
+// positionRadialNodesWithOffset positions nodes in a radial/hub-spoke pattern
+func (s *SimpleLayout) positionRadialNodesWithOffset(nodes []core.Node, layers [][]int, xOffset int, hubID int) {
+	nodeMap := make(map[int]*core.Node)
+	for i := range nodes {
+		nodeMap[nodes[i].ID] = &nodes[i]
+	}
+	
+	// Position hub (layer 1)
+	if len(layers) >= 2 && len(layers[1]) > 0 {
+		hubNode := nodeMap[layers[1][0]]
+		if hubNode != nil {
+			hubNode.X = xOffset
+			// Center the hub vertically based on number of spokes
+			spokeCount := 0
+			if len(layers) >= 3 {
+				spokeCount = len(layers[2])
+			}
+			totalHeight := spokeCount * 5 // Rough estimate: 3 lines per node + 2 spacing
+			hubNode.Y = totalHeight / 2 - hubNode.Height/2
+			if hubNode.Y < 0 {
+				hubNode.Y = 0
+			}
+		}
+	}
+	
+	// Position spokes (layer 2) with good vertical distribution
+	if len(layers) >= 3 && len(layers[2]) > 0 {
+		spokes := layers[2]
+		
+		// Calculate hub bounds for positioning spokes
+		hubNode := nodeMap[hubID]
+		hubRight := hubNode.X + hubNode.Width + s.horizontalSpacing*2
+		
+		// Distribute spokes vertically with reasonable spacing
+		verticalSpacing := s.verticalSpacing + 1 // Slightly more than default for clarity
+		y := 0
+		
+		for _, nodeID := range spokes {
+			if node := nodeMap[nodeID]; node != nil {
+				node.X = hubRight
+				node.Y = y
+				y += node.Height + verticalSpacing
+			}
+		}
+	}
 }
 
 // positionNodesWithOffset assigns X,Y coordinates with a starting X offset.
