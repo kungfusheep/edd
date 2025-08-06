@@ -685,6 +685,7 @@ func (s *SimpleLayout) positionNodesWithOffset(nodes []core.Node, layers [][]int
 		nodeMap[nodes[i].ID] = &nodes[i]
 	}
 	
+	// First pass: position all nodes normally
 	x := xOffset
 	for _, layer := range layers {
 		if len(layer) == 0 {
@@ -701,7 +702,7 @@ func (s *SimpleLayout) positionNodesWithOffset(nodes []core.Node, layers [][]int
 		
 		// Position nodes within the layer, distributing into columns if needed
 		if len(layer) <= s.maxNodesPerColumn {
-			// Single column - original behavior
+			// Single column - position nodes normally first
 			y := 0
 			for _, nodeID := range layer {
 				if node := nodeMap[nodeID]; node != nil {
@@ -748,5 +749,41 @@ func (s *SimpleLayout) positionNodesWithOffset(nodes []core.Node, layers [][]int
 		
 		// Move to next layer
 		x += maxWidth + s.horizontalSpacing
+	}
+	
+	// Second pass: center nodes vertically within each layer based on total height
+	layerHeights := make([]int, len(layers))
+	maxHeight := 0
+	
+	// Calculate total height for each layer
+	for i, layer := range layers {
+		totalHeight := 0
+		for j, nodeID := range layer {
+			if node := nodeMap[nodeID]; node != nil {
+				totalHeight += node.Height
+				if j < len(layer)-1 {
+					totalHeight += s.verticalSpacing
+				}
+			}
+		}
+		layerHeights[i] = totalHeight
+		if totalHeight > maxHeight {
+			maxHeight = totalHeight
+		}
+	}
+	
+	// Now center each layer based on the maximum height
+	for layerIdx, layer := range layers {
+		if len(layer) > 0 && layerHeights[layerIdx] < maxHeight {
+			// Calculate offset to center this layer
+			offset := (maxHeight - layerHeights[layerIdx]) / 2
+			
+			// Apply offset to all nodes in this layer
+			for _, nodeID := range layer {
+				if node := nodeMap[nodeID]; node != nil {
+					node.Y += offset
+				}
+			}
+		}
 	}
 }

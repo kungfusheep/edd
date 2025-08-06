@@ -40,6 +40,9 @@ type PortManager interface {
 	// ReservePort reserves a port for a connection, returns the reserved port
 	ReservePort(nodeID int, edge EdgeSide, connectionID int) (Port, error)
 	
+	// ReservePortWithHint reserves a port with a position hint for better alignment
+	ReservePortWithHint(nodeID int, edge EdgeSide, connectionID int, preferredPos core.Point) (Port, error)
+	
 	// ReleasePort releases a previously reserved port
 	ReleasePort(port Port)
 	

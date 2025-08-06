@@ -192,6 +192,83 @@ func (pm *portManagerImpl) ReservePort(nodeID int, edge EdgeSide, connectionID i
 	return *bestPort, nil
 }
 
+// ReservePortWithHint reserves a port with a position hint for better alignment
+func (pm *portManagerImpl) ReservePortWithHint(nodeID int, edge EdgeSide, connectionID int, preferredPos core.Point) (Port, error) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	
+	_, exists := pm.nodes[nodeID]
+	if !exists {
+		return Port{}, fmt.Errorf("node %d not found", nodeID)
+	}
+	
+	// Find available port closest to preferred position with minimum separation
+	availablePorts := pm.getAvailablePortsUnsafe(nodeID, edge)
+	
+	// Filter ports to ensure minimum separation from already allocated ports
+	const minSeparation = 3 // Minimum units between ports
+	filteredPorts := []Port{}
+	
+	for _, port := range availablePorts {
+		tooClose := false
+		// Check distance from all occupied ports on this edge
+		for _, existingPort := range pm.ports {
+			if existingPort.NodeID == nodeID && existingPort.Edge == edge && 
+			   existingPort.ConnectionID != -1 && existingPort.StackLevel == 0 {
+				if abs(port.Position - existingPort.Position) < minSeparation {
+					tooClose = true
+					break
+				}
+			}
+		}
+		if !tooClose {
+			filteredPorts = append(filteredPorts, port)
+		}
+	}
+	
+	// Use filtered ports if any available, otherwise fall back to all available ports
+	if len(filteredPorts) > 0 {
+		availablePorts = filteredPorts
+	}
+	
+	// If no ports are available, fall back to stacking
+	if len(availablePorts) == 0 {
+		// Use regular ReservePort logic for stacking
+		return pm.ReservePort(nodeID, edge, connectionID)
+	}
+	
+	// Select port closest to preferred position
+	var bestPort *Port
+	minDistance := 999999
+	
+	for i := range availablePorts {
+		port := &availablePorts[i]
+		// Calculate distance based on edge orientation
+		var distance int
+		switch edge {
+		case North, South:
+			// For horizontal edges, compare X positions
+			distance = abs(port.Point.X - preferredPos.X)
+		case East, West:
+			// For vertical edges, compare Y positions
+			distance = abs(port.Point.Y - preferredPos.Y)
+		}
+		
+		if distance < minDistance {
+			minDistance = distance
+			bestPort = port
+		}
+	}
+	
+	// Reserve the port
+	bestPort.ConnectionID = connectionID
+	bestPort.StackLevel = 0 // First level
+	key := pm.portKey(nodeID, edge, bestPort.Position)
+	pm.ports[key] = bestPort
+	
+	return *bestPort, nil
+}
+
 // ReleasePort releases a previously reserved port
 func (pm *portManagerImpl) ReleasePort(port Port) {
 	pm.mu.Lock()
