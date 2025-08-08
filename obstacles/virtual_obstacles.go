@@ -39,13 +39,12 @@ func (v *virtualObstacleChecker) GetObstacleZones(nodes []core.Node, sourceID, t
 				NodeID: node.ID,
 			})
 		} else {
-			// For other nodes, add padding
-			padding := 1
+			// For other nodes, add 1-unit padding
 			zones = append(zones, ObstacleZone{
-				MinX:   node.X - padding,
-				MinY:   node.Y - padding,
-				MaxX:   node.X + node.Width + padding,
-				MaxY:   node.Y + node.Height + padding,
+				MinX:   node.X - 1,
+				MinY:   node.Y - 1,
+				MaxX:   node.X + node.Width,
+				MaxY:   node.Y + node.Height,
 				Type:   "physical",
 				NodeID: node.ID,
 			})
@@ -91,64 +90,9 @@ func (v *virtualObstacleChecker) shouldAddVirtualObstacles(nodeID, sourceID, tar
 
 // createVirtualZones creates virtual obstacle zones around a node
 func (v *virtualObstacleChecker) createVirtualZones(node core.Node, sourceID, targetID int) []ObstacleZone {
-	zones := []ObstacleZone{}
-	
-	// Calculate zone size based on whether this is source/target
-	zoneSize := v.config.ApproachZoneSize
-	if node.ID == sourceID || node.ID == targetID {
-		zoneSize = int(float64(zoneSize) * v.config.SourceTargetScale)
-	}
-	
-	// Create approach zones on each side
-	// North zone (stop before connection point at Y-1)
-	if zoneSize > 1 {
-		zones = append(zones, ObstacleZone{
-			MinX:   node.X - v.config.CornerRadius,
-			MinY:   node.Y - zoneSize,
-			MaxX:   node.X + node.Width + v.config.CornerRadius,
-			MaxY:   node.Y - 2, // Stop before connection point
-			Type:   "virtual",
-			NodeID: node.ID,
-		})
-	}
-	
-	// South zone (start after connection point at Y+Height)
-	if zoneSize > 1 {
-		zones = append(zones, ObstacleZone{
-			MinX:   node.X - v.config.CornerRadius,
-			MinY:   node.Y + node.Height + 1, // Start after connection point
-			MaxX:   node.X + node.Width + v.config.CornerRadius,
-			MaxY:   node.Y + node.Height + zoneSize,
-			Type:   "virtual",
-			NodeID: node.ID,
-		})
-	}
-	
-	// East zone (start after connection point at X+Width)
-	if zoneSize > 1 {
-		zones = append(zones, ObstacleZone{
-			MinX:   node.X + node.Width + 1, // Start after connection point
-			MinY:   node.Y - v.config.CornerRadius,
-			MaxX:   node.X + node.Width + zoneSize,
-			MaxY:   node.Y + node.Height + v.config.CornerRadius,
-			Type:   "virtual",
-			NodeID: node.ID,
-		})
-	}
-	
-	// West zone (stop before connection point at X-1)
-	if zoneSize > 1 {
-		zones = append(zones, ObstacleZone{
-			MinX:   node.X - zoneSize,
-			MinY:   node.Y - v.config.CornerRadius,
-			MaxX:   node.X - 2, // Stop before connection point
-			MaxY:   node.Y + node.Height + v.config.CornerRadius,
-			Type:   "virtual",
-			NodeID: node.ID,
-		})
-	}
-	
-	return zones
+	// For now, don't create any additional virtual zones
+	// The 1-unit padding in GetObstacleZones is sufficient
+	return []ObstacleZone{}
 }
 
 // dynamicVirtualObstacleChecker implements DynamicVirtualObstacleChecker

@@ -22,6 +22,7 @@ type Renderer struct {
 	pathRenderer *rendering.PathRenderer         // Reused across renders
 	validator    *LineValidator                  // Optional output validator
 	debugMode    bool                            // Enable debug obstacle visualization
+	showObstacles bool                          // Show virtual obstacles as dots in standard rendering
 }
 
 // NewRenderer creates a new renderer with sensible defaults.
@@ -69,6 +70,11 @@ func (r *Renderer) EnableValidation() {
 // EnableDebug enables debug mode to show obstacle visualization.
 func (r *Renderer) EnableDebug() {
 	r.debugMode = true
+}
+
+// EnableObstacleVisualization enables showing virtual obstacles as dots in standard rendering
+func (r *Renderer) EnableObstacleVisualization() {
+	r.showObstacles = true
 }
 
 // GetRouter returns the router instance for external configuration
@@ -257,6 +263,11 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 		
 		// Use RenderPathWithOptions to enable connection endpoint handling
 		r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
+	}
+	
+	// Step 8.5: Show virtual obstacles if enabled
+	if r.showObstacles {
+		r.renderObstacleDots(offsetCanvas, layoutNodes, diagram.Connections)
 	}
 	
 	// Step 9: Convert canvas to string output
@@ -665,4 +676,50 @@ func (oc *offsetCanvas) Clear() {
 
 func (oc *offsetCanvas) String() string {
 	return oc.canvas.String()
+}
+
+// renderObstacleDots adds dots to show virtual obstacles on the canvas
+func (r *Renderer) renderObstacleDots(c canvas.Canvas, nodes []core.Node, connections []core.Connection) {
+	// Get the obstacle manager to access virtual obstacles
+	obstacleManager := r.router.GetObstacleManager()
+	if obstacleManager == nil {
+		return
+	}
+	
+	// Create a test obstacle function to probe all points
+	// We'll use a dummy connection to get the general obstacle map
+	obstacleFunc := obstacleManager.GetObstacleFunc(nodes, -1)
+	
+	// Get canvas bounds
+	width, height := c.Size()
+	
+	// Check each point on the canvas
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			p := core.Point{X: x, Y: y}
+			
+			// Skip if there's already content at this position
+			if c.Get(p) != ' ' && c.Get(p) != 0 {
+				continue
+			}
+			
+			// Check if this point is a virtual obstacle
+			if obstacleFunc(p) {
+				// Check if it's a physical obstacle (node body)
+				isPhysical := false
+				for _, node := range nodes {
+					if x >= node.X && x < node.X+node.Width &&
+					   y >= node.Y && y < node.Y+node.Height {
+						isPhysical = true
+						break
+					}
+				}
+				
+				// Only show virtual obstacles, not physical ones
+				if !isPhysical {
+					c.Set(p, '·') // Use middle dot for virtual obstacles
+				}
+			}
+		}
+	}
 }

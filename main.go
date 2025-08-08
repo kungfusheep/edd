@@ -12,9 +12,10 @@ import (
 func main() {
 	// Define command line flags
 	var (
-		validate = flag.Bool("validate", false, "Run validation on the output")
-		debug    = flag.Bool("debug", false, "Show debug visualization with obstacles and ports")
-		help     = flag.Bool("help", false, "Show help")
+		validate      = flag.Bool("validate", false, "Run validation on the output")
+		debug         = flag.Bool("debug", false, "Show debug visualization with obstacles and ports")
+		showObstacles = flag.Bool("show-obstacles", false, "Show virtual obstacles as dots in standard rendering")
+		help          = flag.Bool("help", false, "Show help")
 	)
 	
 	flag.Usage = func() {
@@ -64,6 +65,10 @@ func main() {
 		renderer.EnableDebug()
 	}
 	
+	// Enable obstacle visualization if requested
+	if *showObstacles {
+		renderer.EnableObstacleVisualization()
+	}
 	
 	// Render the diagram
 	output, err := renderer.Render(diagram)

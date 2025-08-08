@@ -4,6 +4,7 @@ import (
 	"edd/core"
 	"edd/obstacles"
 	"fmt"
+	"math"
 )
 
 // Router handles the routing of connections between nodes in a diagram.
@@ -195,18 +196,79 @@ func (r *Router) routeConnectionsWithDynamicObstacles(connections []core.Connect
 		}{conn, i}
 	}
 	
-	// Sort connections by: 1) source ID, 2) target ID, 3) connection ID
-	// This ensures consistent routing order across runs
+	// Calculate distances for each connection
+	distances := make(map[int]float64)
+	for _, item := range orderedConns {
+		var sourceNode, targetNode *core.Node
+		for i := range nodes {
+			if nodes[i].ID == item.conn.From {
+				sourceNode = &nodes[i]
+			}
+			if nodes[i].ID == item.conn.To {
+				targetNode = &nodes[i]
+			}
+		}
+		if sourceNode != nil && targetNode != nil {
+			// Calculate center-to-center distance
+			dx := float64((sourceNode.X + sourceNode.Width/2) - (targetNode.X + targetNode.Width/2))
+			dy := float64((sourceNode.Y + sourceNode.Height/2) - (targetNode.Y + targetNode.Height/2))
+			distance := dx*dx + dy*dy // squared distance is fine for sorting
+			distances[item.index] = distance
+			// Debug: print distances and positions
+			// if item.conn.From == 2 && (item.conn.To == 3 || item.conn.To == 4) {
+			// 	fmt.Printf("Connection %d (%d->%d): distance = %.2f\n", item.conn.ID, item.conn.From, item.conn.To, math.Sqrt(distance))
+			// 	fmt.Printf("  Source (node %d): pos=(%d,%d) size=(%dx%d) center=(%d,%d)\n", 
+			// 		sourceNode.ID, sourceNode.X, sourceNode.Y, sourceNode.Width, sourceNode.Height,
+			// 		sourceNode.X + sourceNode.Width/2, sourceNode.Y + sourceNode.Height/2)
+			// 	fmt.Printf("  Target (node %d): pos=(%d,%d) size=(%dx%d) center=(%d,%d)\n",
+			// 		targetNode.ID, targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height,
+			// 		targetNode.X + targetNode.Width/2, targetNode.Y + targetNode.Height/2)
+			// }
+		}
+	}
+	
+	// Sort connections by distance (nearest first) for better port allocation
+	// Group connections with similar distances (within 1 unit) together
+	// Within each group, sort by source ID, then target ID for determinism
+	const distanceTolerance = 1.0 // Consider distances within 1 unit as equal
+	
 	for i := 0; i < len(orderedConns)-1; i++ {
 		for j := i + 1; j < len(orderedConns); j++ {
-			if shouldSwap(orderedConns[i].conn, orderedConns[j].conn) {
-				orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+			dist1 := math.Sqrt(distances[orderedConns[i].index])
+			dist2 := math.Sqrt(distances[orderedConns[j].index])
+			
+			// Check if distances are significantly different
+			if math.Abs(dist1-dist2) > distanceTolerance {
+				// Sort by distance
+				if dist2 < dist1 {
+					orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+				}
+			} else {
+				// Distances are similar, use deterministic ordering
+				// First by source node ID, then by target node ID
+				conn1 := orderedConns[i].conn
+				conn2 := orderedConns[j].conn
+				
+				if conn1.From != conn2.From {
+					if conn2.From < conn1.From {
+						orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+					}
+				} else if conn1.To != conn2.To {
+					if conn2.To < conn1.To {
+						orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+					}
+				} else if conn2.ID < conn1.ID {
+					// Same source and target, sort by connection ID
+					orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+				}
 			}
 		}
 	}
 	
 	// Route each connection in order
+	// fmt.Println("\nRouting connections in order:")
 	for _, item := range orderedConns {
+		// fmt.Printf("%d. Connection %d (%d->%d) - distance: %.2f\n", i+1, item.conn.ID, item.conn.From, item.conn.To, math.Sqrt(distances[item.index]))
 		// Route the connection
 		path, err := r.RouteConnection(item.conn, nodes)
 		if err != nil {
@@ -235,19 +297,6 @@ func (r *Router) routeConnectionsWithDynamicObstacles(connections []core.Connect
 	return paths, nil
 }
 
-// shouldSwap determines if two connections should be swapped in the ordering
-func shouldSwap(a, b core.Connection) bool {
-	// Sort by source ID first
-	if a.From != b.From {
-		return a.From > b.From
-	}
-	// Then by target ID
-	if a.To != b.To {
-		return a.To > b.To
-	}
-	// Finally by connection ID
-	return a.ID > b.ID
-}
 
 // createObstaclesFunction is a temporary stub for backward compatibility.
 // This should be removed once all callers are updated to use ObstacleManager.

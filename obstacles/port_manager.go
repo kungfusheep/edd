@@ -233,8 +233,27 @@ func (pm *portManagerImpl) ReservePortWithHint(nodeID int, edge EdgeSide, connec
 	
 	// If no ports are available, fall back to stacking
 	if len(availablePorts) == 0 {
-		// Use regular ReservePort logic for stacking
-		return pm.ReservePort(nodeID, edge, connectionID)
+		// Handle stacking logic inline (can't call ReservePort due to lock)
+		bestPos, stackLevel := pm.findBestStackingPosition(nodeID, edge)
+		if bestPos == -1 {
+			return Port{}, fmt.Errorf("no ports available for stacking on %s edge of node %d", edgeName(edge), nodeID)
+		}
+		
+		node := pm.nodes[nodeID]
+		port := Port{
+			NodeID:       nodeID,
+			Edge:         edge,
+			Position:     bestPos,
+			Width:        pm.portWidth,
+			Point:        pm.calculateStackedPortPoint(node, edge, bestPos, stackLevel),
+			ConnectionID: connectionID,
+			StackLevel:   stackLevel,
+		}
+		
+		key := pm.stackedPortKey(nodeID, edge, bestPos, stackLevel)
+		pm.ports[key] = &port
+		
+		return port, nil
 	}
 	
 	// Select port closest to preferred position

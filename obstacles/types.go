@@ -63,10 +63,10 @@ type VirtualObstacleConfig struct {
 // DefaultVirtualObstacleConfig returns sensible defaults
 func DefaultVirtualObstacleConfig() VirtualObstacleConfig {
 	return VirtualObstacleConfig{
-		ApproachZoneSize:  2,
+		ApproachZoneSize:  1,      // Just 1 unit padding around nodes
 		CorridorWidth:     1,
-		CornerRadius:      2,
-		SourceTargetScale: 0.75,
+		CornerRadius:      1,      // Minimal corner clearance
+		SourceTargetScale: 1.0,    // No special scaling for source/target
 		EnableForSource:   true,
 		EnableForTarget:   true,
 	}

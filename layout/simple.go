@@ -638,41 +638,59 @@ func (s *SimpleLayout) positionRadialNodesWithOffset(nodes []core.Node, layers [
 		nodeMap[nodes[i].ID] = &nodes[i]
 	}
 	
-	// Position hub (layer 1)
+	// First, calculate the total height needed for all spokes
+	totalSpokeHeight := 0
+	if len(layers) >= 3 && len(layers[2]) > 0 {
+		for _, nodeID := range layers[2] {
+			if node := nodeMap[nodeID]; node != nil {
+				totalSpokeHeight += node.Height + s.verticalSpacing
+			}
+		}
+		totalSpokeHeight -= s.verticalSpacing // Remove last spacing
+	}
+	
+	// Position hub (layer 1) centered vertically relative to spokes
 	if len(layers) >= 2 && len(layers[1]) > 0 {
 		hubNode := nodeMap[layers[1][0]]
 		if hubNode != nil {
-			hubNode.X = xOffset
-			// Center the hub vertically based on number of spokes
-			spokeCount := 0
+			// Calculate spoke node max width to determine hub position
+			maxSpokeWidth := 0
 			if len(layers) >= 3 {
-				spokeCount = len(layers[2])
+				for _, nodeID := range layers[2] {
+					if node := nodeMap[nodeID]; node != nil && node.Width > maxSpokeWidth {
+						maxSpokeWidth = node.Width
+					}
+				}
 			}
-			totalHeight := spokeCount * 5 // Rough estimate: 3 lines per node + 2 spacing
-			hubNode.Y = totalHeight / 2 - hubNode.Height/2
+			
+			// Position hub to left of spokes with reasonable spacing
+			// This creates space for bidirectional connections
+			hubNode.X = xOffset + maxSpokeWidth/2
+			
+			// Center hub vertically relative to spokes
+			hubNode.Y = totalSpokeHeight / 2 - hubNode.Height/2
 			if hubNode.Y < 0 {
 				hubNode.Y = 0
 			}
 		}
 	}
 	
-	// Position spokes (layer 2) with good vertical distribution
+	// Position spokes (layer 2) in a column to the right
 	if len(layers) >= 3 && len(layers[2]) > 0 {
 		spokes := layers[2]
-		
-		// Calculate hub bounds for positioning spokes
 		hubNode := nodeMap[hubID]
-		hubRight := hubNode.X + hubNode.Width + s.horizontalSpacing*2
 		
-		// Distribute spokes vertically with reasonable spacing
-		verticalSpacing := s.verticalSpacing + 1 // Slightly more than default for clarity
+		// Position spokes with consistent spacing from hub
+		// Use double the normal spacing for cleaner routing
+		spokeX := hubNode.X + hubNode.Width + s.horizontalSpacing*2
+		
+		// Distribute spokes vertically
 		y := 0
-		
 		for _, nodeID := range spokes {
 			if node := nodeMap[nodeID]; node != nil {
-				node.X = hubRight
+				node.X = spokeX
 				node.Y = y
-				y += node.Height + verticalSpacing
+				y += node.Height + s.verticalSpacing
 			}
 		}
 	}

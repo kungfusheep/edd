@@ -4,6 +4,7 @@ import (
 	"edd/core"
 	"edd/obstacles"
 	"fmt"
+	"math"
 )
 
 // TwoPhaseRouter implements routing that first finds a rough path,
@@ -59,13 +60,42 @@ func (r *TwoPhaseRouter) RouteConnectionWithPorts(conn core.Connection, nodes []
 		return core.Path{}, fmt.Errorf("failed to find rough path: %w", err)
 	}
 	
-	// Phase 2: Select and reserve ports based on approach
-	sourcePort, err := r.portManager.ReservePort(sourceNode.ID, sourceEdge, conn.ID)
+	// Calculate centers for angle-based port selection
+	sourceCenter := core.Point{
+		X: sourceNode.X + sourceNode.Width/2,
+		Y: sourceNode.Y + sourceNode.Height/2,
+	}
+	targetCenter := core.Point{
+		X: targetNode.X + targetNode.Width/2,
+		Y: targetNode.Y + targetNode.Height/2,
+	}
+	
+	// Calculate preferred port positions
+	// For source ports on vertical edges (East/West), prefer Y position aligned with target
+	var sourcePreferredPoint core.Point
+	if sourceEdge == obstacles.East || sourceEdge == obstacles.West {
+		// For vertical edges, align port Y with target center Y
+		if sourceEdge == obstacles.East {
+			sourcePreferredPoint = core.Point{X: sourceNode.X + sourceNode.Width, Y: targetCenter.Y}
+		} else {
+			sourcePreferredPoint = core.Point{X: sourceNode.X - 1, Y: targetCenter.Y}
+		}
+	} else {
+		// For horizontal edges, use angle-based positioning
+		angle := calculateAngle(sourceCenter, targetCenter)
+		sourcePreferredPoint = r.calculatePreferredPortPosition(sourceNode, sourceEdge, angle)
+	}
+	
+	// For target ports, use the center of the edge (since we're receiving)
+	targetPreferredPoint := getEdgeCenterForPort(targetNode, targetEdge)
+	
+	// Phase 2: Select and reserve ports based on approach with angle hints
+	sourcePort, err := r.portManager.ReservePortWithHint(sourceNode.ID, sourceEdge, conn.ID, sourcePreferredPoint)
 	if err != nil {
 		return core.Path{}, fmt.Errorf("failed to reserve source port: %w", err)
 	}
 	
-	targetPort, err := r.portManager.ReservePort(targetNode.ID, targetEdge, conn.ID)
+	targetPort, err := r.portManager.ReservePortWithHint(targetNode.ID, targetEdge, conn.ID, targetPreferredPoint)
 	if err != nil {
 		// Release source port before returning
 		r.portManager.ReleasePort(sourcePort)
@@ -181,293 +211,21 @@ func (r *TwoPhaseRouter) findRoughPath(conn core.Connection, sourceNode, targetN
 			sourceCenter.X, sourceCenter.Y, targetCenter.X, targetCenter.Y, err)
 	}
 	
-	// Determine exit edge from source based on first few path points
-	sourceEdge := r.determineExitEdge(sourceNode, roughPath.Points)
+	// Calculate angle from source to target
+	angle := calculateAngle(sourceCenter, targetCenter)
 	
-	// Determine entry edge to target based on last few path points
-	targetEdge := r.determineEntryEdge(targetNode, roughPath.Points)
+	// Determine edges based on angle
+	// For source edge, we use the direct angle (where we're exiting TO)
+	sourceEdge := selectEdgeByAngle(angle)
+	
+	// For target edge, we use the reverse angle (where we're entering FROM)
+	targetAngle := angle + 180
+	if targetAngle >= 360 {
+		targetAngle -= 360
+	}
+	targetEdge := selectEdgeByAngle(targetAngle)
 	
 	return roughPath, sourceEdge, targetEdge, nil
-}
-
-// determineExitEdge analyzes the path to determine which edge it exits from
-func (r *TwoPhaseRouter) determineExitEdge(node *core.Node, pathPoints []core.Point) obstacles.EdgeSide {
-	if len(pathPoints) < 2 {
-		return obstacles.East // Default
-	}
-	
-	// Look at the first point outside the node
-	nodeCenter := core.Point{
-		X: node.X + node.Width/2,
-		Y: node.Y + node.Height/2,
-	}
-	
-	// Find first point that's clearly outside the node
-	var exitPoint core.Point
-	exitIndex := -1
-	
-	// First, find where the path actually exits the node boundary
-	for i, p := range pathPoints {
-		// Skip points inside the node
-		if p.X >= node.X && p.X < node.X+node.Width && 
-		   p.Y >= node.Y && p.Y < node.Y+node.Height {
-			continue
-		}
-		
-		// Check if point is on or just outside the node boundary
-		onNorthEdge := p.Y == node.Y-1 && p.X >= node.X && p.X < node.X+node.Width
-		onSouthEdge := p.Y == node.Y+node.Height && p.X >= node.X && p.X < node.X+node.Width
-		onEastEdge := p.X == node.X+node.Width && p.Y >= node.Y && p.Y < node.Y+node.Height
-		onWestEdge := p.X == node.X-1 && p.Y >= node.Y && p.Y < node.Y+node.Height
-		
-		if onNorthEdge || onSouthEdge || onEastEdge || onWestEdge {
-			exitPoint = p
-			exitIndex = i
-			
-			if onNorthEdge {
-				return obstacles.North
-			} else if onSouthEdge {
-				return obstacles.South
-			} else if onEastEdge {
-				// Check if path turns down soon after exiting east
-				turnsDown := false
-				for j := i+1; j < len(pathPoints) && j <= i+10; j++ {
-					if pathPoints[j].Y > p.Y+1 {
-						turnsDown = true
-						break
-					}
-					// Stop if path goes too far horizontally (more than 10 units)
-					if pathPoints[j].X > p.X+10 {
-						break
-					}
-				}
-				if turnsDown {
-					return obstacles.South
-				}
-				return obstacles.East
-			} else if onWestEdge {
-				// Check if path turns down soon after exiting west
-				turnsDown := false
-				for j := i+1; j < len(pathPoints) && j <= i+10; j++ {
-					if pathPoints[j].Y > p.Y+1 {
-						turnsDown = true
-						break
-					}
-					// Stop if path goes too far horizontally
-					if abs(pathPoints[j].X - p.X) > 10 {
-						break
-					}
-				}
-				if turnsDown {
-					return obstacles.South
-				}
-				return obstacles.West
-			}
-			break
-		}
-	}
-	
-	// Fallback: find first point clearly outside
-	if exitIndex == -1 {
-		for i, p := range pathPoints[1:] {
-			if p.X < node.X-1 || p.X > node.X+node.Width ||
-			   p.Y < node.Y-1 || p.Y > node.Y+node.Height {
-				exitPoint = p
-				exitIndex = i + 1
-				break
-			}
-		}
-	}
-	
-	// Determine direction based on angle
-	dx := exitPoint.X - nodeCenter.X
-	dy := exitPoint.Y - nodeCenter.Y
-	
-	// Calculate aspect ratio for more balanced edge selection
-	// Add 1 to avoid division by zero
-	aspectRatio := float64(abs(dx)) / float64(abs(dy)+1)
-	
-	// Use more balanced thresholds
-	if aspectRatio > 1.5 {
-		// Clearly horizontal exit
-		if dx > 0 {
-			return obstacles.East
-		}
-		return obstacles.West
-	} else if aspectRatio < 0.67 { // Reciprocal of 1.5
-		// Clearly vertical exit
-		if dy > 0 {
-			return obstacles.South
-		}
-		return obstacles.North
-	} else {
-		// Diagonal path - use congestion as tie-breaker
-		if r.portManager != nil {
-			// Count occupied ports on each edge
-			occupiedPorts := r.portManager.GetOccupiedPorts(node.ID)
-			eastCount, southCount, westCount, northCount := 0, 0, 0, 0
-			
-			for _, port := range occupiedPorts {
-				switch port.Edge {
-				case obstacles.East:
-					eastCount++
-				case obstacles.South:
-					southCount++
-				case obstacles.West:
-					westCount++
-				case obstacles.North:
-					northCount++
-				}
-			}
-			
-			// For diagonal paths, prefer the less congested edge
-			if dx > 0 && dy > 0 {
-				// Southeast direction - choose between East and South
-				if southCount < eastCount {
-					return obstacles.South
-				}
-				return obstacles.East
-			} else if dx < 0 && dy > 0 {
-				// Southwest direction - choose between West and South
-				if southCount < westCount {
-					return obstacles.South
-				}
-				return obstacles.West
-			} else if dx < 0 && dy < 0 {
-				// Northwest direction - choose between West and North
-				if northCount < westCount {
-					return obstacles.North
-				}
-				return obstacles.West
-			} else {
-				// Northeast direction - choose between East and North
-				if northCount < eastCount {
-					return obstacles.North
-				}
-				return obstacles.East
-			}
-		}
-		
-		// Fallback to simple horizontal/vertical decision
-		if abs(dx) > abs(dy) {
-			if dx > 0 {
-				return obstacles.East
-			}
-			return obstacles.West
-		} else {
-			if dy > 0 {
-				return obstacles.South
-			}
-			return obstacles.North
-		}
-	}
-}
-
-// determineEntryEdge analyzes the path to determine which edge it enters from
-func (r *TwoPhaseRouter) determineEntryEdge(node *core.Node, pathPoints []core.Point) obstacles.EdgeSide {
-	if len(pathPoints) < 2 {
-		return obstacles.West // Default
-	}
-	
-	// Look at the last point outside the node
-	nodeCenter := core.Point{
-		X: node.X + node.Width/2,
-		Y: node.Y + node.Height/2,
-	}
-	
-	// Find last point that's clearly outside the node (traverse backwards)
-	var entryPoint core.Point
-	for i := len(pathPoints) - 2; i >= 0; i-- {
-		p := pathPoints[i]
-		if p.X < node.X-1 || p.X > node.X+node.Width ||
-		   p.Y < node.Y-1 || p.Y > node.Y+node.Height {
-			entryPoint = p
-			break
-		}
-	}
-	
-	// Determine direction based on angle
-	dx := entryPoint.X - nodeCenter.X
-	dy := entryPoint.Y - nodeCenter.Y
-	
-	// Calculate aspect ratio for more balanced edge selection
-	// Add 1 to avoid division by zero
-	aspectRatio := float64(abs(dx)) / float64(abs(dy)+1)
-	
-	// Use more balanced thresholds
-	if aspectRatio > 1.5 {
-		// Clearly horizontal entry
-		if dx > 0 {
-			return obstacles.East
-		}
-		return obstacles.West
-	} else if aspectRatio < 0.67 { // Reciprocal of 1.5
-		// Clearly vertical entry
-		if dy > 0 {
-			return obstacles.South
-		}
-		return obstacles.North
-	} else {
-		// Diagonal path - use congestion as tie-breaker
-		if r.portManager != nil {
-			// Count occupied ports on each edge
-			occupiedPorts := r.portManager.GetOccupiedPorts(node.ID)
-			eastCount, southCount, westCount, northCount := 0, 0, 0, 0
-			
-			for _, port := range occupiedPorts {
-				switch port.Edge {
-				case obstacles.East:
-					eastCount++
-				case obstacles.South:
-					southCount++
-				case obstacles.West:
-					westCount++
-				case obstacles.North:
-					northCount++
-				}
-			}
-			
-			// For diagonal paths, prefer the less congested edge
-			if dx > 0 && dy > 0 {
-				// Southeast direction - choose between East and South
-				if southCount < eastCount {
-					return obstacles.South
-				}
-				return obstacles.East
-			} else if dx < 0 && dy > 0 {
-				// Southwest direction - choose between West and South
-				if southCount < westCount {
-					return obstacles.South
-				}
-				return obstacles.West
-			} else if dx < 0 && dy < 0 {
-				// Northwest direction - choose between West and North
-				if northCount < westCount {
-					return obstacles.North
-				}
-				return obstacles.West
-			} else {
-				// Northeast direction - choose between East and North
-				if northCount < eastCount {
-					return obstacles.North
-				}
-				return obstacles.East
-			}
-		}
-		
-		// Fallback to simple horizontal/vertical decision
-		if abs(dx) > abs(dy) {
-			if dx > 0 {
-				return obstacles.East
-			}
-			return obstacles.West
-		} else {
-			if dy > 0 {
-				return obstacles.South
-			}
-			return obstacles.North
-		}
-	}
 }
 
 // Helper function to get edge center for port
@@ -595,4 +353,110 @@ func HandleSelfLoops(conn core.Connection, node *core.Node) core.Path {
 		
 		return core.Path{Points: points}
 	}
+}
+
+// calculateAngle calculates the angle from one point to another in degrees (0-360)
+func calculateAngle(from, to core.Point) float64 {
+	dx := float64(to.X - from.X)
+	dy := float64(to.Y - from.Y)
+	
+	// Calculate angle in radians, then convert to degrees
+	angle := math.Atan2(dy, dx) * 180 / math.Pi
+	
+	// Normalize to 0-360 range
+	if angle < 0 {
+		angle += 360
+	}
+	
+	return angle
+}
+
+// selectEdgeByAngle determines which edge to use based on angle
+func selectEdgeByAngle(angle float64) obstacles.EdgeSide {
+	// Normalize angle to 0-360 range
+	for angle < 0 {
+		angle += 360
+	}
+	for angle >= 360 {
+		angle -= 360
+	}
+	
+	// Determine edge based on quadrant
+	// East: -45° to 45° (315° to 45°)
+	// North: 45° to 135°  
+	// West: 135° to 225°
+	// South: 225° to 315°
+	switch {
+	case angle >= 315 || angle < 45:
+		return obstacles.East
+	case angle >= 45 && angle < 135:
+		return obstacles.North
+	case angle >= 135 && angle < 225:
+		return obstacles.West
+	default: // 225 to 315
+		return obstacles.South
+	}
+}
+
+// calculatePreferredPortPosition calculates the ideal port position based on angle
+func (r *TwoPhaseRouter) calculatePreferredPortPosition(node *core.Node, edge obstacles.EdgeSide, angle float64) core.Point {
+	// Normalize angle
+	for angle < 0 {
+		angle += 360
+	}
+	for angle >= 360 {
+		angle -= 360
+	}
+	
+	// Calculate the ideal position on the edge based on angle
+	// This helps align ports when multiple connections go in similar directions
+	switch edge {
+	case obstacles.North, obstacles.South:
+		// For horizontal edges, position based on the horizontal component of the angle
+		// Convert angle to radians for calculation
+		rad := angle * math.Pi / 180
+		// Calculate horizontal offset from center (-1 to 1)
+		offset := math.Cos(rad)
+		// Convert to position on edge
+		centerX := node.X + node.Width/2
+		idealX := centerX + int(offset * float64(node.Width/2-1))
+		
+		// Clamp to valid range
+		if idealX < node.X+1 {
+			idealX = node.X + 1
+		} else if idealX >= node.X+node.Width-1 {
+			idealX = node.X + node.Width - 2
+		}
+		
+		if edge == obstacles.North {
+			return core.Point{X: idealX, Y: node.Y - 1}
+		} else {
+			return core.Point{X: idealX, Y: node.Y + node.Height}
+		}
+		
+	case obstacles.East, obstacles.West:
+		// For vertical edges, position based on the vertical component of the angle
+		rad := angle * math.Pi / 180
+		// Calculate vertical offset from center (-1 to 1)
+		offset := math.Sin(rad)
+		// Convert to position on edge
+		centerY := node.Y + node.Height/2
+		idealY := centerY + int(offset * float64(node.Height/2-1))
+		
+		// Clamp to valid range
+		if idealY < node.Y+1 {
+			idealY = node.Y + 1
+		} else if idealY >= node.Y+node.Height-1 {
+			idealY = node.Y + node.Height - 2
+		}
+		
+		if edge == obstacles.East {
+			return core.Point{X: node.X + node.Width, Y: idealY}
+		} else {
+			return core.Point{X: node.X - 1, Y: idealY}
+		}
+	}
+	
+	// Fallback to edge center
+	return getEdgeCenterForPort(node, edge)
 }
