@@ -227,6 +227,12 @@ func (r *Router) routeConnectionsWithDynamicObstacles(connections []core.Connect
 		}
 	}
 	
+	// Group connections by target for coordinated port assignment
+	targetGroups := make(map[int][]int) // target ID -> indices in orderedConns
+	for i, item := range orderedConns {
+		targetGroups[item.conn.To] = append(targetGroups[item.conn.To], i)
+	}
+	
 	// Sort connections by distance (nearest first) for better port allocation
 	// Group connections with similar distances (within 1 unit) together
 	// Within each group, sort by source ID, then target ID for determinism
@@ -245,21 +251,37 @@ func (r *Router) routeConnectionsWithDynamicObstacles(connections []core.Connect
 				}
 			} else {
 				// Distances are similar, use deterministic ordering
-				// First by source node ID, then by target node ID
 				conn1 := orderedConns[i].conn
 				conn2 := orderedConns[j].conn
 				
-				if conn1.From != conn2.From {
-					if conn2.From < conn1.From {
+				// Special handling: if connections go to the same target, sort by source Y position
+				if conn1.To == conn2.To {
+					// Find source nodes
+					var source1Y, source2Y int
+					for _, node := range nodes {
+						if node.ID == conn1.From {
+							source1Y = node.Y + node.Height/2
+						}
+						if node.ID == conn2.From {
+							source2Y = node.Y + node.Height/2
+						}
+					}
+					// Sort by Y position (higher Y = lower on screen)
+					if source2Y < source1Y {
+						orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+					} else if source1Y == source2Y && conn2.From < conn1.From {
+						// Same Y, sort by source ID
 						orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
 					}
-				} else if conn1.To != conn2.To {
-					if conn2.To < conn1.To {
+				} else {
+					// Different targets, use original logic
+					if conn1.From != conn2.From {
+						if conn2.From < conn1.From {
+							orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
+						}
+					} else if conn2.To < conn1.To {
 						orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
 					}
-				} else if conn2.ID < conn1.ID {
-					// Same source and target, sort by connection ID
-					orderedConns[i], orderedConns[j] = orderedConns[j], orderedConns[i]
 				}
 			}
 		}

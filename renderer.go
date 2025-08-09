@@ -33,8 +33,9 @@ func NewRenderer() *Renderer {
 	// Use smart pathfinder with good defaults
 	pathfinder := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
 		StraightCost:  10,
-		TurnCost:      20,
-		ProximityCost: -5, // Prefer paths that hug obstacles
+		TurnCost:      100,  // Very high cost to strongly discourage turns
+		ProximityCost: 0,    // Neutral - don't hug or avoid walls
+		DirectionBias: 10,   // Prefer horizontal paths
 	})
 	
 	// Add caching for performance. Cache size of 100 handles most diagrams

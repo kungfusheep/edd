@@ -119,7 +119,81 @@ func SimplifyPath(path core.Path) core.Path {
 	// Always include the last point
 	simplified = append(simplified, path.Points[len(path.Points)-1])
 	
-	return core.Path{Points: simplified, Cost: path.Cost}
+	return core.Path{Points: simplified, Cost: path.Cost, Metadata: path.Metadata}
+}
+
+// OptimizePath performs aggressive path optimization to minimize turns
+func OptimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
+	if len(path.Points) <= 2 {
+		return path
+	}
+	
+	// First do basic simplification
+	path = SimplifyPath(path)
+	
+	// Try to connect non-adjacent points directly
+	optimized := []core.Point{path.Points[0]}
+	i := 0
+	
+	for i < len(path.Points)-1 {
+		// Try to connect to the furthest point possible
+		furthest := i + 1
+		for j := len(path.Points) - 1; j > i+1; j-- {
+			if canConnectDirectly(path.Points[i], path.Points[j], obstacles) {
+				furthest = j
+				break
+			}
+		}
+		
+		// Add the furthest reachable point
+		optimized = append(optimized, path.Points[furthest])
+		i = furthest
+	}
+	
+	return core.Path{Points: optimized, Cost: path.Cost, Metadata: path.Metadata}
+}
+
+// canConnectDirectly checks if two points can be connected with a straight line
+func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool {
+	// Use Bresenham's line algorithm to check all points on the line
+	dx := abs(p2.X - p1.X)
+	dy := abs(p2.Y - p1.Y)
+	
+	x, y := p1.X, p1.Y
+	
+	xInc := 1
+	if p1.X > p2.X {
+		xInc = -1
+	}
+	
+	yInc := 1
+	if p1.Y > p2.Y {
+		yInc = -1
+	}
+	
+	// Special case for straight lines
+	if dx == 0 {
+		// Vertical line
+		for y != p2.Y {
+			y += yInc
+			if obstacles != nil && obstacles(core.Point{X: x, Y: y}) {
+				return false
+			}
+		}
+		return true
+	} else if dy == 0 {
+		// Horizontal line
+		for x != p2.X {
+			x += xInc
+			if obstacles != nil && obstacles(core.Point{X: x, Y: y}) {
+				return false
+			}
+		}
+		return true
+	}
+	
+	// General case - we only allow horizontal/vertical connections for cleaner paths
+	return false
 }
 
 // PathToString converts a path to a string representation for debugging.

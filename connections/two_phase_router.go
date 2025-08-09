@@ -3,6 +3,7 @@ package connections
 import (
 	"edd/core"
 	"edd/obstacles"
+	"edd/pathfinding"
 	"fmt"
 	"math"
 )
@@ -86,8 +87,19 @@ func (r *TwoPhaseRouter) RouteConnectionWithPorts(conn core.Connection, nodes []
 		sourcePreferredPoint = r.calculatePreferredPortPosition(sourceNode, sourceEdge, angle)
 	}
 	
-	// For target ports, use the center of the edge (since we're receiving)
-	targetPreferredPoint := getEdgeCenterForPort(targetNode, targetEdge)
+	// For target ports on vertical edges (East/West), prefer Y position aligned with source
+	var targetPreferredPoint core.Point
+	if targetEdge == obstacles.East || targetEdge == obstacles.West {
+		// For vertical edges, align port Y with source center Y
+		if targetEdge == obstacles.East {
+			targetPreferredPoint = core.Point{X: targetNode.X + targetNode.Width, Y: sourceCenter.Y}
+		} else {
+			targetPreferredPoint = core.Point{X: targetNode.X - 1, Y: sourceCenter.Y}
+		}
+	} else {
+		// For horizontal edges, use center of edge
+		targetPreferredPoint = getEdgeCenterForPort(targetNode, targetEdge)
+	}
 	
 	// Phase 2: Select and reserve ports based on approach with angle hints
 	sourcePort, err := r.portManager.ReservePortWithHint(sourceNode.ID, sourceEdge, conn.ID, sourcePreferredPoint)
@@ -169,7 +181,8 @@ func (r *TwoPhaseRouter) RouteConnectionWithPorts(conn core.Connection, nodes []
 		}
 	}
 	
-	// Note: Path simplification removed - we should generate clean paths from the start
+	// Optimize the path to minimize turns
+	finalPath = pathfinding.OptimizePath(finalPath, obstacleFunc)
 	
 	// Add port metadata to path
 	if finalPath.Metadata == nil {
