@@ -89,6 +89,104 @@ func GetNeighbors(p core.Point) []core.Point {
 	}
 }
 
+// GetNeighborsSymmetric returns neighbors ordered to promote symmetric paths.
+// When the goal is diagonal from current position, it returns neighbors in an order
+// that explores both axes equally, preventing bias toward one direction.
+func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
+	dx := goal.X - p.X
+	dy := goal.Y - p.Y
+	
+	neighbors := []core.Point{
+		{X: p.X, Y: p.Y - 1}, // North
+		{X: p.X + 1, Y: p.Y}, // East
+		{X: p.X, Y: p.Y + 1}, // South
+		{X: p.X - 1, Y: p.Y}, // West
+	}
+	
+	// If moving diagonally, alternate between horizontal and vertical moves
+	// to ensure symmetric exploration
+	if dx != 0 && dy != 0 {
+		// Determine primary directions
+		var primary, secondary []core.Point
+		
+		// Prioritize based on which axis has more distance to cover
+		if abs(dx) > abs(dy) {
+			// Horizontal is primary
+			if dx > 0 {
+				primary = append(primary, core.Point{X: p.X + 1, Y: p.Y}) // East
+			} else {
+				primary = append(primary, core.Point{X: p.X - 1, Y: p.Y}) // West
+			}
+			if dy > 0 {
+				secondary = append(secondary, core.Point{X: p.X, Y: p.Y + 1}) // South
+			} else {
+				secondary = append(secondary, core.Point{X: p.X, Y: p.Y - 1}) // North
+			}
+		} else if abs(dy) > abs(dx) {
+			// Vertical is primary
+			if dy > 0 {
+				primary = append(primary, core.Point{X: p.X, Y: p.Y + 1}) // South
+			} else {
+				primary = append(primary, core.Point{X: p.X, Y: p.Y - 1}) // North
+			}
+			if dx > 0 {
+				secondary = append(secondary, core.Point{X: p.X + 1, Y: p.Y}) // East
+			} else {
+				secondary = append(secondary, core.Point{X: p.X - 1, Y: p.Y}) // West
+			}
+		} else {
+			// Equal distance on both axes - this is where we need symmetry
+			// For symmetric behavior, we should explore both directions equally
+			// Order based on a consistent rule to ensure determinism
+			var horizontal, vertical core.Point
+			
+			if dx > 0 {
+				horizontal = core.Point{X: p.X + 1, Y: p.Y} // East
+			} else {
+				horizontal = core.Point{X: p.X - 1, Y: p.Y} // West
+			}
+			
+			if dy > 0 {
+				vertical = core.Point{X: p.X, Y: p.Y + 1} // South
+			} else {
+				vertical = core.Point{X: p.X, Y: p.Y - 1} // North
+			}
+			
+			// Return both options first, then the opposite directions
+			// This ensures both paths are explored with equal priority
+			return []core.Point{horizontal, vertical,
+				{X: p.X - dx/abs(dx), Y: p.Y}, // Opposite horizontal
+				{X: p.X, Y: p.Y - dy/abs(dy)},  // Opposite vertical
+			}
+		}
+		
+		// Add opposite directions
+		remaining := []core.Point{}
+		for _, n := range neighbors {
+			if !containsPoint(primary, n) && !containsPoint(secondary, n) {
+				remaining = append(remaining, n)
+			}
+		}
+		
+		// Return ordered: primary, secondary, remaining
+		result := append(primary, secondary...)
+		return append(result, remaining...)
+	}
+	
+	// If moving straight, return normal order
+	return neighbors
+}
+
+// containsPoint checks if a slice contains a specific point
+func containsPoint(points []core.Point, p core.Point) bool {
+	for _, point := range points {
+		if point == p {
+			return true
+		}
+	}
+	return false
+}
+
 // IsAligned checks if three points are aligned horizontally or vertically.
 func IsAligned(p1, p2, p3 core.Point) bool {
 	// Check horizontal alignment

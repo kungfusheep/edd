@@ -21,7 +21,40 @@ type AStarNode struct {
 type NodeQueue []*AStarNode
 
 func (nq NodeQueue) Len() int           { return len(nq) }
-func (nq NodeQueue) Less(i, j int) bool { return nq[i].FCost < nq[j].FCost }
+func (nq NodeQueue) Less(i, j int) bool {
+	// Primary sort by FCost
+	if nq[i].FCost != nq[j].FCost {
+		return nq[i].FCost < nq[j].FCost
+	}
+	
+	// Tie-breaker 1: Prefer nodes closer to goal (lower HCost)
+	if nq[i].HCost != nq[j].HCost {
+		return nq[i].HCost < nq[j].HCost
+	}
+	
+	// Tie-breaker 2: For equal costs, use position-based ordering
+	// This ensures deterministic and symmetric behavior
+	// Prefer the node that balances X and Y distances to create symmetric paths
+	return symmetricOrder(nq[i].Point, nq[j].Point)
+}
+
+// symmetricOrder provides a deterministic ordering that promotes symmetry
+func symmetricOrder(p1, p2 core.Point) bool {
+	// Order by sum of coordinates first (promotes diagonal movement)
+	sum1 := p1.X + p1.Y
+	sum2 := p2.X + p2.Y
+	if sum1 != sum2 {
+		return sum1 < sum2
+	}
+	
+	// Then by X coordinate
+	if p1.X != p2.X {
+		return p1.X < p2.X
+	}
+	
+	// Finally by Y coordinate
+	return p1.Y < p2.Y
+}
 func (nq NodeQueue) Swap(i, j int) {
 	nq[i], nq[j] = nq[j], nq[i]
 	nq[i].Index = i

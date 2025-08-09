@@ -35,7 +35,7 @@ func NewRenderer() *Renderer {
 		StraightCost:  10,
 		TurnCost:      100,  // Very high cost to strongly discourage turns
 		ProximityCost: 0,    // Neutral - don't hug or avoid walls
-		DirectionBias: 10,   // Prefer horizontal paths
+		DirectionBias: 0,    // No bias - treat horizontal and vertical equally for symmetry
 	})
 	
 	// Add caching for performance. Cache size of 100 handles most diagrams
@@ -268,7 +268,7 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	
 	// Step 8.5: Show virtual obstacles if enabled
 	if r.showObstacles {
-		r.renderObstacleDots(offsetCanvas, layoutNodes, diagram.Connections)
+		r.renderObstacleDots(offsetCanvas, layoutNodes, diagram.Connections, paths)
 	}
 	
 	// Step 9: Convert canvas to string output
@@ -680,7 +680,7 @@ func (oc *offsetCanvas) String() string {
 }
 
 // renderObstacleDots adds dots to show virtual obstacles on the canvas
-func (r *Renderer) renderObstacleDots(c canvas.Canvas, nodes []core.Node, connections []core.Connection) {
+func (r *Renderer) renderObstacleDots(c canvas.Canvas, nodes []core.Node, connections []core.Connection, paths map[int]core.Path) {
 	// Get the obstacle manager to access virtual obstacles
 	obstacleManager := r.router.GetObstacleManager()
 	if obstacleManager == nil {
@@ -723,4 +723,46 @@ func (r *Renderer) renderObstacleDots(c canvas.Canvas, nodes []core.Node, connec
 			}
 		}
 	}
+	
+	// Now render path start and end points with distinct markers
+	// We'll mark points near the start/end to avoid overwriting edge characters
+	markedPoints := make(map[core.Point]bool)
+	for _, path := range paths {
+		if len(path.Points) >= 2 {
+			// Mark start point vicinity
+			start := path.Points[0]
+			for _, neighbor := range []core.Point{
+				{X: start.X - 1, Y: start.Y},
+				{X: start.X + 1, Y: start.Y},
+				{X: start.X, Y: start.Y - 1},
+				{X: start.X, Y: start.Y + 1},
+			} {
+				if !markedPoints[neighbor] && (c.Get(neighbor) == ' ' || c.Get(neighbor) == '·') {
+					c.Set(neighbor, 'S') // S for start
+					markedPoints[neighbor] = true
+					break
+				}
+			}
+			
+			// Mark end point vicinity  
+			end := path.Points[len(path.Points)-1]
+			for _, neighbor := range []core.Point{
+				{X: end.X - 1, Y: end.Y},
+				{X: end.X + 1, Y: end.Y},
+				{X: end.X, Y: end.Y - 1},
+				{X: end.X, Y: end.Y + 1},
+			} {
+				if !markedPoints[neighbor] && (c.Get(neighbor) == ' ' || c.Get(neighbor) == '·') {
+					c.Set(neighbor, 'E') // E for end
+					markedPoints[neighbor] = true
+					break
+				}
+			}
+			
+			// Debug: print path info for Load Balancer connections
+			// Note: connection IDs might not match what we expect
+			// Let's print all paths to understand better
+		}
+	}
 }
+

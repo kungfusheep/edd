@@ -13,6 +13,8 @@ type Router struct {
 	obstacleManager  obstacles.ObstacleManager
 	portManager      obstacles.PortManager
 	twoPhaseRouter   *TwoPhaseRouter
+	simpleRouter     *SimpleRouter
+	useSimpleRouter  bool
 }
 
 // NewRouter creates a new connection router.
@@ -24,10 +26,14 @@ func NewRouter(pathFinder core.PathFinder) *Router {
 	router := &Router{
 		pathFinder:      pathFinder,
 		obstacleManager: obstacleManager,
+		useSimpleRouter: true, // Use simple router by default
 	}
 	
 	// Create two-phase router
 	router.twoPhaseRouter = NewTwoPhaseRouter(pathFinder, obstacleManager)
+	
+	// Create simple router
+	router.simpleRouter = NewSimpleRouter(pathFinder, obstacleManager)
 	
 	return router
 }
@@ -50,10 +56,18 @@ func (r *Router) SetPortManager(pm obstacles.PortManager) {
 	r.twoPhaseRouter.SetPortManager(pm)
 }
 
+// SetUseSimpleRouter enables or disables the simple center-to-center router
+func (r *Router) SetUseSimpleRouter(useSimple bool) {
+	r.useSimpleRouter = useSimple
+}
+
 // RouteConnection finds the best path for a connection between two nodes.
 // It returns a Path that avoids obstacles and creates clean routes.
 func (r *Router) RouteConnection(conn core.Connection, nodes []core.Node) (core.Path, error) {
-	// Always use two-phase routing with port manager
+	if r.useSimpleRouter {
+		return r.simpleRouter.RouteConnection(conn, nodes)
+	}
+	// Use two-phase routing with port manager
 	return r.twoPhaseRouter.RouteConnectionWithPorts(conn, nodes)
 }
 
