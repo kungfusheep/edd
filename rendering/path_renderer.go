@@ -105,9 +105,55 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 		isLastSegment := (i == len(points)-2)
 		drawArrowOnSegment := isLastSegment && hasArrow && !isClosed
 		
-		
-		if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
-			return err
+		// For the first segment of a connection, check if we need a corner character
+		if i == 0 && isConnection && !isClosed {
+			existing := canvas.Get(from)
+			// Only place corner if we're starting from a clean box edge (not a junction or branch)
+			if existing == '│' || existing == '─' {
+				// Place appropriate corner character based on direction
+				dx := to.X - from.X
+				dy := to.Y - from.Y
+				
+				var cornerChar rune
+				if existing == '│' && dy == 0 {
+					// Horizontal movement from vertical edge
+					if dx > 0 {
+						cornerChar = r.style.BottomLeft  // └ merges with │ to make ├
+					} else {
+						cornerChar = r.style.BottomRight // ┘ merges with │ to make ┤
+					}
+				} else if existing == '─' && dx == 0 {
+					// Vertical movement from horizontal edge
+					if dy > 0 {
+						cornerChar = r.style.TopLeft     // ┌ points down, merges with ─ to make ┬
+					} else {
+						cornerChar = r.style.BottomLeft  // └ points up, merges with ─ to make ┴
+					}
+				}
+				
+				if cornerChar != 0 {
+					canvas.Set(from, cornerChar)
+					// Skip first point when drawing to preserve corner
+					if err := r.drawSegmentSkippingCornersWithOptions(canvas, from, to, corners, drawArrowOnSegment, true); err != nil {
+						return err
+					}
+				} else {
+					// No corner needed, draw normally
+					if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
+						return err
+					}
+				}
+			} else {
+				// Not a clean box edge, draw normally
+				if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
+					return err
+				}
+			}
+		} else {
+			// Not first segment, draw normally
+			if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
+				return err
+			}
 		}
 	}
 	
@@ -128,8 +174,66 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 	return nil
 }
 
+// placeStartBranch places a corner character at the start of a connection
+// This corner will merge with the box edge (─ or │) to create a branch character (├, ┤, ┬, ┴)
+func (r *PathRenderer) placeStartBranch(canvas canvas.Canvas, from, to core.Point) {
+	dx := to.X - from.X
+	dy := to.Y - from.Y
+	
+	// Determine which character to use based on direction and what's already there
+	existing := canvas.Get(from)
+	
+	// Don't place anything if:
+	// - It's already a cross
+	// - It's already a branch character
+	// - It's a line in the same direction we're going (horizontal line when moving horizontally)
+	if existing == '┼' || existing == '├' || existing == '┤' || existing == '┬' || existing == '┴' {
+		return
+	}
+	
+	// Don't place a corner if we're continuing in the same direction as existing line
+	if (dy == 0 && existing == '─') || (dx == 0 && existing == '│') {
+		// We're going in the same direction as the existing line, no branch needed
+		return
+	}
+	
+	var cornerChar rune
+	
+	// Only place corner characters when connecting to perpendicular box edges
+	if dy == 0 && existing == '│' {
+		// Moving horizontally from a vertical edge (box side)
+		if dx > 0 {
+			// Moving right from left edge - use └ to merge with │ to get ├
+			cornerChar = r.style.BottomLeft
+		} else {
+			// Moving left from right edge - use ┘ to merge with │ to get ┤  
+			cornerChar = r.style.BottomRight
+		}
+	} else if dx == 0 && existing == '─' {
+		// Moving vertically from a horizontal edge (box top/bottom)
+		if dy > 0 {
+			// Moving down from top edge - use ┌ to merge with ─ to get ┬
+			cornerChar = r.style.TopLeft
+		} else {
+			// Moving up from bottom edge - use └ to merge with ─ to get ┴
+			cornerChar = r.style.BottomLeft
+		}
+	}
+	// If existing is space or something else, don't place anything
+	// The normal line drawing will handle it
+	
+	if cornerChar != 0 {
+		canvas.Set(from, cornerChar)
+	}
+}
+
 // drawSegmentSkippingCorners draws a line segment while skipping any positions marked as corners
+// If skipFirst is true, skip drawing at the first point (used for connection starts)
 func (r *PathRenderer) drawSegmentSkippingCorners(canvas canvas.Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool) error {
+	return r.drawSegmentSkippingCornersWithOptions(canvas, from, to, corners, drawArrow, false)
+}
+
+func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas canvas.Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool, skipFirst bool) error {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -142,6 +246,11 @@ func (r *PathRenderer) drawSegmentSkippingCorners(canvas canvas.Canvas, from, to
 		
 		for x := from.X; x != to.X+step; x += step {
 			p := core.Point{X: x, Y: from.Y}
+			
+			// Skip the first point if requested
+			if skipFirst && x == from.X {
+				continue
+			}
 			
 			// Skip if this is a corner position
 			if _, isCorner := corners[p]; isCorner {
@@ -173,6 +282,11 @@ func (r *PathRenderer) drawSegmentSkippingCorners(canvas canvas.Canvas, from, to
 		
 		for y := from.Y; y != to.Y+step; y += step {
 			p := core.Point{X: from.X, Y: y}
+			
+			// Skip the first point if requested
+			if skipFirst && y == from.Y {
+				continue
+			}
 			
 			// Skip if this is a corner position
 			if _, isCorner := corners[p]; isCorner {
@@ -584,7 +698,11 @@ func selectLineStyle(caps TerminalCapabilities) LineStyle {
 			// Basic lines
 			Horizontal: '─',
 			Vertical:   '│',
-			// Corners
+			// Corners (named from box perspective, not line direction)
+			// TopLeft = top-left corner of a box = └ (lines go right and up)
+			// TopRight = top-right corner of a box = ┘ (lines go left and up)
+			// BottomLeft = bottom-left corner of a box = ┌ (lines go right and down)
+			// BottomRight = bottom-right corner of a box = ┐ (lines go left and down)
 			TopLeft:     '└',
 			TopRight:    '┘',
 			BottomLeft:  '┌',

@@ -174,10 +174,33 @@ func (ar *AreaRouter) adjustPathEndpoints(path core.Path, sourceNode, targetNode
 	//     path.Points[0].X, path.Points[0].Y,
 	//     path.Points[len(path.Points)-1].X, path.Points[len(path.Points)-1].Y)
 
-	// Keep start point one unit away from the source box edge
-	// This prevents overlap with arrow characters at the box edge
-	// The pathfinding already starts one unit outside, so we don't adjust it
-	// (Previously we were moving it back to the edge, causing the overlap)
+	// Adjust start point to be on the source box edge
+	// We'll use a branch character at this position to merge with the box
+	start := adjustedPoints[0]
+	if len(adjustedPoints) > 1 {
+		next := adjustedPoints[1]
+		
+		// If moving horizontally from the start
+		if start.Y == next.Y {
+			if start.X == sourceNode.X - 1 {
+				// Starting from left side, move to box edge
+				adjustedPoints[0].X = sourceNode.X
+			} else if start.X == sourceNode.X + sourceNode.Width {
+				// Starting from right side, move to box edge
+				adjustedPoints[0].X = sourceNode.X + sourceNode.Width - 1
+			}
+		}
+		// If moving vertically from the start
+		if start.X == next.X {
+			if start.Y == sourceNode.Y - 1 {
+				// Starting from top side, move to box edge
+				adjustedPoints[0].Y = sourceNode.Y
+			} else if start.Y == sourceNode.Y + sourceNode.Height {
+				// Starting from bottom side, move to box edge
+				adjustedPoints[0].Y = sourceNode.Y + sourceNode.Height - 1
+			}
+		}
+	}
 
 	// Adjust end point to be on the target box edge
 	// The pathfinding ends one unit outside the box, so we move it back by one
