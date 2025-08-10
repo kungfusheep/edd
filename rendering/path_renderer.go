@@ -105,55 +105,9 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 		isLastSegment := (i == len(points)-2)
 		drawArrowOnSegment := isLastSegment && hasArrow && !isClosed
 		
-		// For the first segment of a connection, check if we need a corner character
-		if i == 0 && isConnection && !isClosed {
-			existing := canvas.Get(from)
-			// Only place corner if we're starting from a clean box edge (not a junction or branch)
-			if existing == '│' || existing == '─' {
-				// Place appropriate corner character based on direction
-				dx := to.X - from.X
-				dy := to.Y - from.Y
-				
-				var cornerChar rune
-				if existing == '│' && dy == 0 {
-					// Horizontal movement from vertical edge
-					if dx > 0 {
-						cornerChar = r.style.BottomLeft  // └ merges with │ to make ├
-					} else {
-						cornerChar = r.style.BottomRight // ┘ merges with │ to make ┤
-					}
-				} else if existing == '─' && dx == 0 {
-					// Vertical movement from horizontal edge
-					if dy > 0 {
-						cornerChar = r.style.TopLeft     // ┌ points down, merges with ─ to make ┬
-					} else {
-						cornerChar = r.style.BottomLeft  // └ points up, merges with ─ to make ┴
-					}
-				}
-				
-				if cornerChar != 0 {
-					canvas.Set(from, cornerChar)
-					// Skip first point when drawing to preserve corner
-					if err := r.drawSegmentSkippingCornersWithOptions(canvas, from, to, corners, drawArrowOnSegment, true); err != nil {
-						return err
-					}
-				} else {
-					// No corner needed, draw normally
-					if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
-						return err
-					}
-				}
-			} else {
-				// Not a clean box edge, draw normally
-				if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
-					return err
-				}
-			}
-		} else {
-			// Not first segment, draw normally
-			if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
-				return err
-			}
+		// Draw all segments normally and let merge handle intersections
+		if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
+			return err
 		}
 	}
 	

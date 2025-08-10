@@ -83,13 +83,11 @@ func (m *CharacterMerger) initializeMergeRules() {
 	m.mergeMap[mergePair{'┘', '─'}] = '┴'  // becomes bottom T
 	m.mergeMap[mergePair{'┘', '│'}] = '┤'  // becomes right T
 	
-	// T-junction + line merging
-	// When a perpendicular line crosses, it becomes a cross
-	// When a parallel line merges (same direction), keep the branch
-	m.mergeMap[mergePair{'┬', '│'}] = '┼'  // perpendicular crossing
-	m.mergeMap[mergePair{'┴', '│'}] = '┼'  // perpendicular crossing
-	m.mergeMap[mergePair{'├', '─'}] = '├'  // parallel - keep branch (multiple exits)
-	m.mergeMap[mergePair{'┤', '─'}] = '┤'  // parallel - keep branch (multiple exits)
+	// T-junction + line = cross
+	m.mergeMap[mergePair{'┬', '│'}] = '┼'
+	m.mergeMap[mergePair{'┴', '│'}] = '┼'
+	m.mergeMap[mergePair{'├', '─'}] = '┼'
+	m.mergeMap[mergePair{'┤', '─'}] = '┼'
 	
 	// Corner + corner combinations
 	m.mergeMap[mergePair{'┌', '┘'}] = '┼'  // opposite corners = cross
