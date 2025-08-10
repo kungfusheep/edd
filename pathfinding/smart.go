@@ -350,6 +350,12 @@ func (s *SmartPathFinder) CacheStats() string {
 	return "Cache not initialized"
 }
 
+// FindPathToArea finds an optimal path from start to the edge of a target area.
+// This delegates to the internal A* pathfinder's area-based routing.
+func (s *SmartPathFinder) FindPathToArea(start core.Point, targetNode core.Node, obstacles func(core.Point) bool) (core.Path, error) {
+	return s.astarFinder.FindPathToArea(start, targetNode, obstacles)
+}
+
 // hashObstacles creates a hash of obstacles that could affect the path.
 func (s *SmartPathFinder) hashObstacles(start, end core.Point, obstacles func(core.Point) bool) uint64 {
 	if obstacles == nil {

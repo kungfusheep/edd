@@ -168,9 +168,13 @@ func (m *unifiedObstacleManager) SetConfig(config VirtualObstacleConfig) {
 }
 
 // GetObstacleFuncForConnection returns obstacles for a specific connection
+// IMPORTANT: This now returns the SAME global obstacles for ALL connections
+// to ensure consistent routing. Virtual obstacles create port corridors that
+// guide paths to center points naturally.
 func (m *unifiedObstacleManager) GetObstacleFuncForConnection(nodes []core.Node, conn core.Connection) func(core.Point) bool {
-	// Get base obstacles with source/target awareness
-	baseObstacles := m.baseChecker.CreateObstacleFunc(nodes, conn.From, conn.To)
+	// Use global obstacles - ALL connections see the same obstacle space
+	// Pass -1, -1 to get obstacles for ALL nodes (not specific to source/target)
+	baseObstacles := m.baseChecker.CreateObstacleFunc(nodes, -1, -1)
 	
 	// If no port manager, just return base obstacles
 	if m.portManager == nil {

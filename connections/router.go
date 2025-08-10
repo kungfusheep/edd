@@ -7,6 +7,15 @@ import (
 	"math"
 )
 
+// RouterType defines the type of routing algorithm to use
+type RouterType string
+
+const (
+	RouterTypeSimple   RouterType = "simple"    // Center-to-center with truncation
+	RouterTypeTwoPhase RouterType = "two-phase" // Two-phase with port selection
+	RouterTypeArea     RouterType = "area"      // Area-based edge-to-edge
+)
+
 // Router handles the routing of connections between nodes in a diagram.
 type Router struct {
 	pathFinder       core.PathFinder
@@ -14,7 +23,9 @@ type Router struct {
 	portManager      obstacles.PortManager
 	twoPhaseRouter   *TwoPhaseRouter
 	simpleRouter     *SimpleRouter
-	useSimpleRouter  bool
+	areaRouter       *AreaRouter
+	routerType       RouterType
+	useSimpleRouter  bool // Deprecated: use routerType instead
 }
 
 // NewRouter creates a new connection router.
@@ -26,7 +37,8 @@ func NewRouter(pathFinder core.PathFinder) *Router {
 	router := &Router{
 		pathFinder:      pathFinder,
 		obstacleManager: obstacleManager,
-		useSimpleRouter: true, // Use simple router by default
+		routerType:      RouterTypeArea, // Default to area-based routing
+		useSimpleRouter: false,          // Deprecated but kept for compatibility
 	}
 	
 	// Create two-phase router
@@ -34,6 +46,11 @@ func NewRouter(pathFinder core.PathFinder) *Router {
 	
 	// Create simple router
 	router.simpleRouter = NewSimpleRouter(pathFinder, obstacleManager)
+	
+	// Create area router if pathfinder supports area-based routing
+	if areaPathFinder, ok := pathFinder.(core.AreaPathFinder); ok {
+		router.areaRouter = NewAreaRouter(areaPathFinder, obstacleManager)
+	}
 	
 	return router
 }
@@ -57,18 +74,40 @@ func (r *Router) SetPortManager(pm obstacles.PortManager) {
 }
 
 // SetUseSimpleRouter enables or disables the simple center-to-center router
+// Deprecated: Use SetRouterType instead
 func (r *Router) SetUseSimpleRouter(useSimple bool) {
 	r.useSimpleRouter = useSimple
+	if useSimple {
+		r.routerType = RouterTypeSimple
+	} else {
+		r.routerType = RouterTypeTwoPhase
+	}
+}
+
+// SetRouterType sets the type of router to use
+func (r *Router) SetRouterType(routerType RouterType) {
+	r.routerType = routerType
+	// Update deprecated flag for backward compatibility
+	r.useSimpleRouter = (routerType == RouterTypeSimple)
 }
 
 // RouteConnection finds the best path for a connection between two nodes.
 // It returns a Path that avoids obstacles and creates clean routes.
 func (r *Router) RouteConnection(conn core.Connection, nodes []core.Node) (core.Path, error) {
-	if r.useSimpleRouter {
+	switch r.routerType {
+	case RouterTypeArea:
+		if r.areaRouter != nil {
+			return r.areaRouter.RouteConnection(conn, nodes)
+		}
+		// Fallback to simple if area router not available
+		return r.simpleRouter.RouteConnection(conn, nodes)
+	case RouterTypeTwoPhase:
+		return r.twoPhaseRouter.RouteConnectionWithPorts(conn, nodes)
+	case RouterTypeSimple:
+		fallthrough
+	default:
 		return r.simpleRouter.RouteConnection(conn, nodes)
 	}
-	// Use two-phase routing with port manager
-	return r.twoPhaseRouter.RouteConnectionWithPorts(conn, nodes)
 }
 
 // RouteConnections routes multiple connections, handling grouping and optimization.

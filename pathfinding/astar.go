@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"edd/core"
 	"fmt"
+	"math"
 )
 
 // AStarNode represents a state in the A* search.
@@ -306,4 +307,178 @@ func (a *AStarPathFinder) countAdjacentObstacles(p core.Point, obstacles func(co
 // SetMaxNodes sets the maximum number of nodes to explore.
 func (a *AStarPathFinder) SetMaxNodes(max int) {
 	a.maxNodes = max
+}
+
+// FindPathToArea finds an optimal path from start to the edge of a target area.
+// The target area is defined by a rectangle (node bounds).
+// The path will terminate at the first point on the edge of the area that is not blocked.
+func (a *AStarPathFinder) FindPathToArea(start core.Point, targetNode core.Node, obstacles func(core.Point) bool) (core.Path, error) {
+	// Check if start is blocked
+	if obstacles != nil && obstacles(start) {
+		return core.Path{}, fmt.Errorf("start point is blocked")
+	}
+	
+	// Check if start is already at the target edge
+	if isAtNodeEdge(start, targetNode) {
+		return core.Path{Points: []core.Point{start}, Cost: 0}, nil
+	}
+	
+	// Initialize open and closed sets
+	openSet := &NodeQueue{}
+	heap.Init(openSet)
+	closedSet := make(map[PointKey]bool)
+	nodeMap := make(map[PointKey]*AStarNode)
+	
+	// Create start node
+	startNode := &AStarNode{
+		Point:     start,
+		GCost:     0,
+		HCost:     a.heuristicToArea(start, targetNode, None),
+		Direction: None,
+	}
+	startNode.FCost = startNode.GCost + startNode.HCost
+	
+	heap.Push(openSet, startNode)
+	nodeMap[PointKey{start.X, start.Y}] = startNode
+	
+	nodesExplored := 0
+	
+	// Main A* loop
+	for openSet.Len() > 0 {
+		// Safety check
+		nodesExplored++
+		if nodesExplored > a.maxNodes {
+			return core.Path{}, fmt.Errorf("pathfinding exceeded node limit")
+		}
+		
+		// Get node with lowest F cost
+		current := heap.Pop(openSet).(*AStarNode)
+		currentKey := PointKey{current.Point.X, current.Point.Y}
+		
+		// Check if we reached the target area edge AND it's not blocked
+		// IMPORTANT: We must respect virtual obstacles even at the target edge
+		if isAtNodeEdge(current.Point, targetNode) && (obstacles == nil || !obstacles(current.Point)) {
+			return a.reconstructPath(current), nil
+		}
+		
+		// Move to closed set
+		closedSet[currentKey] = true
+		
+		// Explore neighbors
+		for _, neighbor := range GetNeighbors(current.Point) {
+			neighborKey := PointKey{neighbor.X, neighbor.Y}
+			
+			// Skip if in closed set
+			if closedSet[neighborKey] {
+				continue
+			}
+			
+			// Skip if obstacle
+			// Virtual obstacles should block even at target edges - that's the whole point!
+			if obstacles != nil && obstacles(neighbor) {
+				// Debug: log when obstacles block
+				// fmt.Printf("    Blocked at (%d,%d)\n", neighbor.X, neighbor.Y)
+				continue
+			}
+			
+			// Calculate costs
+			dir := GetDirection(current.Point, neighbor)
+			tentativeGCost := a.calculateGCost(current, neighbor, dir, obstacles)
+			
+			// Check if we've seen this node before
+			existingNode, exists := nodeMap[neighborKey]
+			
+			if !exists {
+				// New node
+				newNode := &AStarNode{
+					Point:     neighbor,
+					GCost:     tentativeGCost,
+					HCost:     a.heuristicToArea(neighbor, targetNode, dir),
+					Parent:    current,
+					Direction: dir,
+				}
+				newNode.FCost = newNode.GCost + newNode.HCost
+				
+				heap.Push(openSet, newNode)
+				nodeMap[neighborKey] = newNode
+			} else if tentativeGCost < existingNode.GCost {
+				// Found a better path to existing node
+				existingNode.GCost = tentativeGCost
+				existingNode.FCost = existingNode.GCost + existingNode.HCost
+				existingNode.Parent = current
+				existingNode.Direction = dir
+				
+				// Fix heap ordering
+				heap.Fix(openSet, existingNode.Index)
+			}
+		}
+	}
+	
+	return core.Path{}, fmt.Errorf("no path found to target area")
+}
+
+// heuristicToArea calculates the estimated cost to reach the target area.
+func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.Node, currentDir Direction) int {
+	// Calculate minimum Manhattan distance to any edge of the target
+	minDist := math.MaxInt32
+	
+	// Check distance to each edge
+	// Top edge
+	if current.Y < targetNode.Y {
+		dist := abs(targetNode.Y - current.Y) + abs(current.X - (targetNode.X + targetNode.Width/2))
+		if dist < minDist {
+			minDist = dist
+		}
+	}
+	
+	// Bottom edge
+	if current.Y > targetNode.Y + targetNode.Height - 1 {
+		dist := abs(current.Y - (targetNode.Y + targetNode.Height - 1)) + abs(current.X - (targetNode.X + targetNode.Width/2))
+		if dist < minDist {
+			minDist = dist
+		}
+	}
+	
+	// Left edge
+	if current.X < targetNode.X {
+		dist := abs(targetNode.X - current.X) + abs(current.Y - (targetNode.Y + targetNode.Height/2))
+		if dist < minDist {
+			minDist = dist
+		}
+	}
+	
+	// Right edge
+	if current.X > targetNode.X + targetNode.Width - 1 {
+		dist := abs(current.X - (targetNode.X + targetNode.Width - 1)) + abs(current.Y - (targetNode.Y + targetNode.Height/2))
+		if dist < minDist {
+			minDist = dist
+		}
+	}
+	
+	// If we're inside or at the edge, distance is 0
+	if minDist == math.MaxInt32 {
+		minDist = 0
+	}
+	
+	// Base cost using straight movement
+	h := minDist * a.costs.StraightCost
+	
+	// Add minimum turn cost if we'll need at least one turn
+	if minDist > 0 && currentDir != None {
+		// Simplified turn estimation
+		h += a.costs.TurnCost / 2
+	}
+	
+	return h
+}
+
+// isAtNodeEdge checks if a point is exactly at the edge of a node (not inside).
+func isAtNodeEdge(p core.Point, node core.Node) bool {
+	// Check if on the perimeter of the node
+	onVerticalEdge := (p.X == node.X-1 || p.X == node.X+node.Width) && 
+	                  p.Y >= node.Y-1 && p.Y <= node.Y+node.Height
+	onHorizontalEdge := (p.Y == node.Y-1 || p.Y == node.Y+node.Height) && 
+	                    p.X >= node.X-1 && p.X <= node.X+node.Width
+	
+	return onVerticalEdge || onHorizontalEdge
 }

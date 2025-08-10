@@ -187,3 +187,22 @@ func (cpf *CachedPathFinder) ClearCache() {
 func (cpf *CachedPathFinder) CacheStats() string {
 	return cpf.cache.String()
 }
+
+// FindPathToArea finds a path to a target area, delegating to the underlying pathfinder
+func (cpf *CachedPathFinder) FindPathToArea(start core.Point, targetNode core.Node, obstacles func(core.Point) bool) (core.Path, error) {
+	// For now, we don't cache area-based paths - delegate directly
+	// In the future, we could cache these too with a different key structure
+	if smartFinder, ok := cpf.finder.(*SmartPathFinder); ok {
+		return smartFinder.FindPathToArea(start, targetNode, obstacles)
+	}
+	if astarFinder, ok := cpf.finder.(*AStarPathFinder); ok {
+		return astarFinder.FindPathToArea(start, targetNode, obstacles)
+	}
+	
+	// Fallback to point-based routing to target center if area routing not supported
+	targetCenter := core.Point{
+		X: targetNode.X + targetNode.Width/2,
+		Y: targetNode.Y + targetNode.Height/2,
+	}
+	return cpf.FindPath(start, targetCenter, obstacles)
+}

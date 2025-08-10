@@ -83,6 +83,11 @@ func (r *Renderer) GetRouter() *connections.Router {
 	return r.router
 }
 
+// SetRouterType sets the type of router to use
+func (r *Renderer) SetRouterType(routerType connections.RouterType) {
+	r.router.SetRouterType(routerType)
+}
+
 // calculateNodeDimensions determines the width and height of nodes based on their text content.
 func calculateNodeDimensions(nodes []core.Node) []core.Node {
 	result := make([]core.Node, len(nodes))

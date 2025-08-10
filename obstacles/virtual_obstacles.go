@@ -27,33 +27,21 @@ func (v *virtualObstacleChecker) GetObstacleZones(nodes []core.Node, sourceID, t
 	zones := []ObstacleZone{}
 	
 	for _, node := range nodes {
-		// Add physical obstacle (node body with padding)
-		// For source and target nodes, only block the interior
-		if node.ID == sourceID || node.ID == targetID {
-			zones = append(zones, ObstacleZone{
-				MinX:   node.X,
-				MinY:   node.Y,
-				MaxX:   node.X + node.Width - 1,
-				MaxY:   node.Y + node.Height - 1,
-				Type:   "physical",
-				NodeID: node.ID,
-			})
-		} else {
-			// For other nodes, add 1-unit padding
-			zones = append(zones, ObstacleZone{
-				MinX:   node.X - 1,
-				MinY:   node.Y - 1,
-				MaxX:   node.X + node.Width,
-				MaxY:   node.Y + node.Height,
-				Type:   "physical",
-				NodeID: node.ID,
-			})
-		}
+		// Add physical obstacle (node body only, no padding)
+		// ALL nodes are treated the same way for global consistency
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X,
+			MinY:   node.Y,
+			MaxX:   node.X + node.Width - 1,
+			MaxY:   node.Y + node.Height - 1,
+			Type:   "physical",
+			NodeID: node.ID,
+		})
 		
-		// Add virtual obstacle zones around the node
-		if v.shouldAddVirtualObstacles(node.ID, sourceID, targetID) {
-			zones = append(zones, v.createVirtualZones(node, sourceID, targetID)...)
-		}
+		// Add virtual obstacle zones around ALL nodes to create port corridors
+		// This ensures consistent routing for all connections
+		// Pass -1, -1 to indicate these are global obstacles
+		zones = append(zones, v.createVirtualZones(node, -1, -1)...)
 	}
 	
 	return zones
@@ -90,9 +78,116 @@ func (v *virtualObstacleChecker) shouldAddVirtualObstacles(nodeID, sourceID, tar
 
 // createVirtualZones creates virtual obstacle zones around a node
 func (v *virtualObstacleChecker) createVirtualZones(node core.Node, sourceID, targetID int) []ObstacleZone {
-	// For now, don't create any additional virtual zones
-	// The 1-unit padding in GetObstacleZones is sufficient
-	return []ObstacleZone{}
+	zones := []ObstacleZone{}
+	
+	// Create virtual obstacles that block the perimeter except at port locations
+	// This applies to ALL nodes to create consistent routing corridors
+	
+	// Calculate port positions (center of each edge)
+	centerX := node.X + node.Width/2
+	centerY := node.Y + node.Height/2
+	
+	// Debug output
+	// fmt.Printf("Creating virtual zones for node %d: pos(%d,%d) size(%dx%d) center(%d,%d)\n",
+	//     node.ID, node.X, node.Y, node.Width, node.Height, centerX, centerY)
+	
+	// Top edge - block everything except center port
+	// Left part of top edge (from left corner to just before center)
+	if centerX > node.X {
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X - 1,
+			MinY:   node.Y - 1,
+			MaxX:   centerX - 1,
+			MaxY:   node.Y - 1,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	// Right part of top edge (from just after center to right corner)
+	if centerX < node.X + node.Width - 1 {
+		zones = append(zones, ObstacleZone{
+			MinX:   centerX + 1,
+			MinY:   node.Y - 1,
+			MaxX:   node.X + node.Width,
+			MaxY:   node.Y - 1,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	
+	// Bottom edge - block everything except center port
+	// Left part of bottom edge
+	if centerX > node.X {
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X - 1,
+			MinY:   node.Y + node.Height,
+			MaxX:   centerX - 1,
+			MaxY:   node.Y + node.Height,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	// Right part of bottom edge
+	if centerX < node.X + node.Width - 1 {
+		zones = append(zones, ObstacleZone{
+			MinX:   centerX + 1,
+			MinY:   node.Y + node.Height,
+			MaxX:   node.X + node.Width,
+			MaxY:   node.Y + node.Height,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	
+	// Left edge - block everything except center port
+	// Top part of left edge
+	if centerY > node.Y {
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X - 1,
+			MinY:   node.Y - 1,
+			MaxX:   node.X - 1,
+			MaxY:   centerY - 1,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	// Bottom part of left edge
+	if centerY < node.Y + node.Height - 1 {
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X - 1,
+			MinY:   centerY + 1,
+			MaxX:   node.X - 1,
+			MaxY:   node.Y + node.Height,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	
+	// Right edge - block everything except center port
+	// Top part of right edge
+	if centerY > node.Y {
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X + node.Width,
+			MinY:   node.Y - 1,
+			MaxX:   node.X + node.Width,
+			MaxY:   centerY - 1,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	// Bottom part of right edge
+	if centerY < node.Y + node.Height - 1 {
+		zones = append(zones, ObstacleZone{
+			MinX:   node.X + node.Width,
+			MinY:   centerY + 1,
+			MaxX:   node.X + node.Width,
+			MaxY:   node.Y + node.Height,
+			Type:   "virtual-port",
+			NodeID: node.ID,
+		})
+	}
+	
+	return zones
 }
 
 // dynamicVirtualObstacleChecker implements DynamicVirtualObstacleChecker
