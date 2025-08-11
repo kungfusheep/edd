@@ -97,6 +97,22 @@ func (m *CharacterMerger) initializeMergeRules() {
 	m.mergeMap[mergePair{'┌', '└'}] = '├'
 	m.mergeMap[mergePair{'┐', '┘'}] = '┤'
 	
+	// T-junction + corner combinations (for paths that turn after branching)
+	m.mergeMap[mergePair{'┴', '┐'}] = '┼'  // bottom T + top-right corner = cross
+	m.mergeMap[mergePair{'┴', '┌'}] = '┼'  // bottom T + top-left corner = cross
+	m.mergeMap[mergePair{'┬', '┘'}] = '┼'  // top T + bottom-right corner = cross
+	m.mergeMap[mergePair{'┬', '└'}] = '┼'  // top T + bottom-left corner = cross
+	m.mergeMap[mergePair{'├', '┐'}] = '┼'  // left T + top-right corner = cross
+	m.mergeMap[mergePair{'├', '┘'}] = '┼'  // left T + bottom-right corner = cross
+	m.mergeMap[mergePair{'┤', '┌'}] = '┼'  // right T + top-left corner = cross
+	m.mergeMap[mergePair{'┤', '└'}] = '┼'  // right T + bottom-left corner = cross
+	
+	// Line + branch = branch (for when we explicitly want to place a branch)
+	m.mergeMap[mergePair{'│', '├'}] = '├'  // vertical + left branch = left branch
+	m.mergeMap[mergePair{'│', '┤'}] = '┤'  // vertical + right branch = right branch
+	m.mergeMap[mergePair{'─', '┬'}] = '┬'  // horizontal + top branch = top branch
+	m.mergeMap[mergePair{'─', '┴'}] = '┴'  // horizontal + bottom branch = bottom branch
+	
 	// ASCII fallbacks
 	m.mergeMap[mergePair{'-', '|'}] = '+'
 	m.mergeMap[mergePair{'|', '-'}] = '+'

@@ -117,10 +117,6 @@ func (c *MatrixCanvas) Set(p core.Point, char rune) error {
 	existing := c.matrix[p.Y][p.X]
 	merged := c.merger.Merge(existing, char)
 	
-	// Debug merging
-	// if existing != ' ' && existing != merged {
-	//     fmt.Printf("Merge at (%d,%d): %c + %c = %c\n", p.X, p.Y, existing, char, merged)
-	// }
 	
 	c.matrix[p.Y][p.X] = merged
 	return nil

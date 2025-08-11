@@ -105,9 +105,52 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 		isLastSegment := (i == len(points)-2)
 		drawArrowOnSegment := isLastSegment && hasArrow && !isClosed
 		
-		// Draw all segments normally and let merge handle intersections
-		if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
-			return err
+		// For the first segment of a connection from a box edge, handle branch creation
+		if i == 0 && isConnection && !isClosed {
+			existing := canvas.Get(from)
+			// Check if we're starting from a box edge (could be clean or already a branch)
+			if existing == '│' || existing == '─' || existing == '├' || existing == '┤' || existing == '┬' || existing == '┴' {
+				// Don't draw the line at the first point - let it stay as box edge
+				// This prevents │ + ─ = ┼ when we want │ + ─ = ├
+				if err := r.drawSegmentSkippingCornersWithOptions(canvas, from, to, corners, drawArrowOnSegment, true); err != nil {
+					return err
+				}
+				
+				// After drawing, place appropriate branch character at start
+				dx := to.X - from.X
+				dy := to.Y - from.Y
+				var branchChar rune
+				
+				if existing == '│' && dy == 0 {
+					// Horizontal from vertical edge
+					if dx > 0 {
+						branchChar = r.style.TeeRight  // ├
+					} else {
+						branchChar = r.style.TeeLeft   // ┤
+					}
+				} else if existing == '─' && dx == 0 {
+					// Vertical from horizontal edge  
+					if dy > 0 {
+						branchChar = r.style.TeeDown   // ┬
+					} else {
+						branchChar = r.style.TeeUp     // ┴
+					}
+				}
+				
+				if branchChar != 0 {
+					canvas.Set(from, branchChar)
+				}
+			} else {
+				// Not a clean edge, draw normally
+				if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
+					return err
+				}
+			}
+		} else {
+			// Not first segment or not a connection, draw normally
+			if err := r.drawSegmentSkippingCorners(canvas, from, to, corners, drawArrowOnSegment); err != nil {
+				return err
+			}
 		}
 	}
 	
