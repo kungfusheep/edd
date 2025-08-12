@@ -32,6 +32,21 @@ func (r *RealRenderer) SetEditState(nodeID int, text string, cursorPos int) {
 	r.cursorPos = cursorPos
 }
 
+// GetEditingNodeID returns the node being edited
+func (r *RealRenderer) GetEditingNodeID() int {
+	return r.editingNodeID
+}
+
+// GetEditText returns the text being edited
+func (r *RealRenderer) GetEditText() string {
+	return r.editText
+}
+
+// GetCursorPos returns the cursor position
+func (r *RealRenderer) GetCursorPos() int {
+	return r.cursorPos
+}
+
 // NewRealRenderer creates a renderer using our actual modules
 func NewRealRenderer() *RealRenderer {
 	// Use simple layout
@@ -86,10 +101,25 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	// Calculate node dimensions
-	nodes := calculateNodeDimensionsWithEdit(diagram.Nodes, r.editingNodeID, r.editText, r.cursorPos)
+	nodes := calculateNodeDimensions(diagram.Nodes)
 	
 	// Layout
 	layoutNodes, err := r.layout.Layout(nodes, diagram.Connections)
+	
+	// After layout, adjust width for editing node if needed
+	if r.editingNodeID >= 0 {
+		for i := range layoutNodes {
+			if layoutNodes[i].ID == r.editingNodeID {
+				// Recalculate width for edit text
+				minWidth := len([]rune(r.editText)) + 5  // text + cursor + padding
+				if minWidth < 8 {
+					minWidth = 8
+				}
+				layoutNodes[i].Width = minWidth
+				break
+			}
+		}
+	}
 	if err != nil {
 		return nil, "", fmt.Errorf("layout failed: %w", err)
 	}
@@ -157,38 +187,22 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 
 // Helper functions from renderer.go
 func calculateNodeDimensions(nodes []core.Node) []core.Node {
-	return calculateNodeDimensionsWithEdit(nodes, -1, "", 0)
-}
-
-func calculateNodeDimensionsWithEdit(nodes []core.Node, editingNodeID int, editText string, cursorPos int) []core.Node {
 	result := make([]core.Node, len(nodes))
 	copy(result, nodes)
 	
 	for i := range result {
-		// Check if this node is being edited
-		if result[i].ID == editingNodeID {
-			// Use edit text for width calculation
-			minWidth := len([]rune(editText)) + 5  // text + cursor + padding
-			if minWidth < 8 {
-				minWidth = 8  // minimum width
+		maxWidth := 0
+		for _, line := range result[i].Text {
+			if len(line) > maxWidth {
+				maxWidth = len(line)
 			}
-			result[i].Width = minWidth
-			result[i].Height = 3  // single line for editing
-		} else {
-			// Normal calculation for non-edited nodes
-			maxWidth := 0
-			for _, line := range result[i].Text {
-				if len(line) > maxWidth {
-					maxWidth = len(line)
-				}
-			}
-			// Minimum width of 8 characters for empty nodes
-			if maxWidth < 4 {
-				maxWidth = 4
-			}
-			result[i].Width = maxWidth + 4  // padding
-			result[i].Height = len(result[i].Text) + 2  // borders
 		}
+		// Minimum width of 8 characters for empty nodes
+		if maxWidth < 4 {
+			maxWidth = 4
+		}
+		result[i].Width = maxWidth + 4  // padding
+		result[i].Height = len(result[i].Text) + 2  // borders
 	}
 	
 	return result
