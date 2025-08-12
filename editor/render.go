@@ -52,10 +52,8 @@ func RenderTUIWithRenderer(state TUIState, renderer DiagramRenderer) string {
 	// 2. Jump labels are now drawn separately in main_tui.go
 	// Don't overlay them here
 
-	// 3. Overlay text input if in edit mode
-	if state.Mode == ModeEdit || state.Mode == ModeInsert {
-		output = overlayTextInput(output, state)
-	}
+	// 3. Text editing is now handled by showing cursor in the node itself
+	// No overlay needed
 
 	// 4. Don't add Ed here - he's drawn separately in main_tui.go
 	// output = overlayModeIndicator(output, state)

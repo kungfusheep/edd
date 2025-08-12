@@ -37,8 +37,7 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 		
 	case ':': // Command mode
 		e.SetMode(ModeCommand)
-		e.textBuffer = []rune{':'}
-		e.cursorPos = 1
+		e.commandBuffer = []rune{}  // Start with empty, : is shown in prompt
 	}
 	
 	return false
@@ -85,26 +84,18 @@ func (e *TUIEditor) handleCommandKey(key rune) bool {
 		e.SetMode(ModeNormal)
 		
 	case 127, 8: // Backspace
-		if e.cursorPos > 1 { // Keep the ':'
-			e.textBuffer = append(
-				e.textBuffer[:e.cursorPos-1],
-				e.textBuffer[e.cursorPos:]...,
-			)
-			e.cursorPos--
+		if len(e.commandBuffer) > 0 {
+			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
 		}
 		
 	case 13, 10: // Enter - execute command
-		e.executeCommand(string(e.textBuffer[1:])) // Skip the ':'
+		e.executeCommand(string(e.commandBuffer))
 		e.SetMode(ModeNormal)
 		
 	default:
 		// Add to command buffer
 		if unicode.IsPrint(key) {
-			e.textBuffer = append(
-				e.textBuffer[:e.cursorPos],
-				append([]rune{key}, e.textBuffer[e.cursorPos:]...)...,
-			)
-			e.cursorPos++
+			e.commandBuffer = append(e.commandBuffer, key)
 		}
 	}
 	
@@ -182,16 +173,22 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 	switch e.jumpAction {
 	case JumpActionSelect:
 		e.selected = nodeID
+		e.clearJumpLabels()
+		e.SetMode(ModeNormal)
 		
 	case JumpActionEdit:
 		e.selected = nodeID
+		e.clearJumpLabels()
 		e.SetMode(ModeEdit)
+		return // Don't reset to normal mode
 		
 	case JumpActionDelete:
 		e.DeleteNode(nodeID)
 		if e.selected == nodeID {
 			e.selected = -1
 		}
+		e.clearJumpLabels()
+		e.SetMode(ModeNormal)
 		
 	case JumpActionConnectFrom:
 		e.selected = nodeID
@@ -204,9 +201,7 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 			e.AddConnection(e.selected, nodeID, "")
 		}
 		e.selected = -1
+		e.clearJumpLabels()
+		e.SetMode(ModeNormal)
 	}
-	
-	// Clear jump state and return to normal mode
-	e.clearJumpLabels()
-	e.SetMode(ModeNormal)
 }

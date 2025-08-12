@@ -68,8 +68,7 @@ func (e *TUIEditor) StartEdit() {
 // StartCommand enters command mode
 func (e *TUIEditor) StartCommand() {
 	e.SetMode(ModeCommand)
-	e.textBuffer = []rune{}
-	e.cursorPos = 0
+	e.commandBuffer = []rune{}
 }
 
 // HandleTextInput processes text input in insert/edit modes
@@ -127,33 +126,24 @@ func (e *TUIEditor) HandleCommandInput(key rune) {
 	case 27: // ESC
 		e.SetMode(ModeNormal)
 	case 127, 8: // Backspace
-		if e.cursorPos > 0 {
-			e.textBuffer = append(
-				e.textBuffer[:e.cursorPos-1],
-				e.textBuffer[e.cursorPos:]...,
-			)
-			e.cursorPos--
+		if len(e.commandBuffer) > 0 {
+			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
 		}
 	default:
 		if unicode.IsPrint(key) {
-			e.textBuffer = append(
-				e.textBuffer[:e.cursorPos],
-				append([]rune{key}, e.textBuffer[e.cursorPos:]...)...,
-			)
-			e.cursorPos++
+			e.commandBuffer = append(e.commandBuffer, key)
 		}
 	}
 }
 
 // GetCommand returns the current command buffer
 func (e *TUIEditor) GetCommand() string {
-	return string(e.textBuffer)
+	return string(e.commandBuffer)
 }
 
 // ClearCommand clears the command buffer
 func (e *TUIEditor) ClearCommand() {
-	e.textBuffer = []rune{}
-	e.cursorPos = 0
+	e.commandBuffer = []rune{}
 }
 
 // AnimateEd advances Ed's animation

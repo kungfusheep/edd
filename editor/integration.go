@@ -18,6 +18,18 @@ type RealRenderer struct {
 	capabilities rendering.TerminalCapabilities
 	pathRenderer *rendering.PathRenderer
 	labelRenderer *rendering.LabelRenderer
+	
+	// Edit state for rendering cursor in nodes
+	editingNodeID int
+	editText      string
+	cursorPos     int
+}
+
+// SetEditState sets the current editing state for in-node text editing
+func (r *RealRenderer) SetEditState(nodeID int, text string, cursorPos int) {
+	r.editingNodeID = nodeID
+	r.editText = text
+	r.cursorPos = cursorPos
 }
 
 // NewRealRenderer creates a renderer using our actual modules
@@ -50,6 +62,7 @@ func NewRealRenderer() *RealRenderer {
 		capabilities:  caps,
 		pathRenderer:  rendering.NewPathRenderer(caps),
 		labelRenderer: rendering.NewLabelRenderer(),
+		editingNodeID: -1,
 	}
 }
 
@@ -73,7 +86,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	// Calculate node dimensions
-	nodes := calculateNodeDimensions(diagram.Nodes)
+	nodes := calculateNodeDimensionsWithEdit(diagram.Nodes, r.editingNodeID, r.editText, r.cursorPos)
 	
 	// Layout
 	layoutNodes, err := r.layout.Layout(nodes, diagram.Connections)
@@ -111,7 +124,15 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	
 	// Render nodes
 	for _, node := range layoutNodes {
-		renderNode(offsetCanvas, node, r.pathRenderer)
+		// Check if this node is being edited
+		isEditing := node.ID == r.editingNodeID
+		var editText string
+		var cursorPos int
+		if isEditing {
+			editText = r.editText
+			cursorPos = r.cursorPos
+		}
+		renderNodeWithEdit(offsetCanvas, node, r.pathRenderer, isEditing, editText, cursorPos)
 	}
 	
 	// Apply arrows to connections
@@ -136,18 +157,38 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 
 // Helper functions from renderer.go
 func calculateNodeDimensions(nodes []core.Node) []core.Node {
+	return calculateNodeDimensionsWithEdit(nodes, -1, "", 0)
+}
+
+func calculateNodeDimensionsWithEdit(nodes []core.Node, editingNodeID int, editText string, cursorPos int) []core.Node {
 	result := make([]core.Node, len(nodes))
 	copy(result, nodes)
 	
 	for i := range result {
-		maxWidth := 0
-		for _, line := range result[i].Text {
-			if len(line) > maxWidth {
-				maxWidth = len(line)
+		// Check if this node is being edited
+		if result[i].ID == editingNodeID {
+			// Use edit text for width calculation
+			minWidth := len([]rune(editText)) + 5  // text + cursor + padding
+			if minWidth < 8 {
+				minWidth = 8  // minimum width
 			}
+			result[i].Width = minWidth
+			result[i].Height = 3  // single line for editing
+		} else {
+			// Normal calculation for non-edited nodes
+			maxWidth := 0
+			for _, line := range result[i].Text {
+				if len(line) > maxWidth {
+					maxWidth = len(line)
+				}
+			}
+			// Minimum width of 8 characters for empty nodes
+			if maxWidth < 4 {
+				maxWidth = 4
+			}
+			result[i].Width = maxWidth + 4  // padding
+			result[i].Height = len(result[i].Text) + 2  // borders
 		}
-		result[i].Width = maxWidth + 4  // padding
-		result[i].Height = len(result[i].Text) + 2  // borders
 	}
 	
 	return result
@@ -184,7 +225,7 @@ func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
 	}
 }
 
-func renderNode(c canvas.Canvas, node core.Node, pathRenderer *rendering.PathRenderer) {
+func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *rendering.PathRenderer, isEditing bool, editText string, cursorPos int) {
 	// Draw box
 	boxPath := core.Path{
 		Points: []core.Point{
@@ -197,13 +238,47 @@ func renderNode(c canvas.Canvas, node core.Node, pathRenderer *rendering.PathRen
 	}
 	pathRenderer.RenderPath(c, boxPath, false)
 	
-	// Draw text
-	for i, line := range node.Text {
-		y := node.Y + 1 + i
+	// Draw text with cursor if editing
+	if isEditing {
+		// Draw the edit text with cursor
+		y := node.Y + 1
 		x := node.X + 2
-		for j, ch := range line {
-			if x+j < node.X+node.Width-2 {
-				c.Set(core.Point{X: x + j, Y: y}, ch)
+		
+		// Convert to runes for proper Unicode handling
+		runes := []rune(editText)
+		
+		// Ensure cursorPos is within bounds
+		if cursorPos > len(runes) {
+			cursorPos = len(runes)
+		}
+		
+		// Draw text before cursor
+		for i := 0; i < cursorPos && i < len(runes); i++ {
+			if x+i < node.X+node.Width-2 {
+				c.Set(core.Point{X: x + i, Y: y}, runes[i])
+			}
+		}
+		
+		// Draw cursor
+		if x+cursorPos < node.X+node.Width-2 {
+			c.Set(core.Point{X: x + cursorPos, Y: y}, '│')
+		}
+		
+		// Draw text after cursor
+		for i := cursorPos; i < len(runes); i++ {
+			if x+i+1 < node.X+node.Width-2 {
+				c.Set(core.Point{X: x + i + 1, Y: y}, runes[i])
+			}
+		}
+	} else {
+		// Draw normal text
+		for i, line := range node.Text {
+			y := node.Y + 1 + i
+			x := node.X + 2
+			for j, ch := range line {
+				if x+j < node.X+node.Width-2 {
+					c.Set(core.Point{X: x + j, Y: y}, ch)
+				}
 			}
 		}
 	}

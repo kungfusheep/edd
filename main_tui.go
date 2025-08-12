@@ -247,6 +247,13 @@ func showStatusLine(tui *editor.TUIEditor, filename string) {
 	fmt.Print("\033[999;1H") // Move to bottom
 	fmt.Print("\033[K")       // Clear line
 	
+	// Special handling for command mode - show the command being typed
+	if tui.GetMode() == editor.ModeCommand {
+		cmd := tui.GetCommand()
+		fmt.Printf(":%s│", cmd) // Show command with cursor
+		return
+	}
+	
 	// Show filename and mode
 	if filename != "" {
 		fmt.Printf("[ %s ] ", filename)

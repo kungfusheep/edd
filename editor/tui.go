@@ -17,8 +17,9 @@ type TUIEditor struct {
 	jumpAction JumpAction     // What to do after jump selection
 
 	// Text input state
-	textBuffer []rune // Unicode-aware text buffer
-	cursorPos  int    // Position in text buffer
+	textBuffer    []rune // Unicode-aware text buffer for editing nodes
+	cursorPos     int    // Position in text buffer
+	commandBuffer []rune // Separate buffer for command mode
 
 	// Ed mascot
 	edd *EddCharacter
@@ -40,6 +41,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		selected:      -1,
 		jumpLabels:    make(map[int]rune),
 		textBuffer:    []rune{},
+		commandBuffer: []rune{},
 		cursorPos:     0,
 		edd:           NewEddCharacter(),
 		width:         80,
@@ -98,11 +100,22 @@ func (e *TUIEditor) Run() error {
 func (e *TUIEditor) Render() string {
 	// If we have a real renderer that can provide positions, use it
 	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
+		// Set edit state if we're editing or inserting
+		if e.mode == ModeEdit || e.mode == ModeInsert {
+			realRenderer.SetEditState(e.selected, string(e.textBuffer), e.cursorPos)
+		} else {
+			realRenderer.SetEditState(-1, "", 0)
+		}
+		
 		positions, output, err := realRenderer.RenderWithPositions(e.diagram)
 		if err == nil && positions != nil {
 			// Store node positions for jump label rendering
 			e.nodePositions = positions.Positions
 			return output
+		}
+		// If there was an error, fall through to simple rendering
+		if err != nil {
+			return fmt.Sprintf("Render error: %v\n", err)
 		}
 	}
 	
