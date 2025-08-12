@@ -15,14 +15,15 @@ import (
 // Renderer orchestrates the diagram rendering pipeline.
 // It coordinates layout, canvas creation, node rendering, and connection routing.
 type Renderer struct {
-	layout       core.LayoutEngine
-	pathfinder   core.PathFinder
-	router       *connections.Router
-	capabilities rendering.TerminalCapabilities // Cached to avoid repeated detection
-	pathRenderer *rendering.PathRenderer         // Reused across renders
-	validator    *LineValidator                  // Optional output validator
-	debugMode    bool                            // Enable debug obstacle visualization
-	showObstacles bool                          // Show virtual obstacles as dots in standard rendering
+	layout        core.LayoutEngine
+	pathfinder    core.PathFinder
+	router        *connections.Router
+	capabilities  rendering.TerminalCapabilities // Cached to avoid repeated detection
+	pathRenderer  *rendering.PathRenderer         // Reused across renders
+	labelRenderer *rendering.LabelRenderer        // Handles connection labels
+	validator     *LineValidator                  // Optional output validator
+	debugMode     bool                            // Enable debug obstacle visualization
+	showObstacles bool                            // Show virtual obstacles as dots in standard rendering
 }
 
 // NewRenderer creates a new renderer with sensible defaults.
@@ -49,12 +50,13 @@ func NewRenderer() *Renderer {
 	caps := detectTerminalCapabilities()
 	
 	return &Renderer{
-		layout:       layoutEngine,
-		pathfinder:   cachedPathfinder,
-		router:       router,
-		capabilities: caps,
-		pathRenderer: rendering.NewPathRenderer(caps),
-		validator:    nil, // Validator is optional, enabled via SetValidator
+		layout:        layoutEngine,
+		pathfinder:    cachedPathfinder,
+		router:        router,
+		capabilities:  caps,
+		pathRenderer:  rendering.NewPathRenderer(caps),
+		labelRenderer: rendering.NewLabelRenderer(),
+		validator:     nil, // Validator is optional, enabled via SetValidator
 	}
 }
 
@@ -264,11 +266,20 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	}
 	
 	// Step 8: Render all connections (no endpoint adjustment needed)
+	// Note: connectionsWithArrows maintains the same order as diagram.Connections
 	for _, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
 		
 		// Use RenderPathWithOptions to enable connection endpoint handling
 		r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
+	}
+	
+	// Step 8a: Render connection labels after all paths are drawn
+	// This ensures labels are placed on top of the lines
+	for i, conn := range diagram.Connections {
+		if conn.Label != "" && i < len(connectionsWithArrows) {
+			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, rendering.LabelMiddle)
+		}
 	}
 	
 	// Step 8.5: Show virtual obstacles if enabled
@@ -682,6 +693,16 @@ func (oc *offsetCanvas) Clear() {
 
 func (oc *offsetCanvas) String() string {
 	return oc.canvas.String()
+}
+
+// Matrix returns direct access to the underlying matrix for label rendering
+func (oc *offsetCanvas) Matrix() [][]rune {
+	return oc.canvas.Matrix()
+}
+
+// Offset returns the offset for coordinate translation
+func (oc *offsetCanvas) Offset() core.Point {
+	return oc.offset
 }
 
 // renderObstacleDots adds dots to show virtual obstacles on the canvas

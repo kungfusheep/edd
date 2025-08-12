@@ -74,10 +74,11 @@ func (n Node) Contains(p Point) bool {
 
 // Connection represents a directed edge between nodes.
 type Connection struct {
-	ID    int  `json:"id,omitempty"`    // Unique connection identifier  
-	From  int  `json:"from"`            // Source node ID
-	To    int  `json:"to"`              // Target node ID
-	Arrow bool `json:"arrow,omitempty"` // Whether this connection should have an arrow
+	ID    int    `json:"id,omitempty"`    // Unique connection identifier  
+	From  int    `json:"from"`            // Source node ID
+	To    int    `json:"to"`              // Target node ID
+	Arrow bool   `json:"arrow,omitempty"` // Whether this connection should have an arrow
+	Label string `json:"label,omitempty"` // Optional label for the connection
 }
 
 // Diagram represents a complete diagram with nodes and connections.

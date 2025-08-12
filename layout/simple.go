@@ -21,7 +21,7 @@ type SimpleLayout struct {
 // NewSimpleLayout creates a SimpleLayout with default settings.
 func NewSimpleLayout() *SimpleLayout {
 	return &SimpleLayout{
-		horizontalSpacing: 8,
+		horizontalSpacing: 12, // Increased from 8 to allow space for inline labels
 		verticalSpacing:   4,
 		minNodeWidth:      3,
 		minNodeHeight:     3,
