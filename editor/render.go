@@ -49,10 +49,8 @@ func RenderTUIWithRenderer(state TUIState, renderer DiagramRenderer) string {
 		output = createEmptyCanvas(state.Width, state.Height)
 	}
 
-	// 2. Overlay jump labels if active
-	if len(state.JumpLabels) > 0 {
-		output = overlayJumpLabels(output, state)
-	}
+	// 2. Jump labels are now drawn separately in main_tui.go
+	// Don't overlay them here
 
 	// 3. Overlay text input if in edit mode
 	if state.Mode == ModeEdit || state.Mode == ModeInsert {
@@ -125,17 +123,37 @@ func createEmptyCanvas(width, height int) string {
 
 // overlayJumpLabels adds jump labels to the output
 func overlayJumpLabels(output string, state TUIState) string {
+	if state.Diagram == nil {
+		return output
+	}
+	
 	lines := strings.Split(output, "\n")
 	
-	// For each node with a jump label, try to overlay it
-	for nodeID, label := range state.JumpLabels {
-		// Find the node in the output (simple search for now)
-		nodeStr := fmt.Sprintf("[%d]", nodeID)
-		for i, line := range lines {
-			if idx := strings.Index(line, nodeStr); idx >= 0 {
-				// Replace the [nodeID] with [label] for jump mode
-				labelStr := fmt.Sprintf("[%c]", label)
-				lines[i] = strings.Replace(line, nodeStr, labelStr, 1)
+	// For each node with a jump label, find its text in the output
+	for _, node := range state.Diagram.Nodes {
+		if label, ok := state.JumpLabels[node.ID]; ok {
+			// Get the node's text
+			if len(node.Text) > 0 {
+				nodeText := node.Text[0]
+				
+				// Search for this text in the output
+				for i, line := range lines {
+					if idx := strings.Index(line, nodeText); idx >= 0 {
+						// Found the node text - add jump label before it
+						// Look for the box edge (│) before the text
+						boxIdx := strings.LastIndex(line[:idx], "│")
+						if boxIdx >= 0 && boxIdx < idx {
+							// Insert jump label right after the box edge
+							labelStr := fmt.Sprintf("[%c] ", label)
+							lines[i] = line[:boxIdx+3] + labelStr + line[boxIdx+3:]
+						} else {
+							// Fallback: just prepend the label
+							labelStr := fmt.Sprintf("[%c] ", label)
+							lines[i] = strings.Replace(line, nodeText, labelStr+nodeText, 1)
+						}
+						break
+					}
+				}
 			}
 		}
 	}

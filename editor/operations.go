@@ -14,6 +14,11 @@ func (e *TUIEditor) GetEddFrame() string {
 	return e.edd.GetFrame(e.mode)
 }
 
+// GetJumpLabels returns the current jump labels
+func (e *TUIEditor) GetJumpLabels() map[int]rune {
+	return e.jumpLabels
+}
+
 // StartAddNode begins adding a new node
 func (e *TUIEditor) StartAddNode() {
 	e.SetMode(ModeInsert)

@@ -109,11 +109,16 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		output := tui.Render()
 		fmt.Print(output)
 		
-		// Position and draw Ed separately using ANSI codes
-		drawEd(tui)
+		// Draw jump labels if in jump mode
+		if tui.GetMode() == editor.ModeJump {
+			drawJumpLabels(tui, output)
+		}
 		
-		// Show status line
+		// Show status line first
 		showStatusLine(tui, filename)
+		
+		// Then draw Ed on top (so he doesn't get overwritten)
+		drawEd(tui)
 		
 		// Handle input or animation
 		select {
@@ -147,6 +152,61 @@ func readSingleKey() rune {
 	return rune(b[0])
 }
 
+func drawJumpLabels(tui *editor.TUIEditor, output string) {
+	// Get jump labels from TUI
+	labels := tui.GetJumpLabels()
+	if len(labels) == 0 {
+		return
+	}
+	
+	diagram := tui.GetDiagram()
+	lines := strings.Split(output, "\n")
+	
+	// Save cursor once
+	fmt.Print("\033[s")
+	
+	// Track which boxes we've already labeled
+	labeledBoxes := make(map[string]bool)
+	
+	// For each node with a label, find its box in the output
+	for _, node := range diagram.Nodes {
+		if label, ok := labels[node.ID]; ok && len(node.Text) > 0 {
+			nodeText := node.Text[0]
+			
+			// Search for this node's box
+			for lineNum := range lines {
+				// Look for the top-left corner in this line
+				if lineNum > 0 && lineNum < len(lines)-1 {
+					line := lines[lineNum]
+					nextLine := lines[lineNum+1]
+					
+					// Check if this line has a box corner and next line has our text
+					for col, r := range []rune(line) {
+						if r == '┌' || r == '┏' || r == '╭' {
+							// Found a corner - check if the text below belongs to our node
+							if strings.Contains(nextLine, nodeText) {
+								// Verify this box hasn't been labeled yet
+								boxKey := fmt.Sprintf("%d,%d", lineNum, col)
+								if !labeledBoxes[boxKey] {
+									// Draw label OVER the corner character
+									fmt.Printf("\033[%d;%dH", lineNum+1, col+1) // Position at corner
+									fmt.Printf("\033[33;1m%c\033[0m", label) // Bright yellow label
+									labeledBoxes[boxKey] = true
+									goto nextNode
+								}
+							}
+						}
+					}
+				}
+			}
+		nextNode:
+		}
+	}
+	
+	// Restore cursor
+	fmt.Print("\033[u")
+}
+
 func drawEd(tui *editor.TUIEditor) {
 	// Draw Ed in bottom-right corner using ANSI positioning
 	mode := tui.GetMode()
@@ -170,21 +230,35 @@ func drawEd(tui *editor.TUIEditor) {
 	}
 	reset := "\033[0m"
 	
-	// Position and draw Ed's box
-	// Line 1: Top of box
-	fmt.Print("\033[s")                     // Save cursor
-	fmt.Print("\033[999;999H\033[3A\033[20D") // Bottom-right, up 3, left 20
+	// Save cursor position
+	fmt.Print("\033[s")
+	
+	// Draw Ed's box - position above status line
+	// We need to position Ed carefully to avoid the status line
+	
+	// Top of box (4 lines from bottom)
+	fmt.Print("\033[999;999H")      // Go to bottom-right
+	fmt.Print("\033[4A")            // Move up 4 lines from bottom
+	fmt.Print("\033[20D")           // Move left 20 chars from right edge
 	fmt.Printf("%s╭─────╮%s", color, reset)
 	
-	// Line 2: Ed's face
-	fmt.Print("\033[999;999H\033[2A\033[20D") // Bottom-right, up 2, left 20
+	// Ed's face and mode (3 lines from bottom)
+	fmt.Print("\033[999;999H")      // Go to bottom-right again
+	fmt.Print("\033[3A")            // Move up 3 lines from bottom
+	fmt.Print("\033[20D")           // Move left 20 chars from right edge
 	fmt.Printf("%s│%s│%s %s", color, frame, reset, mode)
 	
-	// Line 3: Bottom of box
-	fmt.Print("\033[999;999H\033[1A\033[20D") // Bottom-right, up 1, left 20
+	// Bottom of box (2 lines from bottom)
+	fmt.Print("\033[999;999H")      // Go to bottom-right again
+	fmt.Print("\033[2A")            // Move up 2 lines from bottom
+	fmt.Print("\033[20D")           // Move left 20 chars from right edge
 	fmt.Printf("%s╰─────╯%s", color, reset)
 	
-	fmt.Print("\033[u")                     // Restore cursor
+	// Restore cursor position
+	fmt.Print("\033[u")
+	
+	// Force flush to ensure it renders
+	os.Stdout.Sync()
 }
 
 func showStatusLine(tui *editor.TUIEditor, filename string) {
