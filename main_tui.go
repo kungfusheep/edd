@@ -153,53 +153,34 @@ func readSingleKey() rune {
 }
 
 func drawJumpLabels(tui *editor.TUIEditor, output string) {
-	// Get jump labels from TUI
+	// Get jump labels and state from TUI
 	labels := tui.GetJumpLabels()
 	if len(labels) == 0 {
 		return
 	}
 	
-	diagram := tui.GetDiagram()
-	lines := strings.Split(output, "\n")
+	nodePositions := tui.GetNodePositions()
+	selectedNode := tui.GetSelectedNode()
+	jumpAction := tui.GetJumpAction()
 	
 	// Save cursor once
 	fmt.Print("\033[s")
 	
-	// Track which boxes we've already labeled
-	labeledBoxes := make(map[string]bool)
-	
-	// For each node with a label, find its box in the output
-	for _, node := range diagram.Nodes {
-		if label, ok := labels[node.ID]; ok && len(node.Text) > 0 {
-			nodeText := node.Text[0]
+	// Draw labels using known positions
+	for nodeID, label := range labels {
+		if pos, ok := nodePositions[nodeID]; ok {
+			// Position at top-left corner of node (offset by 1 for terminal indexing)
+			// Add 1 to position to draw label inside the box corner
+			fmt.Printf("\033[%d;%dH", pos.Y+1, pos.X+2)
 			
-			// Search for this node's box
-			for lineNum := range lines {
-				// Look for the top-left corner in this line
-				if lineNum > 0 && lineNum < len(lines)-1 {
-					line := lines[lineNum]
-					nextLine := lines[lineNum+1]
-					
-					// Check if this line has a box corner and next line has our text
-					for col, r := range []rune(line) {
-						if r == '┌' || r == '┏' || r == '╭' {
-							// Found a corner - check if the text below belongs to our node
-							if strings.Contains(nextLine, nodeText) {
-								// Verify this box hasn't been labeled yet
-								boxKey := fmt.Sprintf("%d,%d", lineNum, col)
-								if !labeledBoxes[boxKey] {
-									// Draw label OVER the corner character
-									fmt.Printf("\033[%d;%dH", lineNum+1, col+1) // Position at corner
-									fmt.Printf("\033[33;1m%c\033[0m", label) // Bright yellow label
-									labeledBoxes[boxKey] = true
-									goto nextNode
-								}
-							}
-						}
-					}
-				}
+			// Determine what to display
+			if jumpAction == editor.JumpActionConnectTo && nodeID == selectedNode {
+				// This is the "FROM" node in connection mode
+				fmt.Printf("\033[32;1mFROM\033[0m") // Green "FROM"
+			} else {
+				// Regular jump label - single character in yellow
+				fmt.Printf("\033[33;1m%c\033[0m", label) // Yellow label
 			}
-		nextNode:
 		}
 	}
 	

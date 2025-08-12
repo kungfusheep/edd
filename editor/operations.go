@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"edd/core"
 	"unicode"
 )
 
@@ -17,6 +18,21 @@ func (e *TUIEditor) GetEddFrame() string {
 // GetJumpLabels returns the current jump labels
 func (e *TUIEditor) GetJumpLabels() map[int]rune {
 	return e.jumpLabels
+}
+
+// GetJumpAction returns the current jump action
+func (e *TUIEditor) GetJumpAction() JumpAction {
+	return e.jumpAction
+}
+
+// GetSelectedNode returns the currently selected node ID
+func (e *TUIEditor) GetSelectedNode() int {
+	return e.selected
+}
+
+// GetNodePositions returns the last rendered node positions
+func (e *TUIEditor) GetNodePositions() map[int]core.Point {
+	return e.nodePositions
 }
 
 // StartAddNode begins adding a new node
@@ -153,9 +169,4 @@ func (e *TUIEditor) GetNodeCount() int {
 // GetConnectionCount returns the number of connections
 func (e *TUIEditor) GetConnectionCount() int {
 	return len(e.diagram.Connections)
-}
-
-// GetSelectedNode returns the currently selected node ID
-func (e *TUIEditor) GetSelectedNode() int {
-	return e.selected
 }

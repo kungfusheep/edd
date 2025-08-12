@@ -115,8 +115,8 @@ func (e *TUIEditor) handleCommandKey(key rune) bool {
 func (e *TUIEditor) handleJumpKey(key rune) bool {
 	// ESC cancels jump
 	if key == 27 {
-		e.jumpLabels = make(map[int]rune)
-		e.jumpAction = JumpActionSelect
+		e.clearJumpLabels()
+		e.SetMode(ModeNormal)
 		return false
 	}
 	
@@ -130,7 +130,8 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 	}
 	
 	// No match - cancel jump
-	e.jumpLabels = make(map[int]rune)
+	e.clearJumpLabels()
+	e.SetMode(ModeNormal)
 	return false
 }
 
@@ -205,7 +206,7 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		e.selected = -1
 	}
 	
-	// Clear jump state
-	e.jumpLabels = make(map[int]rune)
-	e.jumpAction = JumpActionSelect
+	// Clear jump state and return to normal mode
+	e.clearJumpLabels()
+	e.SetMode(ModeNormal)
 }

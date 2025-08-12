@@ -26,21 +26,25 @@ type TUIEditor struct {
 	// Terminal state
 	width  int
 	height int
+	
+	// Node positions from last layout (for jump label positioning)
+	nodePositions map[int]core.Point // Node ID -> position from last render
 }
 
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 	return &TUIEditor{
-		diagram:    &core.Diagram{},
-		renderer:   renderer,
-		mode:       ModeNormal,
-		selected:   -1,
-		jumpLabels: make(map[int]rune),
-		textBuffer: []rune{},
-		cursorPos:  0,
-		edd:        NewEddCharacter(),
-		width:      80,
-		height:     24,
+		diagram:       &core.Diagram{},
+		renderer:      renderer,
+		mode:          ModeNormal,
+		selected:      -1,
+		jumpLabels:    make(map[int]rune),
+		textBuffer:    []rune{},
+		cursorPos:     0,
+		edd:           NewEddCharacter(),
+		width:         80,
+		height:        24,
+		nodePositions: make(map[int]core.Point),
 	}
 }
 
@@ -92,7 +96,17 @@ func (e *TUIEditor) Run() error {
 
 // Render produces the current display output
 func (e *TUIEditor) Render() string {
-	// Get current state for stateless rendering
+	// If we have a real renderer that can provide positions, use it
+	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
+		positions, output, err := realRenderer.RenderWithPositions(e.diagram)
+		if err == nil && positions != nil {
+			// Store node positions for jump label rendering
+			e.nodePositions = positions.Positions
+			return output
+		}
+	}
+	
+	// Fall back to simple rendering
 	state := e.GetState()
 	return RenderTUIWithRenderer(state, e.renderer)
 }

@@ -53,10 +53,23 @@ func NewRealRenderer() *RealRenderer {
 	}
 }
 
+// NodePositions stores the last rendered node positions
+type NodePositions struct {
+	Positions map[int]core.Point // Node ID -> position
+	Offset    core.Point         // Canvas offset used during rendering
+}
+
 // Render implements the core.Renderer interface for TUI
 func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
+	positions, output, err := r.RenderWithPositions(diagram)
+	_ = positions // Will be used by TUI for jump labels
+	return output, err
+}
+
+// RenderWithPositions renders and returns node positions for jump labels
+func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePositions, string, error) {
 	if diagram == nil || len(diagram.Nodes) == 0 {
-		return "", nil
+		return &NodePositions{Positions: make(map[int]core.Point)}, "", nil
 	}
 	
 	// Calculate node dimensions
@@ -65,13 +78,13 @@ func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
 	// Layout
 	layoutNodes, err := r.layout.Layout(nodes, diagram.Connections)
 	if err != nil {
-		return "", fmt.Errorf("layout failed: %w", err)
+		return nil, "", fmt.Errorf("layout failed: %w", err)
 	}
 	
 	// Route connections
 	paths, err := r.router.RouteConnections(diagram.Connections, layoutNodes)
 	if err != nil {
-		return "", fmt.Errorf("routing failed: %w", err)
+		return nil, "", fmt.Errorf("routing failed: %w", err)
 	}
 	
 	// Calculate bounds
@@ -82,6 +95,19 @@ func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
 	
 	// Create offset canvas for negative coordinates
 	offsetCanvas := newOffsetCanvas(c, bounds.Min)
+	
+	// Track node positions (adjusted for canvas offset)
+	positions := &NodePositions{
+		Positions: make(map[int]core.Point),
+		Offset:    bounds.Min,
+	}
+	for _, node := range layoutNodes {
+		// Store the canvas-relative position (after offset adjustment)
+		positions.Positions[node.ID] = core.Point{
+			X: node.X - bounds.Min.X,
+			Y: node.Y - bounds.Min.Y,
+		}
+	}
 	
 	// Render nodes
 	for _, node := range layoutNodes {
@@ -105,7 +131,7 @@ func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
 		}
 	}
 	
-	return c.String(), nil
+	return positions, c.String(), nil
 }
 
 // Helper functions from renderer.go
