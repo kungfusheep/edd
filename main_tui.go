@@ -120,6 +120,14 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		// Then draw Ed on top (so he doesn't get overwritten)
 		drawEd(tui)
 		
+		// Position cursor if in edit mode
+		if tui.GetMode() == editor.ModeEdit || tui.GetMode() == editor.ModeInsert {
+			positionCursor(tui)
+		} else {
+			// Hide cursor when not editing
+			fmt.Print("\033[?25l")
+		}
+		
 		// Handle input or animation
 		select {
 		case key := <-keyChan:
@@ -150,6 +158,34 @@ func readSingleKey() rune {
 	var b [1]byte
 	os.Stdin.Read(b[:])
 	return rune(b[0])
+}
+
+func positionCursor(tui *editor.TUIEditor) {
+	// Get the node being edited
+	selectedNode := tui.GetSelectedNode()
+	if selectedNode < 0 {
+		return
+	}
+	
+	// Get node positions
+	positions := tui.GetNodePositions()
+	pos, ok := positions[selectedNode]
+	if !ok {
+		return
+	}
+	
+	// Get cursor position in text
+	state := tui.GetState()
+	cursorPos := state.CursorPos
+	
+	// Calculate actual cursor position on screen
+	// Node text starts at X+2, Y+1 (inside the box)
+	cursorX := pos.X + 2 + cursorPos + 1 // +1 for terminal indexing
+	cursorY := pos.Y + 1 + 1              // +1 for terminal indexing
+	
+	// Move cursor to position and show it
+	fmt.Printf("\033[%d;%dH", cursorY, cursorX)
+	fmt.Print("\033[?25h") // Show cursor
 }
 
 func drawJumpLabels(tui *editor.TUIEditor, output string) {

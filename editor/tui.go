@@ -3,6 +3,7 @@ package editor
 import (
 	"edd/core"
 	"fmt"
+	"slices"
 )
 
 // TUIEditor represents the interactive terminal UI editor
@@ -210,7 +211,7 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 	// Remove node
 	for i, node := range e.diagram.Nodes {
 		if node.ID == nodeID {
-			e.diagram.Nodes = append(e.diagram.Nodes[:i], e.diagram.Nodes[i+1:]...)
+			e.diagram.Nodes = slices.Delete(e.diagram.Nodes, i, i+1)
 			break
 		}
 	}

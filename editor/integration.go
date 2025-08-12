@@ -111,7 +111,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 		for i := range layoutNodes {
 			if layoutNodes[i].ID == r.editingNodeID {
 				// Recalculate width for edit text
-				minWidth := len([]rune(r.editText)) + 5  // text + cursor + padding
+				minWidth := len([]rune(r.editText)) + 4  // text + padding (no cursor char)
 				if minWidth < 8 {
 					minWidth = 8
 				}
@@ -266,22 +266,10 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *rendering
 			cursorPos = len(runes)
 		}
 		
-		// Draw text before cursor
-		for i := 0; i < cursorPos && i < len(runes); i++ {
+		// Draw all text (no cursor character needed - using terminal cursor)
+		for i := 0; i < len(runes); i++ {
 			if x+i < node.X+node.Width-2 {
 				c.Set(core.Point{X: x + i, Y: y}, runes[i])
-			}
-		}
-		
-		// Draw cursor
-		if x+cursorPos < node.X+node.Width-2 {
-			c.Set(core.Point{X: x + cursorPos, Y: y}, '│')
-		}
-		
-		// Draw text after cursor
-		for i := cursorPos; i < len(runes); i++ {
-			if x+i+1 < node.X+node.Width-2 {
-				c.Set(core.Point{X: x + i + 1, Y: y}, runes[i])
 			}
 		}
 	} else {
