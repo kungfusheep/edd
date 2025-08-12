@@ -12,6 +12,8 @@ import (
 func main() {
 	// Define command line flags
 	var (
+		interactive   = flag.Bool("i", false, "Interactive TUI mode")
+		edit          = flag.Bool("edit", false, "Edit diagram in TUI (same as -i)")
 		validate      = flag.Bool("validate", false, "Run validation on the output")
 		debug         = flag.Bool("debug", false, "Show debug visualization with obstacles and ports")
 		showObstacles = flag.Bool("show-obstacles", false, "Show virtual obstacles as dots in standard rendering")
@@ -19,13 +21,14 @@ func main() {
 	)
 	
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] <diagram.json>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] [diagram.json]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "A modular diagram renderer that converts JSON diagrams to ASCII/Unicode art.\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExample:\n")
-		fmt.Fprintf(os.Stderr, "  %s diagram.json\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s -validate diagram.json\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  %s                    # Start interactive TUI\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s diagram.json       # Render diagram to stdout\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -i diagram.json    # Edit diagram in TUI\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -debug diagram.json\n", os.Args[0])
 	}
 	
@@ -36,16 +39,31 @@ func main() {
 		os.Exit(0)
 	}
 	
-	// Check for input file
+	// Get filename if provided
 	args := flag.Args()
-	if len(args) != 1 {
+	var filename string
+	if len(args) > 0 {
+		filename = args[0]
+	}
+	
+	// Handle interactive mode
+	if *interactive || *edit || (len(args) == 0 && !*validate && !*debug && !*showObstacles) {
+		// Launch TUI
+		if err := RunInteractive(filename); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	
+	// Non-interactive mode requires a file
+	if filename == "" {
 		fmt.Fprintf(os.Stderr, "Error: Please provide a diagram JSON file\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
 	
 	// Read the diagram file
-	filename := args[0]
 	diagram, err := loadDiagram(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading diagram: %v\n", err)

@@ -1,0 +1,357 @@
+package main
+
+import (
+	"edd/core"
+	"edd/editor"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"strings"
+	"syscall"
+	"time"
+	"unsafe"
+)
+
+// RunInteractive launches the TUI editor
+func RunInteractive(filename string) error {
+	// Create the real renderer
+	renderer := editor.NewRealRenderer()
+	
+	// Create TUI editor
+	tui := editor.NewTUIEditor(renderer)
+	
+	// Load diagram if filename provided
+	if filename != "" {
+		diagram, err := loadDiagramFile(filename)
+		if err != nil {
+			return fmt.Errorf("failed to load diagram: %w", err)
+		}
+		tui.SetDiagram(diagram)
+	}
+	
+	// Setup terminal
+	if err := setupTerminal(); err != nil {
+		return fmt.Errorf("failed to setup terminal: %w", err)
+	}
+	defer restoreTerminal()
+	
+	// Run the interactive loop
+	return runInteractiveLoop(tui, filename)
+}
+
+func loadDiagramFile(filename string) (*core.Diagram, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	
+	var diagram core.Diagram
+	if err := json.Unmarshal(data, &diagram); err != nil {
+		return nil, err
+	}
+	
+	return &diagram, nil
+}
+
+func saveDiagramFile(filename string, diagram *core.Diagram) error {
+	data, err := json.MarshalIndent(diagram, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	return ioutil.WriteFile(filename, data, 0644)
+}
+
+func setupTerminal() error {
+	// Put terminal in raw mode
+	cmd := exec.Command("stty", "-echo", "cbreak", "min", "1")
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
+func restoreTerminal() {
+	// Restore terminal settings
+	cmd := exec.Command("stty", "echo", "-cbreak")
+	cmd.Stdin = os.Stdin
+	cmd.Run()
+	fmt.Print("\033[?25h") // Show cursor
+}
+
+func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
+	// Initial clear and hide cursor
+	fmt.Print("\033[2J\033[H\033[?25l")
+	
+	// Get terminal size
+	width, height := getTerminalSize()
+	tui.SetTerminalSize(width, height)
+	
+	// Create a channel for keyboard input
+	keyChan := make(chan rune)
+	go func() {
+		for {
+			keyChan <- readSingleKey()
+		}
+	}()
+	
+	// Animation ticker - update Ed every 200ms
+	animTicker := time.NewTicker(200 * time.Millisecond)
+	defer animTicker.Stop()
+	
+	// Main render loop
+	for {
+		// Move cursor to home and clear everything
+		fmt.Print("\033[H")       // Move cursor to home position (0,0)
+		fmt.Print("\033[2J")      // Clear entire screen
+		
+		// Render current state
+		output := tui.Render()
+		fmt.Print(output)
+		
+		// Position and draw Ed separately using ANSI codes
+		drawEd(tui)
+		
+		// Show status line
+		showStatusLine(tui, filename)
+		
+		// Handle input or animation
+		select {
+		case key := <-keyChan:
+			// Handle key
+			switch tui.GetMode() {
+			case editor.ModeNormal:
+				if handleNormalMode(tui, key, &filename) {
+					return nil // Exit requested
+				}
+			case editor.ModeInsert, editor.ModeEdit:
+				handleTextMode(tui, key)
+			case editor.ModeJump:
+				handleJumpMode(tui, key)
+			case editor.ModeCommand:
+				if handleCommandMode(tui, key, &filename) {
+					return nil // Exit requested
+				}
+			}
+			
+		case <-animTicker.C:
+			// Animate Ed
+			tui.AnimateEd()
+		}
+	}
+}
+
+func readSingleKey() rune {
+	var b [1]byte
+	os.Stdin.Read(b[:])
+	return rune(b[0])
+}
+
+func drawEd(tui *editor.TUIEditor) {
+	// Draw Ed in bottom-right corner using ANSI positioning
+	mode := tui.GetMode()
+	frame := tui.GetEddFrame()
+	
+	// Determine color based on mode
+	var color string
+	switch mode {
+	case editor.ModeNormal:
+		color = "\033[36m" // Cyan
+	case editor.ModeInsert:
+		color = "\033[32m" // Green
+	case editor.ModeEdit:
+		color = "\033[33m" // Yellow
+	case editor.ModeJump:
+		color = "\033[35m" // Magenta
+	case editor.ModeCommand:
+		color = "\033[34m" // Blue
+	default:
+		color = "\033[37m" // White
+	}
+	reset := "\033[0m"
+	
+	// Position and draw Ed's box
+	// Line 1: Top of box
+	fmt.Print("\033[s")                     // Save cursor
+	fmt.Print("\033[999;999H\033[3A\033[20D") // Bottom-right, up 3, left 20
+	fmt.Printf("%s╭─────╮%s", color, reset)
+	
+	// Line 2: Ed's face
+	fmt.Print("\033[999;999H\033[2A\033[20D") // Bottom-right, up 2, left 20
+	fmt.Printf("%s│%s│%s %s", color, frame, reset, mode)
+	
+	// Line 3: Bottom of box
+	fmt.Print("\033[999;999H\033[1A\033[20D") // Bottom-right, up 1, left 20
+	fmt.Printf("%s╰─────╯%s", color, reset)
+	
+	fmt.Print("\033[u")                     // Restore cursor
+}
+
+func showStatusLine(tui *editor.TUIEditor, filename string) {
+	// Move to bottom of screen
+	fmt.Print("\033[999;1H") // Move to bottom
+	fmt.Print("\033[K")       // Clear line
+	
+	// Show filename and mode
+	if filename != "" {
+		fmt.Printf("[ %s ] ", filename)
+	} else {
+		fmt.Print("[ untitled ] ")
+	}
+	
+	// Show node/connection count
+	diagram := tui.GetDiagram()
+	fmt.Printf("Nodes: %d | Connections: %d | Mode: %s",
+		len(diagram.Nodes),
+		len(diagram.Connections),
+		tui.GetMode())
+}
+
+func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
+	switch key {
+	case 'q', 3: // q or Ctrl+C
+		return true // Exit
+	case 'a': // Add node
+		tui.StartAddNode()
+	case 'c': // Connect
+		tui.StartConnect()
+	case 'd': // Delete
+		tui.StartDelete()
+	case 'e': // Edit
+		tui.StartEdit()
+	case ':': // Command mode
+		tui.StartCommand()
+	case '?', 'h': // Help
+		showHelp()
+	}
+	return false
+}
+
+func handleTextMode(tui *editor.TUIEditor, key rune) {
+	tui.HandleTextInput(key)
+}
+
+func handleJumpMode(tui *editor.TUIEditor, key rune) {
+	tui.HandleJumpInput(key)
+}
+
+func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
+	if key == 13 || key == 10 { // Enter
+		cmd := tui.GetCommand()
+		
+		// Parse command
+		parts := strings.Fields(cmd)
+		if len(parts) > 0 {
+			switch parts[0] {
+			case "w", "write", "save":
+				if *filename == "" && len(parts) > 1 {
+					*filename = parts[1]
+				}
+				if *filename != "" {
+					if err := saveDiagramFile(*filename, tui.GetDiagram()); err != nil {
+						fmt.Printf("\nError saving: %v", err)
+					} else {
+						fmt.Printf("\nSaved to %s", *filename)
+					}
+				}
+			case "q", "quit":
+				return true
+			case "wq":
+				if *filename != "" {
+					saveDiagramFile(*filename, tui.GetDiagram())
+				}
+				return true
+			}
+		}
+		
+		tui.ClearCommand()
+		tui.SetMode(editor.ModeNormal)
+	} else {
+		tui.HandleCommandInput(key)
+	}
+	
+	return false
+}
+
+// Terminal size constants for Darwin/macOS
+const TIOCGWINSZ = 0x40087468
+
+// winsize struct for ioctl
+type winsize struct {
+	Row    uint16
+	Col    uint16
+	Xpixel uint16
+	Ypixel uint16
+}
+
+func getTerminalSize() (int, int) {
+	// Use ioctl to get actual terminal size
+	ws := &winsize{}
+	retCode, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(syscall.Stdout),
+		uintptr(syscall.TIOCGWINSZ),
+		uintptr(unsafe.Pointer(ws)))
+	
+	if int(retCode) == -1 {
+		// Try stderr or stdin
+		retCode, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
+			uintptr(syscall.Stderr),
+			uintptr(syscall.TIOCGWINSZ),
+			uintptr(unsafe.Pointer(ws)))
+		
+		if int(retCode) == -1 {
+			retCode, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
+				uintptr(syscall.Stdin),
+				uintptr(syscall.TIOCGWINSZ),
+				uintptr(unsafe.Pointer(ws)))
+			
+			if int(retCode) == -1 {
+				// Last resort: try environment variables
+				if cols := os.Getenv("COLUMNS"); cols != "" {
+					if lines := os.Getenv("LINES"); lines != "" {
+						var c, l int
+						fmt.Sscanf(cols, "%d", &c)
+						fmt.Sscanf(lines, "%d", &l)
+						if c > 0 && l > 0 {
+							return c, l
+						}
+					}
+				}
+				// Fallback
+				_ = errno // avoid unused variable warning
+				return 80, 24
+			}
+		}
+	}
+	
+	return int(ws.Col), int(ws.Row)
+}
+
+func showHelp() {
+	fmt.Print("\033[2J\033[H") // Clear screen and move to home
+	fmt.Println("EDD Interactive Editor")
+	fmt.Println("═══════════════════════")
+	fmt.Println()
+	fmt.Println("Normal Mode Commands:")
+	fmt.Println("  a     - Add new node")
+	fmt.Println("  c     - Connect nodes (with jump labels)")
+	fmt.Println("  d     - Delete node (with jump labels)")
+	fmt.Println("  e     - Edit node text (with jump labels)")
+	fmt.Println("  q     - Quit")
+	fmt.Println("  :     - Command mode")
+	fmt.Println()
+	fmt.Println("Command Mode:")
+	fmt.Println("  :w [file]  - Save diagram")
+	fmt.Println("  :q         - Quit")
+	fmt.Println("  :wq        - Save and quit")
+	fmt.Println()
+	fmt.Println("Text Editing:")
+	fmt.Println("  ESC   - Exit to normal mode")
+	fmt.Println("  Enter - Confirm text")
+	fmt.Println()
+	fmt.Println("Press any key to continue...")
+	readSingleKey()
+	
+	// Clear screen completely after help is dismissed
+	fmt.Print("\033[2J\033[H")
+}
