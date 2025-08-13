@@ -12,10 +12,11 @@ type TUIEditor struct {
 	renderer DiagramRenderer
 
 	// UI State (minimal!)
-	mode       Mode
-	selected   int            // Currently selected node ID (-1 for none)
-	jumpLabels map[int]rune   // Node ID -> jump label mapping
-	jumpAction JumpAction     // What to do after jump selection
+	mode             Mode
+	selected         int            // Currently selected node ID (-1 for none)
+	jumpLabels       map[int]rune   // Node ID -> jump label mapping
+	connectionLabels map[int]rune   // Connection index -> jump label mapping
+	jumpAction       JumpAction     // What to do after jump selection
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -29,25 +30,28 @@ type TUIEditor struct {
 	width  int
 	height int
 	
-	// Node positions from last layout (for jump label positioning)
-	nodePositions map[int]core.Point // Node ID -> position from last render
+	// Positions from last layout (for jump label positioning)
+	nodePositions       map[int]core.Point // Node ID -> position from last render
+	connectionPaths     map[int]core.Path  // Connection index -> path from last render
 }
 
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 	return &TUIEditor{
-		diagram:       &core.Diagram{},
-		renderer:      renderer,
-		mode:          ModeNormal,
-		selected:      -1,
-		jumpLabels:    make(map[int]rune),
-		textBuffer:    []rune{},
-		commandBuffer: []rune{},
-		cursorPos:     0,
-		edd:           NewEddCharacter(),
-		width:         80,
-		height:        24,
-		nodePositions: make(map[int]core.Point),
+		diagram:          &core.Diagram{},
+		renderer:         renderer,
+		mode:             ModeNormal,
+		selected:         -1,
+		jumpLabels:       make(map[int]rune),
+		connectionLabels: make(map[int]rune),
+		textBuffer:       []rune{},
+		commandBuffer:    []rune{},
+		cursorPos:        0,
+		edd:              NewEddCharacter(),
+		width:            80,
+		height:           24,
+		nodePositions:    make(map[int]core.Point),
+		connectionPaths:  make(map[int]core.Path),
 	}
 }
 
@@ -110,8 +114,9 @@ func (e *TUIEditor) Render() string {
 		
 		positions, output, err := realRenderer.RenderWithPositions(e.diagram)
 		if err == nil && positions != nil {
-			// Store node positions for jump label rendering
+			// Store node positions and connection paths for jump label rendering
 			e.nodePositions = positions.Positions
+			e.connectionPaths = positions.ConnectionPaths
 			return output
 		}
 		// If there was an error, fall through to simple rendering
@@ -234,6 +239,16 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		Label: label,
 	}
 	e.diagram.Connections = append(e.diagram.Connections, conn)
+}
+
+// DeleteConnection removes a connection by index
+func (e *TUIEditor) DeleteConnection(index int) {
+	if index >= 0 && index < len(e.diagram.Connections) {
+		e.diagram.Connections = append(
+			e.diagram.Connections[:index],
+			e.diagram.Connections[index+1:]...,
+		)
+	}
 }
 
 // UpdateNodeText updates the text of a node

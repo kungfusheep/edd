@@ -10,18 +10,33 @@ func (e *TUIEditor) startJump(action JumpAction) {
 	e.SetMode(ModeJump)
 }
 
-// assignJumpLabels assigns single-character labels to nodes
+// assignJumpLabels assigns single-character labels to nodes and connections
 func (e *TUIEditor) assignJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
+	e.connectionLabels = make(map[int]rune)
+	
+	labelIndex := 0
 	
 	// Assign labels to nodes
-	for i, node := range e.diagram.Nodes {
-		if i < len(jumpChars) {
-			e.jumpLabels[node.ID] = rune(jumpChars[i])
+	for _, node := range e.diagram.Nodes {
+		if labelIndex < len(jumpChars) {
+			e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
+			labelIndex++
 		} else {
-			// If we have more nodes than single chars, use double chars
-			// For now, just skip extra nodes
 			break
+		}
+	}
+	
+	// If in delete mode, also assign labels to connections
+	if e.jumpAction == JumpActionDelete {
+		// Use index-based iteration to ensure consistent ordering
+		for i := 0; i < len(e.diagram.Connections); i++ {
+			if labelIndex < len(jumpChars) {
+				e.connectionLabels[i] = rune(jumpChars[labelIndex])
+				labelIndex++
+			} else {
+				break
+			}
 		}
 	}
 }
@@ -37,5 +52,6 @@ func (e *TUIEditor) getJumpLabel(nodeID int) string {
 // clearJumpLabels clears all jump labels
 func (e *TUIEditor) clearJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
+	e.connectionLabels = make(map[int]rune)
 	e.jumpAction = JumpActionSelect
 }

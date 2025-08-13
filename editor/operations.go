@@ -20,6 +20,11 @@ func (e *TUIEditor) GetJumpLabels() map[int]rune {
 	return e.jumpLabels
 }
 
+// GetConnectionLabels returns the current connection jump labels
+func (e *TUIEditor) GetConnectionLabels() map[int]rune {
+	return e.connectionLabels
+}
+
 // GetJumpAction returns the current jump action
 func (e *TUIEditor) GetJumpAction() JumpAction {
 	return e.jumpAction
@@ -33,6 +38,11 @@ func (e *TUIEditor) GetSelectedNode() int {
 // GetNodePositions returns the last rendered node positions
 func (e *TUIEditor) GetNodePositions() map[int]core.Point {
 	return e.nodePositions
+}
+
+// GetConnectionPaths returns the last rendered connection paths
+func (e *TUIEditor) GetConnectionPaths() map[int]core.Path {
+	return e.connectionPaths
 }
 
 // StartAddNode begins adding a new node
@@ -99,25 +109,11 @@ func (e *TUIEditor) HandleTextInput(key rune) {
 	}
 }
 
-// HandleJumpInput processes jump label selection
+// HandleJumpInput processes jump label selection for both nodes and connections
 func (e *TUIEditor) HandleJumpInput(key rune) {
-	if key == 27 { // ESC cancels
-		e.clearJumpLabels()
-		e.SetMode(ModeNormal)
-		return
-	}
-	
-	// Look for matching label
-	for nodeID, label := range e.jumpLabels {
-		if label == key {
-			e.executeJumpAction(nodeID)
-			return
-		}
-	}
-	
-	// No match - cancel
-	e.clearJumpLabels()
-	e.SetMode(ModeNormal)
+	// This is the public method that should handle both nodes and connections
+	// It delegates to the internal handleJumpKey which has the full logic
+	e.handleJumpKey(key)
 }
 
 // HandleCommandInput processes command mode input

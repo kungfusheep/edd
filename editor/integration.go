@@ -81,10 +81,11 @@ func NewRealRenderer() *RealRenderer {
 	}
 }
 
-// NodePositions stores the last rendered node positions
+// NodePositions stores the last rendered node positions and connection paths
 type NodePositions struct {
-	Positions map[int]core.Point // Node ID -> position
-	Offset    core.Point         // Canvas offset used during rendering
+	Positions        map[int]core.Point // Node ID -> position
+	ConnectionPaths  map[int]core.Path  // Connection index -> path
+	Offset           core.Point         // Canvas offset used during rendering
 }
 
 // Render implements the core.Renderer interface for TUI
@@ -139,10 +140,11 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	// Create offset canvas for negative coordinates
 	offsetCanvas := newOffsetCanvas(c, bounds.Min)
 	
-	// Track node positions (adjusted for canvas offset)
+	// Track node positions and connection paths (adjusted for canvas offset)
 	positions := &NodePositions{
-		Positions: make(map[int]core.Point),
-		Offset:    bounds.Min,
+		Positions:       make(map[int]core.Point),
+		ConnectionPaths: make(map[int]core.Path),
+		Offset:          bounds.Min,
 	}
 	for _, node := range layoutNodes {
 		// Store the canvas-relative position (after offset adjustment)
@@ -150,6 +152,20 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 			X: node.X - bounds.Min.X,
 			Y: node.Y - bounds.Min.Y,
 		}
+	}
+	
+	// Store connection paths (adjusted for offset)
+	for i, path := range paths {
+		adjustedPath := core.Path{
+			Points: make([]core.Point, len(path.Points)),
+		}
+		for j, point := range path.Points {
+			adjustedPath.Points[j] = core.Point{
+				X: point.X - bounds.Min.X,
+				Y: point.Y - bounds.Min.Y,
+			}
+		}
+		positions.ConnectionPaths[i] = adjustedPath
 	}
 	
 	// Render nodes

@@ -111,12 +111,25 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		return false
 	}
 	
-	// Look for matching jump label
+	// Look for matching node jump label
 	for nodeID, label := range e.jumpLabels {
 		if label == key {
 			// Found match - execute jump action
 			e.executeJumpAction(nodeID)
 			return false
+		}
+	}
+	
+	// Look for matching connection jump label (only in delete mode)
+	if e.jumpAction == JumpActionDelete {
+		for connIndex, label := range e.connectionLabels {
+			if label == key {
+				// Delete the connection
+				e.DeleteConnection(connIndex)
+				e.clearJumpLabels()
+				e.SetMode(ModeNormal)
+				return false
+			}
 		}
 	}
 	
