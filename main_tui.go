@@ -5,10 +5,12 @@ import (
 	"edd/core"
 	"edd/editor"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -65,6 +67,189 @@ func saveDiagramFile(filename string, diagram *core.Diagram) error {
 	return ioutil.WriteFile(filename, data, 0644)
 }
 
+// validateDiagram checks if a diagram has valid structure
+func validateDiagram(d *core.Diagram) error {
+	// Check for duplicate node IDs
+	nodeIDs := make(map[int]bool)
+	for _, node := range d.Nodes {
+		if nodeIDs[node.ID] {
+			return fmt.Errorf("duplicate node ID: %d", node.ID)
+		}
+		nodeIDs[node.ID] = true
+	}
+
+	// Check that connections reference valid nodes
+	for i, conn := range d.Connections {
+		if !nodeIDs[conn.From] {
+			return fmt.Errorf("connection %d references non-existent 'from' node: %d", i, conn.From)
+		}
+		if !nodeIDs[conn.To] {
+			return fmt.Errorf("connection %d references non-existent 'to' node: %d", i, conn.To)
+		}
+	}
+
+	return nil
+}
+
+// launchExternalEditor opens the diagram in the user's $EDITOR
+func launchExternalEditor(tui *editor.TUIEditor) error {
+	// Get the editor from environment
+	editorCmd := os.Getenv("EDITOR")
+	if editorCmd == "" {
+		editorCmd = os.Getenv("VISUAL")
+	}
+	if editorCmd == "" {
+		// Try common defaults
+		if _, err := exec.LookPath("vim"); err == nil {
+			editorCmd = "vim"
+		} else if _, err := exec.LookPath("nano"); err == nil {
+			editorCmd = "nano"
+		} else if _, err := exec.LookPath("vi"); err == nil {
+			editorCmd = "vi"
+		} else {
+			return fmt.Errorf("no editor found. Please set $EDITOR environment variable")
+		}
+	}
+
+	// Create a temporary file for editing
+	tmpFile, err := ioutil.TempFile("", "edd-edit-*.json")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpFileName := tmpFile.Name()
+	defer os.Remove(tmpFileName) // Clean up after we're done
+
+	// Write current diagram to temp file
+	diagram := tui.GetDiagram()
+	data, err := json.MarshalIndent(diagram, "", "  ")
+	if err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to marshal diagram: %w", err)
+	}
+
+	// Write data and ensure it's flushed to disk
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	
+	// Add newline at end of file (some editors expect this)
+	tmpFile.Write([]byte("\n"))
+	
+	// Ensure all data is written to disk
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	// Store original file stats to detect changes
+	originalStat, err := os.Stat(tmpFileName)
+	if err != nil {
+		return fmt.Errorf("failed to stat temp file: %w", err)
+	}
+
+	// First, completely clean the terminal state
+	// Exit alternate screen
+	fmt.Print("\033[?1049l")
+	
+	// Clear screen and reset cursor
+	fmt.Print("\033[2J")       // Clear entire screen
+	fmt.Print("\033[H")        // Move cursor to home
+	fmt.Print("\033[0m")       // Reset all attributes
+	fmt.Print("\033[?25h")     // Show cursor
+	
+	// Restore terminal settings
+	restoreTerminal()
+	
+	// Ensure everything is flushed
+	os.Stdout.Sync()
+	
+	// Small delay for terminal to process
+	time.Sleep(50 * time.Millisecond)
+
+	// Launch the editor
+	cmd := exec.Command(editorCmd, tmpFileName)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		// Re-setup terminal even if editor failed
+		setupTerminal()
+		// Re-enter alternate screen
+		fmt.Print("\033[?1049h\033[2J\033[H\033[?25l")
+		return fmt.Errorf("editor failed: %w", err)
+	}
+
+	// Check if file was actually modified
+	newStat, err := os.Stat(tmpFileName)
+	if err != nil {
+		setupTerminal()
+		fmt.Print("\033[?1049h\033[2J\033[H\033[?25l")
+		return fmt.Errorf("failed to stat edited file: %w", err)
+	}
+
+	// Re-setup terminal after editor exits
+	if err := setupTerminal(); err != nil {
+		fmt.Print("\033[?1049h\033[2J\033[H\033[?25l")
+		return fmt.Errorf("failed to re-setup terminal: %w", err)
+	}
+
+	// Re-enter alternate screen and clear
+	fmt.Print("\033[?1049h\033[2J\033[H\033[?25l")
+
+	// If file wasn't modified, just return
+	if originalStat.ModTime().Equal(newStat.ModTime()) {
+		// File wasn't changed, no need to parse
+		return nil
+	}
+
+	// Read the edited file
+	editedData, err := ioutil.ReadFile(tmpFileName)
+	if err != nil {
+		return fmt.Errorf("failed to read edited file: %w", err)
+	}
+
+	// Trim any trailing whitespace that might cause issues
+	editedData = bytes.TrimSpace(editedData)
+	
+	// If the file is empty after trimming, user cleared it - ignore
+	if len(editedData) == 0 {
+		return nil
+	}
+
+	// Parse the edited JSON
+	var editedDiagram core.Diagram
+	if err := json.Unmarshal(editedData, &editedDiagram); err != nil {
+		// Save the invalid JSON for debugging
+		debugFile := filepath.Join(os.TempDir(), "edd-invalid.json")
+		ioutil.WriteFile(debugFile, editedData, 0644)
+		
+		// Try to provide more helpful error message
+		var syntaxErr *json.SyntaxError
+		if errors.As(err, &syntaxErr) {
+			// Calculate line and column
+			lines := bytes.Split(editedData[:syntaxErr.Offset], []byte("\n"))
+			line := len(lines)
+			col := len(lines[line-1]) + 1
+			return fmt.Errorf("JSON syntax error at line %d, column %d: %v (saved to %s)", 
+				line, col, err, debugFile)
+		}
+		return fmt.Errorf("invalid JSON after editing: %w (saved to %s)", err, debugFile)
+	}
+
+	// Validate the diagram has valid structure
+	if err := validateDiagram(&editedDiagram); err != nil {
+		return fmt.Errorf("invalid diagram structure: %w", err)
+	}
+
+	// Update the diagram
+	tui.SetDiagram(&editedDiagram)
+
+	return nil
+}
+
 func setupTerminal() error {
 	// Put terminal in raw mode
 	cmd := exec.Command("stty", "-echo", "cbreak", "min", "1")
@@ -73,11 +258,10 @@ func setupTerminal() error {
 }
 
 func restoreTerminal() {
-	// Restore terminal settings
-	cmd := exec.Command("stty", "echo", "-cbreak")
+	// Restore terminal to cooked mode with echo
+	cmd := exec.Command("stty", "echo", "cooked")
 	cmd.Stdin = os.Stdin
 	cmd.Run()
-	fmt.Print("\033[?25h") // Show cursor
 }
 
 func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
@@ -494,10 +678,18 @@ func showStatusLine(tui *editor.TUIEditor, filename string) {
 			}
 		}
 		
-		fmt.Printf("Nodes: %d | Connections: %d | Mode: %s",
+		// Get history status
+		histCurrent, histTotal := tui.GetHistoryStats()
+		historyStr := ""
+		if histTotal > 1 {
+			historyStr = fmt.Sprintf(" | History: %d/%d", histCurrent, histTotal)
+		}
+		
+		fmt.Printf("Nodes: %d | Connections: %d | Mode: %s%s",
 			len(diagram.Nodes),
 			len(diagram.Connections),
-			modeStr)
+			modeStr,
+			historyStr)
 	}
 }
 
@@ -517,8 +709,23 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		tui.StartContinuousDelete()
 	case 'e': // Edit
 		tui.StartEdit()
+	case 'E': // Edit in external editor
+		// Show loading message
+		fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
+		fmt.Print("\033[93mLaunching external editor...\033[0m")
+		
+		if err := launchExternalEditor(tui); err != nil {
+			// Show error briefly
+			fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
+			fmt.Printf("\033[91mError: %v\033[0m", err)
+			time.Sleep(2 * time.Second)
+		}
 	case 'j': // JSON view
 		tui.SetMode(editor.ModeJSON)
+	case 'u': // Undo
+		tui.Undo()
+	case 18: // Ctrl+R for redo
+		tui.Redo()
 	case ':': // Command mode
 		tui.StartCommand()
 	case '?', 'h': // Help
@@ -536,7 +743,25 @@ func handleJumpMode(tui *editor.TUIEditor, key rune) {
 }
 
 func handleJSONMode(tui *editor.TUIEditor, key rune) {
-	// The TUI editor handles JSON mode keys internally
+	// Handle 'E' for external editor from JSON mode
+	if key == 'E' {
+		// Exit JSON mode first
+		tui.SetMode(editor.ModeNormal)
+		
+		// Show loading message
+		fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
+		fmt.Print("\033[93mLaunching external editor...\033[0m")
+		
+		if err := launchExternalEditor(tui); err != nil {
+			// Show error briefly
+			fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
+			fmt.Printf("\033[91mError: %v\033[0m", err)
+			time.Sleep(2 * time.Second)
+		}
+		return
+	}
+	
+	// The TUI editor handles other JSON mode keys internally
 	tui.HandleJSONInput(key)
 }
 
@@ -644,7 +869,10 @@ func showHelp() {
 	fmt.Println("  d     - Delete node/connection (single)")
 	fmt.Println("  D     - Delete node/connection (continuous)")
 	fmt.Println("  e     - Edit node/connection text")
+	fmt.Println("  E     - Edit JSON in $EDITOR")
 	fmt.Println("  j     - Toggle JSON view")
+	fmt.Println("  u     - Undo")
+	fmt.Println("  Ctrl+R - Redo")
 	fmt.Println("  q     - Quit")
 	fmt.Println("  :     - Command mode")
 	fmt.Println()
@@ -663,6 +891,7 @@ func showHelp() {
 	fmt.Println("  J       - Scroll down")
 	fmt.Println("  g       - Go to top")
 	fmt.Println("  G       - Go to bottom")
+	fmt.Println("  E       - Edit in $EDITOR")
 	fmt.Println()
 	fmt.Println("Press any key to continue...")
 	readSingleKey()

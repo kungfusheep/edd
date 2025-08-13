@@ -41,11 +41,14 @@ type TUIEditor struct {
 	
 	// JSON view state
 	jsonScrollOffset    int  // Current scroll position in JSON view
+	
+	// History management
+	history            *SimpleHistory  // Undo/redo history
 }
 
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
-	return &TUIEditor{
+	editor := &TUIEditor{
 		diagram:            &core.Diagram{},
 		renderer:           renderer,
 		mode:               ModeNormal,
@@ -64,12 +67,20 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		continuousConnect:  false,
 		continuousDelete:   false,
 		jsonScrollOffset:   0,
+		history:            NewSimpleHistory(50), // 50 states max
 	}
+	
+	// Save initial empty state
+	editor.history.SaveState(editor.diagram)
+	
+	return editor
 }
 
 // SetDiagram sets the diagram to edit
 func (e *TUIEditor) SetDiagram(d *core.Diagram) {
 	e.diagram = d
+	// Save this as a new state in history
+	e.history.SaveState(d)
 }
 
 // GetDiagram returns the current diagram
@@ -227,6 +238,10 @@ func (e *TUIEditor) AddNode(text []string) int {
 	}
 
 	e.diagram.Nodes = append(e.diagram.Nodes, newNode)
+	
+	// Save to history after modification
+	e.SaveHistory()
+	
 	return newNode.ID
 }
 
@@ -248,6 +263,9 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 		}
 	}
 	e.diagram.Connections = newConnections
+	
+	// Save to history after modification
+	e.SaveHistory()
 }
 
 // AddConnection adds a connection between two nodes
@@ -258,6 +276,9 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		Label: label,
 	}
 	e.diagram.Connections = append(e.diagram.Connections, conn)
+	
+	// Save to history after modification
+	e.SaveHistory()
 }
 
 // DeleteConnection removes a connection by index
@@ -267,6 +288,9 @@ func (e *TUIEditor) DeleteConnection(index int) {
 			e.diagram.Connections[:index],
 			e.diagram.Connections[index+1:]...,
 		)
+		
+		// Save to history after modification
+		e.SaveHistory()
 	}
 }
 
@@ -278,6 +302,9 @@ func (e *TUIEditor) UpdateNodeText(nodeID int, text []string) {
 			break
 		}
 	}
+	
+	// Save to history after modification
+	e.SaveHistory()
 }
 
 // StartEditingConnection begins editing a connection's label
@@ -301,6 +328,9 @@ func (e *TUIEditor) StartEditingConnection(connIndex int) {
 func (e *TUIEditor) UpdateConnectionLabel(connIndex int, label string) {
 	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
 		e.diagram.Connections[connIndex].Label = label
+		
+		// Save to history after modification
+		e.SaveHistory()
 	}
 }
 
@@ -374,4 +404,36 @@ func (e *TUIEditor) GetJSONScrollOffset() int {
 func (e *TUIEditor) ScrollJSON(delta int) {
 	e.jsonScrollOffset += delta
 	// Bounds checking will be done in renderJSON
+}
+
+// Undo undoes the last action
+func (e *TUIEditor) Undo() {
+	if diagram, err := e.history.Undo(); err == nil && diagram != nil {
+		e.diagram = diagram
+		// Clear any selection
+		e.selected = -1
+		e.selectedConnection = -1
+		e.clearJumpLabels()
+	}
+}
+
+// Redo redoes the next action
+func (e *TUIEditor) Redo() {
+	if diagram, err := e.history.Redo(); err == nil && diagram != nil {
+		e.diagram = diagram
+		// Clear any selection
+		e.selected = -1
+		e.selectedConnection = -1
+		e.clearJumpLabels()
+	}
+}
+
+// SaveHistory saves the current state to history (call after modifications)
+func (e *TUIEditor) SaveHistory() {
+	e.history.SaveState(e.diagram)
+}
+
+// GetHistoryStats returns undo/redo statistics
+func (e *TUIEditor) GetHistoryStats() (current, total int) {
+	return e.history.Stats()
 }
