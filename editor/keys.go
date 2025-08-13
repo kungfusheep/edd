@@ -46,6 +46,10 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 			e.startJump(JumpActionEdit)
 		}
 		
+	case 'j': // Toggle JSON view
+		e.SetMode(ModeJSON)
+		e.jsonScrollOffset = 0  // Reset scroll when entering JSON mode
+		
 	case '?', 'h': // Help
 		// TODO: Show help
 		
@@ -294,4 +298,32 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 			e.SetMode(ModeNormal)
 		}
 	}
+}
+
+// handleJSONKey processes keys in JSON view mode
+func (e *TUIEditor) handleJSONKey(key rune) bool {
+	switch key {
+	case 27, 'q', 'j': // ESC, q, or j to return to diagram view
+		e.SetMode(ModeNormal)
+		
+	case 'k', 'K': // vim-style up
+		e.ScrollJSON(-1)
+		
+	case 'J': // vim-style down (capital J since j exits)
+		e.ScrollJSON(1)
+		
+	case 'u', 21: // Page up (Ctrl+U in vim)
+		e.ScrollJSON(-(e.height / 2))
+		
+	case 'd', 4: // Page down (Ctrl+D in vim)
+		e.ScrollJSON(e.height / 2)
+		
+	case 'g': // Go to top
+		e.jsonScrollOffset = 0
+		
+	case 'G': // Go to bottom
+		e.jsonScrollOffset = 999999 // Will be clamped in renderJSON
+	}
+	
+	return false
 }

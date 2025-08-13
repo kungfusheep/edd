@@ -122,7 +122,7 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		fmt.Print(buf.String())
 		
 		// Now draw overlays directly (these use absolute positioning)
-		// Draw jump labels if in jump mode
+		// Draw jump labels if in jump mode (but not in JSON mode)
 		if tui.GetMode() == editor.ModeJump {
 			drawJumpLabels(tui, output)
 			// Also draw connection labels if in delete or edit mode
@@ -134,8 +134,10 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		// Show status line
 		showStatusLine(tui, filename)
 
-		// Draw Ed
-		drawEd(tui)
+		// Draw Ed (but not in JSON mode)
+		if tui.GetMode() != editor.ModeJSON {
+			drawEd(tui)
+		}
 
 		// Position cursor if in edit mode
 		if tui.GetMode() == editor.ModeEdit || tui.GetMode() == editor.ModeInsert {
@@ -162,6 +164,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 				if handleCommandMode(tui, key, &filename) {
 					return nil // Exit requested
 				}
+			case editor.ModeJSON:
+				handleJSONMode(tui, key)
 			}
 
 		case <-animTicker.C:
@@ -513,6 +517,8 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		tui.StartContinuousDelete()
 	case 'e': // Edit
 		tui.StartEdit()
+	case 'j': // JSON view
+		tui.SetMode(editor.ModeJSON)
 	case ':': // Command mode
 		tui.StartCommand()
 	case '?', 'h': // Help
@@ -527,6 +533,11 @@ func handleTextMode(tui *editor.TUIEditor, key rune) {
 
 func handleJumpMode(tui *editor.TUIEditor, key rune) {
 	tui.HandleJumpInput(key)
+}
+
+func handleJSONMode(tui *editor.TUIEditor, key rune) {
+	// The TUI editor handles JSON mode keys internally
+	tui.HandleJSONInput(key)
 }
 
 func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
@@ -633,6 +644,7 @@ func showHelp() {
 	fmt.Println("  d     - Delete node/connection (single)")
 	fmt.Println("  D     - Delete node/connection (continuous)")
 	fmt.Println("  e     - Edit node/connection text")
+	fmt.Println("  j     - Toggle JSON view")
 	fmt.Println("  q     - Quit")
 	fmt.Println("  :     - Command mode")
 	fmt.Println()
@@ -644,6 +656,13 @@ func showHelp() {
 	fmt.Println("Text Editing:")
 	fmt.Println("  ESC   - Exit to normal mode")
 	fmt.Println("  Enter - Confirm text")
+	fmt.Println()
+	fmt.Println("JSON View Mode:")
+	fmt.Println("  j/q/ESC - Return to diagram")
+	fmt.Println("  k       - Scroll up")
+	fmt.Println("  J       - Scroll down")
+	fmt.Println("  g       - Go to top")
+	fmt.Println("  G       - Go to bottom")
 	fmt.Println()
 	fmt.Println("Press any key to continue...")
 	readSingleKey()

@@ -9,6 +9,7 @@ const (
 	ModeEdit                // Editing existing node text
 	ModeCommand             // Command input mode
 	ModeJump                // Jump selection active
+	ModeJSON                // JSON view mode
 )
 
 // String returns the mode name for display
@@ -24,6 +25,8 @@ func (m Mode) String() string {
 		return "COMMAND"
 	case ModeJump:
 		return "JUMP"
+	case ModeJSON:
+		return "JSON"
 	default:
 		return "UNKNOWN"
 	}

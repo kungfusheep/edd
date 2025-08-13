@@ -127,6 +127,12 @@ func (e *TUIEditor) HandleJumpInput(key rune) {
 	e.handleJumpKey(key)
 }
 
+// HandleJSONInput processes JSON view mode input
+func (e *TUIEditor) HandleJSONInput(key rune) {
+	// Delegate to the internal handler
+	e.handleJSONKey(key)
+}
+
 // HandleCommandInput processes command mode input
 func (e *TUIEditor) HandleCommandInput(key rune) {
 	switch key {

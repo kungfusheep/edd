@@ -2,8 +2,10 @@ package editor
 
 import (
 	"edd/core"
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // TUIEditor represents the interactive terminal UI editor
@@ -36,6 +38,9 @@ type TUIEditor struct {
 	// Positions from last layout (for jump label positioning)
 	nodePositions       map[int]core.Point // Node ID -> position from last render
 	connectionPaths     map[int]core.Path  // Connection index -> path from last render
+	
+	// JSON view state
+	jsonScrollOffset    int  // Current scroll position in JSON view
 }
 
 // NewTUIEditor creates a new TUI editor instance
@@ -58,6 +63,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		connectionPaths:    make(map[int]core.Path),
 		continuousConnect:  false,
 		continuousDelete:   false,
+		jsonScrollOffset:   0,
 	}
 }
 
@@ -109,6 +115,11 @@ func (e *TUIEditor) Run() error {
 
 // Render produces the current display output
 func (e *TUIEditor) Render() string {
+	// If in JSON mode, render JSON instead
+	if e.mode == ModeJSON {
+		return e.renderJSON()
+	}
+	
 	// If we have a real renderer that can provide positions, use it
 	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
 		// Set edit state if we're editing or inserting
@@ -166,6 +177,8 @@ func (e *TUIEditor) handleKey(key rune) bool {
 		return e.handleTextKey(key)
 	case ModeCommand:
 		return e.handleCommandKey(key)
+	case ModeJSON:
+		return e.handleJSONKey(key)
 	}
 
 	return false
@@ -294,4 +307,71 @@ func (e *TUIEditor) UpdateConnectionLabel(connIndex int, label string) {
 // GetSelectedConnection returns the currently selected connection index
 func (e *TUIEditor) GetSelectedConnection() int {
 	return e.selectedConnection
+}
+
+// renderJSON renders the diagram as formatted JSON
+func (e *TUIEditor) renderJSON() string {
+	// Marshal with indentation
+	jsonBytes, err := json.MarshalIndent(e.diagram, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("Error rendering JSON: %v", err)
+	}
+	
+	// Split into lines for scrolling
+	lines := strings.Split(string(jsonBytes), "\n")
+	
+	// Calculate visible lines (leave room for status)
+	visibleLines := e.height - 2
+	if visibleLines < 1 {
+		visibleLines = 1
+	}
+	
+	// Adjust scroll offset if needed
+	maxOffset := len(lines) - visibleLines
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if e.jsonScrollOffset > maxOffset {
+		e.jsonScrollOffset = maxOffset
+	}
+	if e.jsonScrollOffset < 0 {
+		e.jsonScrollOffset = 0
+	}
+	
+	// Build output
+	var output strings.Builder
+	
+	// Show line numbers and content
+	endLine := e.jsonScrollOffset + visibleLines
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+	
+	for i := e.jsonScrollOffset; i < endLine; i++ {
+		// Add line number in gray
+		output.WriteString(fmt.Sprintf("\033[90m%4d │\033[0m %s\n", i+1, lines[i]))
+	}
+	
+	// Add scroll indicator if there's more content
+	if len(lines) > visibleLines {
+		scrollPercent := 0
+		if maxOffset > 0 {
+			scrollPercent = (e.jsonScrollOffset * 100) / maxOffset
+		}
+		output.WriteString(fmt.Sprintf("\n\033[90m[Line %d-%d of %d | %d%%]\033[0m",
+			e.jsonScrollOffset+1, endLine, len(lines), scrollPercent))
+	}
+	
+	return output.String()
+}
+
+// GetJSONScrollOffset returns the current JSON scroll offset
+func (e *TUIEditor) GetJSONScrollOffset() int {
+	return e.jsonScrollOffset
+}
+
+// ScrollJSON scrolls the JSON view
+func (e *TUIEditor) ScrollJSON(delta int) {
+	e.jsonScrollOffset += delta
+	// Bounds checking will be done in renderJSON
 }
