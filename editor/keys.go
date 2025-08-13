@@ -12,13 +12,20 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'q', 3: // q or Ctrl+C to quit
 		return true
 		
-	case 'a': // Add new node
+	case 'a', 'A': // Add new node (A is same as a since we're already in INSERT mode with continuation)
 		e.SetMode(ModeInsert)
 		nodeID := e.AddNode([]string{""})
 		e.selected = nodeID
 		
-	case 'c': // Connect nodes
+	case 'c': // Connect nodes (single)
 		if len(e.diagram.Nodes) >= 2 {
+			e.continuousConnect = false
+			e.startJump(JumpActionConnectFrom)
+		}
+		
+	case 'C': // Connect nodes (continuous)
+		if len(e.diagram.Nodes) >= 2 {
+			e.continuousConnect = true
 			e.startJump(JumpActionConnectFrom)
 		}
 		
@@ -60,8 +67,24 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 		}
 		
 	case 13, 10: // Enter - commit text
+		// Save the mode before committing (in case commit changes it)
+		wasInsertMode := e.mode == ModeInsert
+		
 		e.commitText()
-		e.SetMode(ModeNormal)
+		
+		// In INSERT mode, immediately start adding another node
+		if wasInsertMode {
+			// Create a new node and continue in insert mode
+			nodeID := e.AddNode([]string{""})
+			e.selected = nodeID
+			e.textBuffer = []rune{}
+			e.cursorPos = 0
+			// Stay in INSERT mode (don't call SetMode as it clears the buffer)
+			// e.mode is already ModeInsert
+		} else {
+			// In EDIT mode, return to normal
+			e.SetMode(ModeNormal)
+		}
 		
 	default:
 		// Insert printable characters
@@ -107,6 +130,7 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 	// ESC cancels jump
 	if key == 27 {
 		e.clearJumpLabels()
+		e.continuousConnect = false // Also exit continuous mode
 		e.SetMode(ModeNormal)
 		return false
 	}
@@ -162,7 +186,8 @@ func (e *TUIEditor) commitText() {
 	}
 	
 	text = strings.TrimSpace(text)
-	if text == "" {
+	// In INSERT mode, we allow empty text (user might just press Enter to create empty nodes)
+	if text == "" && e.mode != ModeInsert {
 		return
 	}
 	
@@ -229,8 +254,18 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		if e.selected >= 0 && e.selected != nodeID {
 			e.AddConnection(e.selected, nodeID, "")
 		}
-		e.selected = -1
-		e.clearJumpLabels()
-		e.SetMode(ModeNormal)
+		
+		// If in continuous connect mode, start another connection
+		if e.continuousConnect {
+			e.selected = -1
+			e.clearJumpLabels()
+			// Start another connection
+			e.startJump(JumpActionConnectFrom)
+		} else {
+			// Normal mode - exit to normal
+			e.selected = -1
+			e.clearJumpLabels()
+			e.SetMode(ModeNormal)
+		}
 	}
 }

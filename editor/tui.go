@@ -18,6 +18,7 @@ type TUIEditor struct {
 	jumpLabels         map[int]rune   // Node ID -> jump label mapping
 	connectionLabels   map[int]rune   // Connection index -> jump label mapping
 	jumpAction         JumpAction     // What to do after jump selection
+	continuousConnect  bool           // Whether to continue connecting after each connection
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -54,6 +55,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		height:             24,
 		nodePositions:      make(map[int]core.Point),
 		connectionPaths:    make(map[int]core.Path),
+		continuousConnect:  false,
 	}
 }
 

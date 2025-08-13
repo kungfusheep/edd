@@ -476,10 +476,20 @@ func showStatusLine(tui *editor.TUIEditor, filename string) {
 			fmt.Print("│") // Show cursor
 		}
 	} else {
+		mode := tui.GetMode()
+		modeStr := mode.String()
+		
+		// Add indicator for continuous modes
+		if mode == editor.ModeJump && tui.GetJumpAction() == editor.JumpActionConnectFrom {
+			if tui.IsContinuousConnect() {
+				modeStr = "CONNECT (continuous)"
+			}
+		}
+		
 		fmt.Printf("Nodes: %d | Connections: %d | Mode: %s",
 			len(diagram.Nodes),
 			len(diagram.Connections),
-			tui.GetMode())
+			modeStr)
 	}
 }
 
@@ -489,8 +499,10 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		return true // Exit
 	case 'a': // Add node
 		tui.StartAddNode()
-	case 'c': // Connect
+	case 'c': // Connect (single)
 		tui.StartConnect()
+	case 'C': // Connect (continuous)
+		tui.StartContinuousConnect()
 	case 'd': // Delete
 		tui.StartDelete()
 	case 'e': // Edit

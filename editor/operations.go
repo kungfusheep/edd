@@ -50,6 +50,11 @@ func (e *TUIEditor) GetTextBuffer() []rune {
 	return e.textBuffer
 }
 
+// IsContinuousConnect returns whether we're in continuous connection mode
+func (e *TUIEditor) IsContinuousConnect() bool {
+	return e.continuousConnect
+}
+
 // StartAddNode begins adding a new node
 func (e *TUIEditor) StartAddNode() {
 	e.SetMode(ModeInsert)
@@ -59,9 +64,18 @@ func (e *TUIEditor) StartAddNode() {
 	e.cursorPos = 0
 }
 
-// StartConnect begins connection mode
+// StartConnect begins connection mode (single connection)
 func (e *TUIEditor) StartConnect() {
 	if len(e.diagram.Nodes) >= 2 {
+		e.continuousConnect = false
+		e.startJump(JumpActionConnectFrom)
+	}
+}
+
+// StartContinuousConnect begins continuous connection mode (multiple connections)
+func (e *TUIEditor) StartContinuousConnect() {
+	if len(e.diagram.Nodes) >= 2 {
+		e.continuousConnect = true
 		e.startJump(JumpActionConnectFrom)
 	}
 }
@@ -88,30 +102,8 @@ func (e *TUIEditor) StartCommand() {
 
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
-	switch key {
-	case 27: // ESC
-		e.commitText()
-		e.SetMode(ModeNormal)
-	case 127, 8: // Backspace
-		if e.cursorPos > 0 {
-			e.textBuffer = append(
-				e.textBuffer[:e.cursorPos-1],
-				e.textBuffer[e.cursorPos:]...,
-			)
-			e.cursorPos--
-		}
-	case 13, 10: // Enter
-		e.commitText()
-		e.SetMode(ModeNormal)
-	default:
-		if unicode.IsPrint(key) {
-			e.textBuffer = append(
-				e.textBuffer[:e.cursorPos],
-				append([]rune{key}, e.textBuffer[e.cursorPos:]...)...,
-			)
-			e.cursorPos++
-		}
-	}
+	// Delegate to the internal handler which has the proper logic
+	e.handleTextKey(key)
 }
 
 // HandleJumpInput processes jump label selection for both nodes and connections
