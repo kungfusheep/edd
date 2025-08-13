@@ -125,8 +125,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		// Draw jump labels if in jump mode
 		if tui.GetMode() == editor.ModeJump {
 			drawJumpLabels(tui, output)
-			// Also draw connection labels if in delete mode
-			if tui.GetJumpAction() == editor.JumpActionDelete {
+			// Also draw connection labels if in delete or edit mode
+			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit {
 				drawConnectionLabels(tui)
 			}
 		}
@@ -308,7 +308,16 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 				
 				// Draw simple label on the connection
 				fmt.Printf("\033[%d;%dH", labelY+1, labelX+1)
-				fmt.Printf("\033[41;97;1m %c \033[0m", label) // Red bg, white text
+				
+				// Choose color based on action
+				jumpAction := tui.GetJumpAction()
+				if jumpAction == editor.JumpActionEdit {
+					// Yellow background for edit mode
+					fmt.Printf("\033[43;30;1m %c \033[0m", label) // Yellow bg, black text
+				} else {
+					// Red background for delete mode
+					fmt.Printf("\033[41;97;1m %c \033[0m", label) // Red bg, white text
+				}
 			}
 		}
 	}
@@ -319,8 +328,15 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 	fmt.Print("\033[5A")      // Move up 5 lines from bottom
 	fmt.Print("\033[K")       // Clear line
 	
-	// Draw connection legend header
-	fmt.Print("\033[91mConnection Labels:\033[0m ")
+	// Draw connection legend header based on action
+	jumpAction := tui.GetJumpAction()
+	if jumpAction == editor.JumpActionDelete {
+		fmt.Print("\033[91mDelete Connection:\033[0m ")
+	} else if jumpAction == editor.JumpActionEdit {
+		fmt.Print("\033[93mEdit Connection Label:\033[0m ")
+	} else {
+		fmt.Print("\033[91mConnection Labels:\033[0m ")
+	}
 	
 	// Draw each connection label with its endpoints
 	labelCount := 0
@@ -345,8 +361,14 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 				}
 			}
 			
-			// Print legend entry
-			fmt.Printf("\033[41;97m%c\033[0m=%s→%s  ", label, fromText, toText)
+			// Choose color based on action
+			if jumpAction == editor.JumpActionEdit {
+				// Yellow background for edit mode
+				fmt.Printf("\033[43;30m%c\033[0m=%s→%s  ", label, fromText, toText)
+			} else {
+				// Red background for delete mode
+				fmt.Printf("\033[41;97m%c\033[0m=%s→%s  ", label, fromText, toText)
+			}
 			
 			labelCount++
 			// Start a new line after every 3 entries to avoid running off screen
@@ -432,10 +454,33 @@ func showStatusLine(tui *editor.TUIEditor, filename string) {
 
 	// Show node/connection count
 	diagram := tui.GetDiagram()
-	fmt.Printf("Nodes: %d | Connections: %d | Mode: %s",
-		len(diagram.Nodes),
-		len(diagram.Connections),
-		tui.GetMode())
+	
+	// Check if we're editing a connection
+	if tui.GetMode() == editor.ModeEdit && tui.GetSelectedConnection() >= 0 {
+		connIdx := tui.GetSelectedConnection()
+		if connIdx < len(diagram.Connections) {
+			conn := diagram.Connections[connIdx]
+			// Find node names for clarity
+			var fromName, toName string
+			for _, node := range diagram.Nodes {
+				if node.ID == conn.From && len(node.Text) > 0 {
+					fromName = node.Text[0]
+				}
+				if node.ID == conn.To && len(node.Text) > 0 {
+					toName = node.Text[0]
+				}
+			}
+			fmt.Printf("Editing connection: %s → %s | Label: ", fromName, toName)
+			// Show the current text being edited
+			fmt.Print(string(tui.GetTextBuffer()))
+			fmt.Print("│") // Show cursor
+		}
+	} else {
+		fmt.Printf("Nodes: %d | Connections: %d | Mode: %s",
+			len(diagram.Nodes),
+			len(diagram.Connections),
+			tui.GetMode())
+	}
 }
 
 func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {

@@ -12,11 +12,12 @@ type TUIEditor struct {
 	renderer DiagramRenderer
 
 	// UI State (minimal!)
-	mode             Mode
-	selected         int            // Currently selected node ID (-1 for none)
-	jumpLabels       map[int]rune   // Node ID -> jump label mapping
-	connectionLabels map[int]rune   // Connection index -> jump label mapping
-	jumpAction       JumpAction     // What to do after jump selection
+	mode               Mode
+	selected           int            // Currently selected node ID (-1 for none)
+	selectedConnection int            // Currently selected connection index (-1 for none)
+	jumpLabels         map[int]rune   // Node ID -> jump label mapping
+	connectionLabels   map[int]rune   // Connection index -> jump label mapping
+	jumpAction         JumpAction     // What to do after jump selection
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -38,20 +39,21 @@ type TUIEditor struct {
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 	return &TUIEditor{
-		diagram:          &core.Diagram{},
-		renderer:         renderer,
-		mode:             ModeNormal,
-		selected:         -1,
-		jumpLabels:       make(map[int]rune),
-		connectionLabels: make(map[int]rune),
-		textBuffer:       []rune{},
-		commandBuffer:    []rune{},
-		cursorPos:        0,
-		edd:              NewEddCharacter(),
-		width:            80,
-		height:           24,
-		nodePositions:    make(map[int]core.Point),
-		connectionPaths:  make(map[int]core.Path),
+		diagram:            &core.Diagram{},
+		renderer:           renderer,
+		mode:               ModeNormal,
+		selected:           -1,
+		selectedConnection: -1,
+		jumpLabels:         make(map[int]rune),
+		connectionLabels:   make(map[int]rune),
+		textBuffer:         []rune{},
+		commandBuffer:      []rune{},
+		cursorPos:          0,
+		edd:                NewEddCharacter(),
+		width:              80,
+		height:             24,
+		nodePositions:      make(map[int]core.Point),
+		connectionPaths:    make(map[int]core.Path),
 	}
 }
 
@@ -259,4 +261,33 @@ func (e *TUIEditor) UpdateNodeText(nodeID int, text []string) {
 			break
 		}
 	}
+}
+
+// StartEditingConnection begins editing a connection's label
+func (e *TUIEditor) StartEditingConnection(connIndex int) {
+	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
+		e.selectedConnection = connIndex
+		e.selected = -1 // Clear node selection
+		
+		// Load current connection label into text buffer
+		currentLabel := e.diagram.Connections[connIndex].Label
+		e.textBuffer = []rune(currentLabel)
+		e.cursorPos = len(e.textBuffer)
+		
+		// Clear jump labels and enter edit mode
+		e.clearJumpLabels()
+		e.SetMode(ModeEdit)
+	}
+}
+
+// UpdateConnectionLabel updates the label of a connection
+func (e *TUIEditor) UpdateConnectionLabel(connIndex int, label string) {
+	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
+		e.diagram.Connections[connIndex].Label = label
+	}
+}
+
+// GetSelectedConnection returns the currently selected connection index
+func (e *TUIEditor) GetSelectedConnection() int {
+	return e.selectedConnection
 }

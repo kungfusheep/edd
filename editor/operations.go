@@ -45,6 +45,11 @@ func (e *TUIEditor) GetConnectionPaths() map[int]core.Path {
 	return e.connectionPaths
 }
 
+// GetTextBuffer returns the current text buffer (for display purposes)
+func (e *TUIEditor) GetTextBuffer() []rune {
+	return e.textBuffer
+}
+
 // StartAddNode begins adding a new node
 func (e *TUIEditor) StartAddNode() {
 	e.SetMode(ModeInsert)

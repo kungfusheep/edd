@@ -66,5 +66,11 @@ func (e *TUIEditor) SetMode(mode Mode) {
 				}
 			}
 		}
+		
+		// If editing existing connection, load its label
+		if mode == ModeEdit && e.selectedConnection >= 0 && e.selectedConnection < len(e.diagram.Connections) {
+			e.textBuffer = []rune(e.diagram.Connections[e.selectedConnection].Label)
+			e.cursorPos = len(e.textBuffer)
+		}
 	}
 }

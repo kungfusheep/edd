@@ -120,14 +120,19 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		}
 	}
 	
-	// Look for matching connection jump label (only in delete mode)
-	if e.jumpAction == JumpActionDelete {
+	// Look for matching connection jump label (in delete or edit mode)
+	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit {
 		for connIndex, label := range e.connectionLabels {
 			if label == key {
-				// Delete the connection
-				e.DeleteConnection(connIndex)
-				e.clearJumpLabels()
-				e.SetMode(ModeNormal)
+				if e.jumpAction == JumpActionDelete {
+					// Delete the connection
+					e.DeleteConnection(connIndex)
+					e.clearJumpLabels()
+					e.SetMode(ModeNormal)
+				} else if e.jumpAction == JumpActionEdit {
+					// Edit the connection label
+					e.StartEditingConnection(connIndex)
+				}
 				return false
 			}
 		}
@@ -139,13 +144,24 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 	return false
 }
 
-// commitText saves the current text buffer to the selected node
+// commitText saves the current text buffer to the selected node or connection
 func (e *TUIEditor) commitText() {
+	text := string(e.textBuffer)
+	
+	// Check if we're editing a connection
+	if e.selectedConnection >= 0 {
+		// Connection labels can be empty (to clear them)
+		e.UpdateConnectionLabel(e.selectedConnection, text)
+		e.selectedConnection = -1
+		return
+	}
+	
+	// Otherwise we're editing a node
 	if e.selected < 0 {
 		return
 	}
 	
-	text := strings.TrimSpace(string(e.textBuffer))
+	text = strings.TrimSpace(text)
 	if text == "" {
 		return
 	}
