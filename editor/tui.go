@@ -19,6 +19,7 @@ type TUIEditor struct {
 	connectionLabels   map[int]rune   // Connection index -> jump label mapping
 	jumpAction         JumpAction     // What to do after jump selection
 	continuousConnect  bool           // Whether to continue connecting after each connection
+	continuousDelete   bool           // Whether to continue deleting after each deletion
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -56,6 +57,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		nodePositions:      make(map[int]core.Point),
 		connectionPaths:    make(map[int]core.Path),
 		continuousConnect:  false,
+		continuousDelete:   false,
 	}
 }
 

@@ -29,8 +29,15 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 			e.startJump(JumpActionConnectFrom)
 		}
 		
-	case 'd': // Delete node
-		if len(e.diagram.Nodes) > 0 {
+	case 'd': // Delete node/connection (single)
+		if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
+			e.continuousDelete = false
+			e.startJump(JumpActionDelete)
+		}
+		
+	case 'D': // Delete node/connection (continuous)
+		if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
+			e.continuousDelete = true
 			e.startJump(JumpActionDelete)
 		}
 		
@@ -130,7 +137,8 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 	// ESC cancels jump
 	if key == 27 {
 		e.clearJumpLabels()
-		e.continuousConnect = false // Also exit continuous mode
+		e.continuousConnect = false // Exit continuous connect mode
+		e.continuousDelete = false  // Exit continuous delete mode
 		e.SetMode(ModeNormal)
 		return false
 	}
@@ -151,8 +159,17 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 				if e.jumpAction == JumpActionDelete {
 					// Delete the connection
 					e.DeleteConnection(connIndex)
-					e.clearJumpLabels()
-					e.SetMode(ModeNormal)
+					
+					// If in continuous delete mode, start another delete
+					if e.continuousDelete && (len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0) {
+						e.clearJumpLabels()
+						e.startJump(JumpActionDelete)
+					} else {
+						// Normal mode - exit to normal
+						e.continuousDelete = false
+						e.clearJumpLabels()
+						e.SetMode(ModeNormal)
+					}
 				} else if e.jumpAction == JumpActionEdit {
 					// Edit the connection label
 					e.StartEditingConnection(connIndex)
@@ -241,8 +258,17 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		if e.selected == nodeID {
 			e.selected = -1
 		}
-		e.clearJumpLabels()
-		e.SetMode(ModeNormal)
+		
+		// If in continuous delete mode, start another delete
+		if e.continuousDelete && (len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0) {
+			e.clearJumpLabels()
+			e.startJump(JumpActionDelete)
+		} else {
+			// Normal mode - exit to normal
+			e.continuousDelete = false
+			e.clearJumpLabels()
+			e.SetMode(ModeNormal)
+		}
 		
 	case JumpActionConnectFrom:
 		e.selected = nodeID

@@ -55,6 +55,11 @@ func (e *TUIEditor) IsContinuousConnect() bool {
 	return e.continuousConnect
 }
 
+// IsContinuousDelete returns whether we're in continuous delete mode
+func (e *TUIEditor) IsContinuousDelete() bool {
+	return e.continuousDelete
+}
+
 // StartAddNode begins adding a new node
 func (e *TUIEditor) StartAddNode() {
 	e.SetMode(ModeInsert)
@@ -80,9 +85,18 @@ func (e *TUIEditor) StartContinuousConnect() {
 	}
 }
 
-// StartDelete begins delete mode
+// StartDelete begins delete mode (single deletion)
 func (e *TUIEditor) StartDelete() {
-	if len(e.diagram.Nodes) > 0 {
+	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
+		e.continuousDelete = false
+		e.startJump(JumpActionDelete)
+	}
+}
+
+// StartContinuousDelete begins continuous delete mode (multiple deletions)
+func (e *TUIEditor) StartContinuousDelete() {
+	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
+		e.continuousDelete = true
 		e.startJump(JumpActionDelete)
 	}
 }

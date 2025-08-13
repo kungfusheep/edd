@@ -223,3 +223,148 @@ func TestSingleConnectionMode(t *testing.T) {
 		t.Errorf("Expected ModeNormal after single connection, got %v", tui.GetMode())
 	}
 }
+
+func TestContinuousDeleteMode(t *testing.T) {
+	diagram := &core.Diagram{
+		Nodes: []core.Node{
+			{ID: 1, Text: []string{"A"}},
+			{ID: 2, Text: []string{"B"}},
+			{ID: 3, Text: []string{"C"}},
+			{ID: 4, Text: []string{"D"}},
+		},
+		Connections: []core.Connection{
+			{From: 1, To: 2, Label: "conn1"},
+			{From: 2, To: 3, Label: "conn2"},
+			{From: 3, To: 4, Label: "conn3"},
+		},
+	}
+
+	renderer := NewRealRenderer()
+	tui := NewTUIEditor(renderer)
+	tui.SetDiagram(diagram)
+
+	// Start continuous delete mode with 'D'
+	tui.handleNormalKey('D')
+	
+	if !tui.IsContinuousDelete() {
+		t.Error("Expected continuous delete mode to be enabled")
+	}
+
+	// Should be in jump mode
+	if tui.GetMode() != ModeJump {
+		t.Errorf("Expected ModeJump, got %v", tui.GetMode())
+	}
+
+	// Get labels (both nodes and connections should have labels)
+	nodeLabels := tui.GetJumpLabels()
+	connLabels := tui.GetConnectionLabels()
+	
+	// Delete a connection first
+	var connLabel rune
+	for idx, label := range connLabels {
+		if idx == 0 { // Delete first connection
+			connLabel = label
+			break
+		}
+	}
+	tui.handleJumpKey(connLabel)
+
+	// Should have 2 connections now
+	if len(tui.diagram.Connections) != 2 {
+		t.Errorf("Expected 2 connections after delete, got %d", len(tui.diagram.Connections))
+	}
+
+	// Should STILL be in jump mode for another deletion (continuous mode)
+	if tui.GetMode() != ModeJump {
+		t.Errorf("Expected to stay in ModeJump for continuous delete, got %v", tui.GetMode())
+	}
+
+	// Delete a node
+	nodeLabels = tui.GetJumpLabels()
+	var nodeLabel rune
+	for id, label := range nodeLabels {
+		if id == 4 { // Delete node D
+			nodeLabel = label
+			break
+		}
+	}
+	tui.handleJumpKey(nodeLabel)
+
+	// Should have 3 nodes now
+	if len(tui.diagram.Nodes) != 3 {
+		t.Errorf("Expected 3 nodes after delete, got %d", len(tui.diagram.Nodes))
+	}
+
+	// Connection from node 3 to node 4 should also be removed
+	if len(tui.diagram.Connections) != 1 {
+		t.Errorf("Expected 1 connection after node delete, got %d", len(tui.diagram.Connections))
+	}
+
+	// Should STILL be in jump mode
+	if tui.GetMode() != ModeJump {
+		t.Errorf("Expected to stay in ModeJump for continuous delete, got %v", tui.GetMode())
+	}
+
+	// Press ESC to exit continuous mode
+	tui.handleJumpKey(27)
+
+	// Should be in normal mode
+	if tui.GetMode() != ModeNormal {
+		t.Errorf("Expected ModeNormal after ESC, got %v", tui.GetMode())
+	}
+
+	// Should no longer be in continuous delete mode
+	if tui.IsContinuousDelete() {
+		t.Error("Expected continuous delete mode to be disabled after ESC")
+	}
+}
+
+func TestSingleDeleteMode(t *testing.T) {
+	diagram := &core.Diagram{
+		Nodes: []core.Node{
+			{ID: 1, Text: []string{"A"}},
+			{ID: 2, Text: []string{"B"}},
+		},
+		Connections: []core.Connection{
+			{From: 1, To: 2, Label: "conn"},
+		},
+	}
+
+	renderer := NewRealRenderer()
+	tui := NewTUIEditor(renderer)
+	tui.SetDiagram(diagram)
+
+	// Start single delete mode with 'd'
+	tui.handleNormalKey('d')
+	
+	if tui.IsContinuousDelete() {
+		t.Error("Expected continuous delete mode to be disabled for 'd'")
+	}
+
+	// Delete a node
+	labels := tui.GetJumpLabels()
+	var label1 rune
+	for id, label := range labels {
+		if id == 1 {
+			label1 = label
+			break
+		}
+	}
+	
+	tui.handleJumpKey(label1)
+
+	// Should have one node left
+	if len(tui.diagram.Nodes) != 1 {
+		t.Errorf("Expected 1 node, got %d", len(tui.diagram.Nodes))
+	}
+
+	// Connection should be removed too
+	if len(tui.diagram.Connections) != 0 {
+		t.Errorf("Expected 0 connections, got %d", len(tui.diagram.Connections))
+	}
+
+	// Should return to normal mode (not continuous)
+	if tui.GetMode() != ModeNormal {
+		t.Errorf("Expected ModeNormal after single delete, got %v", tui.GetMode())
+	}
+}

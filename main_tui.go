@@ -484,6 +484,10 @@ func showStatusLine(tui *editor.TUIEditor, filename string) {
 			if tui.IsContinuousConnect() {
 				modeStr = "CONNECT (continuous)"
 			}
+		} else if mode == editor.ModeJump && tui.GetJumpAction() == editor.JumpActionDelete {
+			if tui.IsContinuousDelete() {
+				modeStr = "DELETE (continuous)"
+			}
 		}
 		
 		fmt.Printf("Nodes: %d | Connections: %d | Mode: %s",
@@ -503,8 +507,10 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		tui.StartConnect()
 	case 'C': // Connect (continuous)
 		tui.StartContinuousConnect()
-	case 'd': // Delete
+	case 'd': // Delete (single)
 		tui.StartDelete()
+	case 'D': // Delete (continuous)
+		tui.StartContinuousDelete()
 	case 'e': // Edit
 		tui.StartEdit()
 	case ':': // Command mode
@@ -621,10 +627,12 @@ func showHelp() {
 	fmt.Println("═══════════════════════")
 	fmt.Println()
 	fmt.Println("Normal Mode Commands:")
-	fmt.Println("  a     - Add new node")
-	fmt.Println("  c     - Connect nodes (with jump labels)")
-	fmt.Println("  d     - Delete node (with jump labels)")
-	fmt.Println("  e     - Edit node text (with jump labels)")
+	fmt.Println("  a     - Add new node (Enter creates more)")
+	fmt.Println("  c     - Connect nodes (single)")
+	fmt.Println("  C     - Connect nodes (continuous)")
+	fmt.Println("  d     - Delete node/connection (single)")
+	fmt.Println("  D     - Delete node/connection (continuous)")
+	fmt.Println("  e     - Edit node/connection text")
 	fmt.Println("  q     - Quit")
 	fmt.Println("  :     - Command mode")
 	fmt.Println()
