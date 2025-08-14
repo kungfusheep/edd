@@ -1,13 +1,16 @@
 package tui
 
 import (
+	"bufio"
 	"bytes"
 	"edd/core"
+	"edd/demo"
 	"edd/editor"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,8 +20,20 @@ import (
 	"unsafe"
 )
 
+// DemoSettings configures demo playback
+type DemoSettings struct {
+	MinDelay  int // Min delay between keystrokes in ms
+	MaxDelay  int // Max delay between keystrokes in ms
+	LineDelay int // Extra delay between lines in ms
+}
+
 // RunInteractive launches the TUI editor
 func RunInteractive(filename string) error {
+	return RunInteractiveWithDemo(filename, nil)
+}
+
+// RunInteractiveWithDemo launches the TUI editor with optional demo mode
+func RunInteractiveWithDemo(filename string, demoSettings *DemoSettings) error {
 	// Create the real renderer
 	renderer := editor.NewRealRenderer()
 
@@ -38,10 +53,16 @@ func RunInteractive(filename string) error {
 	if err := setupTerminal(); err != nil {
 		return fmt.Errorf("failed to setup terminal: %w", err)
 	}
-	defer restoreTerminal()
+	
+	// Ensure terminal is restored even on panic
+	defer func() {
+		restoreTerminal()
+		// Extra safety - ensure cursor is visible
+		fmt.Print("\033[?25h")
+	}()
 
 	// Run the interactive loop
-	return runInteractiveLoop(tui, filename)
+	return runInteractiveLoop(tui, filename, demoSettings)
 }
 
 func loadDiagramFile(filename string) (*core.Diagram, error) {
@@ -256,16 +277,19 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 
 func setupTerminal() error {
 	// Put terminal in raw mode
-	cmd := exec.Command("stty", "-echo", "cbreak", "min", "1")
-	cmd.Stdin = os.Stdin
+	// Use < /dev/tty for input redirection (more portable)
+	cmd := exec.Command("sh", "-c", "stty -echo cbreak min 1 < /dev/tty")
 	return cmd.Run()
 }
 
 func restoreTerminal() {
 	// Restore terminal to cooked mode with echo
-	cmd := exec.Command("stty", "echo", "cooked")
-	cmd.Stdin = os.Stdin
+	cmd := exec.Command("sh", "-c", "stty echo cooked < /dev/tty")
 	cmd.Run()
+	
+	// Also ensure cursor is visible and colors are reset
+	fmt.Print("\033[?25h") // Show cursor
+	fmt.Print("\033[0m")   // Reset all attributes
 }
 
 // clearStdinBuffer reads and discards any pending input
@@ -291,13 +315,17 @@ func clearStdinBuffer() {
 	}
 }
 
-func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
+func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettings) error {
 	// Switch to alternate screen buffer and hide cursor
 	fmt.Print("\033[?1049h") // Enter alternate screen
 	fmt.Print("\033[2J\033[H\033[?25l") // Clear and hide cursor
 	
 	// Ensure we restore on exit
-	defer fmt.Print("\033[?1049l") // Exit alternate screen
+	defer func() {
+		fmt.Print("\033[?25h")   // Show cursor
+		fmt.Print("\033[?1049l") // Exit alternate screen
+		fmt.Print("\033[0m")      // Reset colors
+	}()
 
 	// Get terminal size
 	width, height := getTerminalSize()
@@ -305,11 +333,65 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 
 	// Create a channel for keyboard input with support for special keys
 	keyChan := make(chan editor.KeyEvent)
-	go func() {
-		for {
-			keyChan <- readKeyWithEscape()
+	
+	// Create demo channel for demo playback
+	demoChan := make(chan editor.KeyEvent, 10)
+	
+	if demoSettings != nil {
+		// Demo mode - read from stdin with randomized timing
+		go func() {
+			rand.Seed(time.Now().UnixNano())
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				line := scanner.Text()
+				// Process each character with random delay
+				for i, ch := range line {
+					demoChan <- editor.KeyEvent{Rune: ch}
+					if i < len(line)-1 {
+						delay := demoSettings.MinDelay + rand.Intn(demoSettings.MaxDelay-demoSettings.MinDelay+1)
+						time.Sleep(time.Duration(delay) * time.Millisecond)
+					}
+				}
+				// Send newline and wait before next line
+				demoChan <- editor.KeyEvent{Rune: '\n'}
+				time.Sleep(time.Duration(demoSettings.LineDelay) * time.Millisecond)
+			}
+		}()
+		
+		// Also read from keyboard (/dev/tty) to allow ESC to stop demo
+		tty, err := os.Open("/dev/tty")
+		if err == nil {
+			go func() {
+				defer tty.Close()
+				for {
+					var b [1]byte
+					n, _ := tty.Read(b[:])
+					if n > 0 {
+						keyChan <- editor.KeyEvent{Rune: rune(b[0])}
+					}
+				}
+			}()
 		}
-	}()
+	} else {
+		// Normal mode - read from keyboard
+		go func() {
+			for {
+				keyChan <- readKeyWithEscape()
+			}
+		}()
+	}
+	
+	// Create demo player (for file-based demos)
+	demoPlayer := demo.NewPlayer(
+		func(r rune) { // onKey callback
+			demoChan <- editor.KeyEvent{Rune: r}
+		},
+		func(s string) { // onText callback
+			for _, r := range s {
+				demoChan <- editor.KeyEvent{Rune: r}
+			}
+		},
+	)
 
 	// Animation ticker - update Ed every 200ms
 	animTicker := time.NewTicker(200 * time.Millisecond)
@@ -349,7 +431,7 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		}
 
 		// Show status line
-		showStatusLine(tui, filename)
+		showStatusLine(tui, filename, demoPlayer)
 
 		// Draw Ed (but not in JSON mode)
 		if tui.GetMode() != editor.ModeJSON {
@@ -367,42 +449,97 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		// Handle input or animation
 		select {
 		case keyEvent := <-keyChan:
-			// Handle special keys or regular keys
-			if keyEvent.IsSpecial() {
-				// Handle special keys (arrows, etc.)
-				switch tui.GetMode() {
-				case editor.ModeInsert, editor.ModeEdit:
-					handleSpecialKeyInTextMode(tui, keyEvent.SpecialKey)
-				// Could add special key handling for other modes here
-				}
-			} else {
-				// Handle regular keys
-				key := keyEvent.Rune
-				switch tui.GetMode() {
-				case editor.ModeNormal:
-					if handleNormalMode(tui, key, &filename) {
-						return nil // Exit requested
+			// Check for demo control keys in normal mode
+			if !demoPlayer.IsPlaying() && tui.GetMode() == editor.ModeNormal {
+				if keyEvent.Rune == 'P' { // Play demo
+					if err := playDemoFile(demoPlayer); err == nil {
+						continue // Skip normal key handling
 					}
-				case editor.ModeInsert, editor.ModeEdit:
-					handleTextMode(tui, key)
-				case editor.ModeJump:
-					handleJumpMode(tui, key)
-				case editor.ModeCommand:
-					if handleCommandMode(tui, key, &filename) {
-						return nil // Exit requested
-					}
-				case editor.ModeJSON:
-					handleJSONMode(tui, key)
-				case editor.ModeHintMenu:
-					tui.HandleHintMenuInput(key)
+				} else if keyEvent.Rune == 'R' { // Record demo (create example)
+					createExampleDemo()
+					continue
 				}
 			}
+			
+			// Stop demo if playing
+			if demoPlayer.IsPlaying() && keyEvent.Rune == 27 { // ESC
+				demoPlayer.Stop()
+				continue
+			}
+			
+			// Normal key handling
+			handleKeyEvent(tui, keyEvent, &filename, demoPlayer)
+			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
+				return nil // Exit requested
+			}
+			
+		case demoKeyEvent := <-demoChan:
+			// Handle demo input just like real input
+			handleKeyEvent(tui, demoKeyEvent, &filename, demoPlayer)
 
 		case <-animTicker.C:
 			// Animate Ed
 			tui.AnimateEd()
 		}
 	}
+}
+
+// handleKeyEvent processes a key event from either real input or demo playback
+func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *string, demoPlayer *demo.Player) {
+	if keyEvent.IsSpecial() {
+		// Handle special keys (arrows, etc.)
+		switch tui.GetMode() {
+		case editor.ModeInsert, editor.ModeEdit:
+			handleSpecialKeyInTextMode(tui, keyEvent.SpecialKey)
+		// Could add special key handling for other modes here
+		}
+	} else {
+		// Handle regular keys
+		key := keyEvent.Rune
+		switch tui.GetMode() {
+		case editor.ModeNormal:
+			handleNormalMode(tui, key, filename)
+		case editor.ModeInsert, editor.ModeEdit:
+			handleTextMode(tui, key)
+		case editor.ModeJump:
+			handleJumpMode(tui, key)
+		case editor.ModeCommand:
+			handleCommandMode(tui, key, filename)
+		case editor.ModeJSON:
+			handleJSONMode(tui, key)
+		case editor.ModeHintMenu:
+			tui.HandleHintMenuInput(key)
+		}
+	}
+}
+
+// playDemoFile loads and plays a demo script
+func playDemoFile(player *demo.Player) error {
+	// Look for demo.json in current directory
+	demoPath := "demo.json"
+	if _, err := os.Stat(demoPath); os.IsNotExist(err) {
+		// Try in .edd directory
+		homeDir, _ := os.UserHomeDir()
+		demoPath = filepath.Join(homeDir, ".edd", "demo.json")
+		if _, err := os.Stat(demoPath); os.IsNotExist(err) {
+			return fmt.Errorf("no demo.json found")
+		}
+	}
+	
+	if err := player.LoadScript(demoPath); err != nil {
+		return err
+	}
+	
+	return player.Play()
+}
+
+// createExampleDemo creates an example demo script
+func createExampleDemo() {
+	example := demo.GenerateExample()
+	ioutil.WriteFile("demo.json", []byte(example), 0644)
+	fmt.Print("\033[2K\033[1G") // Clear line
+	fmt.Print("Created demo.json - press P to play it")
+	time.Sleep(2 * time.Second)
 }
 
 func readSingleKey() rune {
@@ -680,7 +817,7 @@ func drawEd(tui *editor.TUIEditor) {
 	fmt.Print("\033[u")
 }
 
-func showStatusLine(tui *editor.TUIEditor, filename string) {
+func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Player) {
 	// Move to bottom of screen
 	fmt.Print("\033[999;1H") // Move to bottom
 	fmt.Print("\033[K")      // Clear line
@@ -690,6 +827,11 @@ func showStatusLine(tui *editor.TUIEditor, filename string) {
 		cmd := tui.GetCommand()
 		fmt.Printf(":%s│", cmd) // Show command with cursor
 		return
+	}
+
+	// Show demo status if playing
+	if demoPlayer.IsPlaying() {
+		fmt.Print("\033[33m[DEMO PLAYING - Press ESC to stop] \033[0m")
 	}
 
 	// Show filename and mode
@@ -952,6 +1094,8 @@ func showHelp() {
 	fmt.Println("  j     - Toggle JSON view")
 	fmt.Println("  u     - Undo")
 	fmt.Println("  Ctrl+R - Redo")
+	fmt.Println("  P     - Play demo (from demo.json)")
+	fmt.Println("  R     - Create example demo.json")
 	fmt.Println("  q     - Quit")
 	fmt.Println("  :     - Command mode")
 	fmt.Println()

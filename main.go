@@ -21,6 +21,12 @@ func main() {
 		debug         = flag.Bool("debug", false, "Show debug visualization with obstacles and ports")
 		showObstacles = flag.Bool("show-obstacles", false, "Show virtual obstacles as dots in standard rendering")
 		help          = flag.Bool("help", false, "Show help")
+		
+		// Demo mode flags
+		demo       = flag.Bool("demo", false, "Demo mode: replay stdin input with randomized timing")
+		minDelay   = flag.Int("min-delay", 50, "Minimum delay between keystrokes in ms (demo mode)")
+		maxDelay   = flag.Int("max-delay", 300, "Maximum delay between keystrokes in ms (demo mode)")
+		lineDelay  = flag.Int("line-delay", 500, "Extra delay between lines in ms (demo mode)")
 	)
 	
 	flag.Usage = func() {
@@ -49,10 +55,18 @@ func main() {
 		filename = args[0]
 	}
 	
-	// Handle interactive mode
-	if *interactive || *edit || (len(args) == 0 && !*validate && !*debug && !*showObstacles) {
-		// Launch TUI
-		if err := tui.RunInteractive(filename); err != nil {
+	// Handle interactive mode (including demo mode)
+	if *interactive || *edit || *demo || (len(args) == 0 && !*validate && !*debug && !*showObstacles) {
+		// Launch TUI (with demo settings if applicable)
+		var demoSettings *tui.DemoSettings
+		if *demo {
+			demoSettings = &tui.DemoSettings{
+				MinDelay:  *minDelay,
+				MaxDelay:  *maxDelay,
+				LineDelay: *lineDelay,
+			}
+		}
+		if err := tui.RunInteractiveWithDemo(filename, demoSettings); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -149,3 +163,4 @@ func loadDiagram(filename string) (*core.Diagram, error) {
 	
 	return &diagram, nil
 }
+
