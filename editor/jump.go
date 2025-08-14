@@ -27,8 +27,8 @@ func (e *TUIEditor) assignJumpLabels() {
 		}
 	}
 	
-	// If in delete or edit mode, also assign labels to connections
-	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit {
+	// If in delete, edit, or hint mode, also assign labels to connections
+	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
 		// Use index-based iteration to ensure consistent ordering
 		for i := 0; i < len(e.diagram.Connections); i++ {
 			if labelIndex < len(jumpChars) {

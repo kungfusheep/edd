@@ -200,9 +200,12 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	arrowConfig := connections.NewArrowConfig()
 	connectionsWithArrows := connections.ApplyArrowConfig(diagram.Connections, paths, arrowConfig)
 	
-	// Render connections
+	// Render connections with hints
 	for _, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
+		
+		// TODO: Implement style and color rendering based on hints
+		// For now, just render normally
 		r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
 	}
 	

@@ -165,6 +165,10 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 	// Ensure everything is flushed
 	os.Stdout.Sync()
 	
+	// Clear any pending input from stdin
+	// This prevents vim from receiving stray characters
+	clearStdinBuffer()
+	
 	// Small delay for terminal to process
 	time.Sleep(50 * time.Millisecond)
 
@@ -264,6 +268,29 @@ func restoreTerminal() {
 	cmd.Run()
 }
 
+// clearStdinBuffer reads and discards any pending input
+func clearStdinBuffer() {
+	// Use tcflush to clear the input buffer more reliably
+	// This is more effective than trying to read pending bytes
+	cmd := exec.Command("stty", "-F", "/dev/tty", "sane")
+	cmd.Run()
+	
+	// Alternative approach: read with timeout
+	// Set non-blocking read with very short timeout
+	cmd = exec.Command("stty", "-icanon", "min", "0", "time", "1")
+	cmd.Stdin = os.Stdin
+	cmd.Run()
+	
+	// Read and discard any pending bytes
+	var discard [256]byte
+	for i := 0; i < 3; i++ { // Try a few times
+		n, _ := os.Stdin.Read(discard[:])
+		if n == 0 {
+			break
+		}
+	}
+}
+
 func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 	// Switch to alternate screen buffer and hide cursor
 	fmt.Print("\033[?1049h") // Enter alternate screen
@@ -309,10 +336,16 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 		// Draw jump labels if in jump mode (but not in JSON mode)
 		if tui.GetMode() == editor.ModeJump {
 			drawJumpLabels(tui, output)
-			// Also draw connection labels if in delete or edit mode
-			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit {
+			// Also draw connection labels if in delete, edit, or hint mode
+			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit || tui.GetJumpAction() == editor.JumpActionHint {
 				drawConnectionLabels(tui)
 			}
+		}
+		
+		// Draw hint menu if in hint mode
+		if tui.GetMode() == editor.ModeHintMenu {
+			hintDisplay := tui.GetHintMenuDisplay()
+			fmt.Print(hintDisplay)
 		}
 
 		// Show status line
@@ -360,6 +393,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 					}
 				case editor.ModeJSON:
 					handleJSONMode(tui, key)
+				case editor.ModeHintMenu:
+					tui.HandleHintMenuInput(key)
 				}
 			}
 
@@ -378,44 +413,15 @@ func readSingleKey() rune {
 
 // readKeyWithEscape reads a key and handles escape sequences for special keys
 func readKeyWithEscape() editor.KeyEvent {
-	var b [3]byte
-	n, _ := os.Stdin.Read(b[:1])
+	var b [1]byte
+	n, _ := os.Stdin.Read(b[:])
 	
 	if n == 0 {
 		return editor.KeyEvent{Rune: 0}
 	}
 	
-	// Check for ESC sequence
-	if b[0] == 27 { // ESC
-		// Try to read the next two bytes for escape sequence
-		// Set a very short timeout using non-blocking read
-		n2, _ := os.Stdin.Read(b[1:2])
-		if n2 > 0 && b[1] == '[' {
-			// This is an escape sequence
-			n3, _ := os.Stdin.Read(b[2:3])
-			if n3 > 0 {
-				// Parse the escape sequence
-				switch b[2] {
-				case 'A':
-					return editor.KeyEvent{SpecialKey: editor.KeyArrowUp}
-				case 'B':
-					return editor.KeyEvent{SpecialKey: editor.KeyArrowDown}
-				case 'C':
-					return editor.KeyEvent{SpecialKey: editor.KeyArrowRight}
-				case 'D':
-					return editor.KeyEvent{SpecialKey: editor.KeyArrowLeft}
-				case 'H':
-					return editor.KeyEvent{SpecialKey: editor.KeyHome}
-				case 'F':
-					return editor.KeyEvent{SpecialKey: editor.KeyEnd}
-				}
-			}
-		}
-		// Just ESC by itself
-		return editor.KeyEvent{Rune: 27}
-	}
-	
-	// Regular character
+	// For now, don't handle escape sequences - they're causing double keypress issues
+	// Just return the key as-is
 	return editor.KeyEvent{Rune: rune(b[0])}
 }
 
@@ -940,6 +946,7 @@ func showHelp() {
 	fmt.Println("  D     - Delete node/connection (continuous)")
 	fmt.Println("  e     - Edit node/connection text")
 	fmt.Println("  E     - Edit JSON in $EDITOR")
+	fmt.Println("  H     - Edit connection hints (style/color)")
 	fmt.Println("  j     - Toggle JSON view")
 	fmt.Println("  u     - Undo")
 	fmt.Println("  Ctrl+R - Redo")

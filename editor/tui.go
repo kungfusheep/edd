@@ -22,6 +22,7 @@ type TUIEditor struct {
 	jumpAction         JumpAction     // What to do after jump selection
 	continuousConnect  bool           // Whether to continue connecting after each connection
 	continuousDelete   bool           // Whether to continue deleting after each deletion
+	editingHintConn    int            // Connection being edited for hints (-1 for none)
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -274,6 +275,14 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 
 // AddConnection adds a connection between two nodes
 func (e *TUIEditor) AddConnection(from, to int, label string) {
+	// Check for duplicate connections in the same direction only
+	for _, existing := range e.diagram.Connections {
+		if existing.From == from && existing.To == to {
+			// Connection already exists in this direction
+			return
+		}
+	}
+	
 	conn := core.Connection{
 		From:  from,
 		To:    to,

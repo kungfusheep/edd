@@ -74,11 +74,12 @@ func (n Node) Contains(p Point) bool {
 
 // Connection represents a directed edge between nodes.
 type Connection struct {
-	ID    int    `json:"id,omitempty"`    // Unique connection identifier  
-	From  int    `json:"from"`            // Source node ID
-	To    int    `json:"to"`              // Target node ID
-	Arrow bool   `json:"arrow,omitempty"` // Whether this connection should have an arrow
-	Label string `json:"label,omitempty"` // Optional label for the connection
+	ID    int               `json:"id,omitempty"`    // Unique connection identifier  
+	From  int               `json:"from"`            // Source node ID
+	To    int               `json:"to"`              // Target node ID
+	Arrow bool              `json:"arrow,omitempty"` // Whether this connection should have an arrow
+	Label string            `json:"label,omitempty"` // Optional label for the connection
+	Hints map[string]string `json:"hints,omitempty"` // Visual hints (style, color, etc.)
 }
 
 // Diagram represents a complete diagram with nodes and connections.
@@ -114,8 +115,23 @@ func (d *Diagram) Clone() *Diagram {
 		}
 	}
 	
-	// Copy connections (they're simple value types)
-	copy(clone.Connections, d.Connections)
+	// Deep copy connections (need to copy Hints map)
+	for i, conn := range d.Connections {
+		clone.Connections[i] = Connection{
+			ID:    conn.ID,
+			From:  conn.From,
+			To:    conn.To,
+			Arrow: conn.Arrow,
+			Label: conn.Label,
+		}
+		// Deep copy hints map if it exists
+		if conn.Hints != nil {
+			clone.Connections[i].Hints = make(map[string]string)
+			for k, v := range conn.Hints {
+				clone.Connections[i].Hints[k] = v
+			}
+		}
+	}
 	
 	return clone
 }

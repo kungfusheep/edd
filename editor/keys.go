@@ -50,6 +50,11 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 		// This will be handled by the main loop since it needs file system access
 		return false
 		
+	case 'H': // Edit connection hints
+		if len(e.diagram.Connections) > 0 {
+			e.startJump(JumpActionHint)
+		}
+		
 	case 'j': // Toggle JSON view
 		e.SetMode(ModeJSON)
 		e.jsonScrollOffset = 0  // Reset scroll when entering JSON mode
@@ -198,8 +203,8 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		}
 	}
 	
-	// Look for matching connection jump label (in delete or edit mode)
-	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit {
+	// Look for matching connection jump label (in delete, edit, or hint mode)
+	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
 		for connIndex, label := range e.connectionLabels {
 			if label == key {
 				if e.jumpAction == JumpActionDelete {
@@ -219,6 +224,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 				} else if e.jumpAction == JumpActionEdit {
 					// Edit the connection label
 					e.StartEditingConnection(connIndex)
+				} else if e.jumpAction == JumpActionHint {
+					// Enter hint menu for this connection
+					e.editingHintConn = connIndex
+					e.clearJumpLabels()
+					e.SetMode(ModeHintMenu)
 				}
 				return false
 			}
