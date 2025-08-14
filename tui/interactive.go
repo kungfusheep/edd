@@ -779,6 +779,8 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 			fmt.Printf("\033[91mError: %v\033[0m", err)
 			time.Sleep(2 * time.Second)
 		}
+	case 'H': // Edit connection hints
+		tui.StartHintEdit()
 	case 'j': // JSON view
 		tui.SetMode(editor.ModeJSON)
 	case 'u': // Undo

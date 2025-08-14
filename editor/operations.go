@@ -114,6 +114,13 @@ func (e *TUIEditor) StartCommand() {
 	e.commandBuffer = []rune{}
 }
 
+// StartHintEdit starts hint editing mode for connections
+func (e *TUIEditor) StartHintEdit() {
+	if len(e.diagram.Connections) > 0 {
+		e.startJump(JumpActionHint)
+	}
+}
+
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
 	// Delegate to the internal handler which has the proper logic

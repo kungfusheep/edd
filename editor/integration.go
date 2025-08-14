@@ -148,8 +148,26 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	// Calculate bounds
 	bounds := calculateBounds(layoutNodes, paths)
 	
-	// Create canvas
-	c := canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
+	// Check if any connections have color hints
+	hasColors := false
+	for _, conn := range diagram.Connections {
+		if conn.Hints != nil {
+			if _, hasColor := conn.Hints["color"]; hasColor {
+				hasColors = true
+				break
+			}
+		}
+	}
+	
+	// Create appropriate canvas type
+	var c canvas.Canvas
+	var coloredCanvas *canvas.ColoredMatrixCanvas
+	if hasColors {
+		coloredCanvas = canvas.NewColoredMatrixCanvas(bounds.Width(), bounds.Height())
+		c = coloredCanvas
+	} else {
+		c = canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
+	}
 	
 	// Create offset canvas for negative coordinates
 	offsetCanvas := newOffsetCanvas(c, bounds.Min)
@@ -200,12 +218,17 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	connectionsWithArrows := connections.ApplyArrowConfig(diagram.Connections, paths, arrowConfig)
 	
 	// Render connections with hints
-	for _, cwa := range connectionsWithArrows {
+	for i, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
 		
-		// TODO: Implement style and color rendering based on hints
-		// For now, just render normally
-		r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
+		// Check if this connection has hints
+		if i < len(diagram.Connections) && diagram.Connections[i].Hints != nil && len(diagram.Connections[i].Hints) > 0 {
+			// Use RenderPathWithHints to apply visual hints
+			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, diagram.Connections[i].Hints)
+		} else {
+			// Render normally
+			r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
+		}
 	}
 	
 	// Render labels
@@ -215,7 +238,21 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 		}
 	}
 	
-	return positions, c.String(), nil
+	// Get the output string
+	var output string
+	if coloredCanvas != nil {
+		// Use colored output if we have a colored canvas
+		output = coloredCanvas.ColoredString()
+	} else {
+		// Regular output
+		if mc, ok := c.(*canvas.MatrixCanvas); ok {
+			output = mc.String()
+		} else {
+			output = c.String()
+		}
+	}
+	
+	return positions, output, nil
 }
 
 // Helper functions from renderer.go
@@ -323,11 +360,11 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *canvas.Pa
 
 // offsetCanvas implementation (from renderer.go)
 type offsetCanvas struct {
-	canvas *canvas.MatrixCanvas
+	canvas canvas.Canvas
 	offset core.Point
 }
 
-func newOffsetCanvas(c *canvas.MatrixCanvas, offset core.Point) *offsetCanvas {
+func newOffsetCanvas(c canvas.Canvas, offset core.Point) *offsetCanvas {
 	return &offsetCanvas{
 		canvas: c,
 		offset: offset,
@@ -339,6 +376,20 @@ func (oc *offsetCanvas) Set(p core.Point, char rune) error {
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
+	return oc.canvas.Set(translated, char)
+}
+
+// SetWithColor sets a character with color if the underlying canvas supports it
+func (oc *offsetCanvas) SetWithColor(p core.Point, char rune, color string) error {
+	translated := core.Point{
+		X: p.X - oc.offset.X,
+		Y: p.Y - oc.offset.Y,
+	}
+	// Try to set with color if the underlying canvas supports it
+	if coloredCanvas, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+		return coloredCanvas.SetWithColor(translated, char, color)
+	}
+	// Fall back to regular set
 	return oc.canvas.Set(translated, char)
 }
 
@@ -363,7 +414,13 @@ func (oc *offsetCanvas) String() string {
 }
 
 func (oc *offsetCanvas) Matrix() [][]rune {
-	return oc.canvas.Matrix()
+	if mc, ok := oc.canvas.(*canvas.MatrixCanvas); ok {
+		return mc.Matrix()
+	}
+	if cc, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+		return cc.Matrix()
+	}
+	return nil
 }
 
 func (oc *offsetCanvas) Offset() core.Point {

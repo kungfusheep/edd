@@ -21,6 +21,8 @@ type PathRenderer struct {
 	style      LineStyle
 	junction   *JunctionResolver
 	renderMode PathRenderMode
+	hintStyle  string // Current hint style (solid, dashed, dotted, double)
+	hintColor  string // Current hint color
 }
 
 // LineStyle represents the visual style for rendering lines.
@@ -67,6 +69,117 @@ func (r *PathRenderer) SetRenderMode(mode PathRenderMode) {
 // RenderPath draws a path on the canvas with appropriate line characters.
 func (r *PathRenderer) RenderPath(canvas Canvas, path core.Path, hasArrow bool) error {
 	return r.RenderPathWithOptions(canvas, path, hasArrow, false)
+}
+
+// RenderPathWithHints draws a path with visual hints applied.
+func (r *PathRenderer) RenderPathWithHints(canvas Canvas, path core.Path, hasArrow bool, hints map[string]string) error {
+	// Save current style
+	oldStyle := r.style
+	oldHintStyle := r.hintStyle
+	oldHintColor := r.hintColor
+	
+	// Apply hints
+	if hints != nil {
+		if style, ok := hints["style"]; ok {
+			r.hintStyle = style
+			r.applyHintStyle(style)
+		}
+		if color, ok := hints["color"]; ok {
+			r.hintColor = color
+		}
+	}
+	
+	// Render the path (color will be applied via setWithColor method)
+	err := r.RenderPathWithOptions(canvas, path, hasArrow, true)
+	
+	// Restore original style
+	r.style = oldStyle
+	r.hintStyle = oldHintStyle
+	r.hintColor = oldHintColor
+	
+	return err
+}
+
+// setWithColor sets a character on the canvas, applying color if the canvas supports it
+func (r *PathRenderer) setWithColor(canvas Canvas, p core.Point, char rune) error {
+	if r.hintColor != "" {
+		// Try to set with color if the canvas supports it
+		if coloredCanvas, ok := canvas.(*ColoredMatrixCanvas); ok {
+			return coloredCanvas.SetWithColor(p, char, r.hintColor)
+		}
+		// Also check if it's a type that supports SetWithColor method (like offsetCanvas)
+		if colorSetter, ok := canvas.(interface {
+			SetWithColor(core.Point, rune, string) error
+		}); ok {
+			return colorSetter.SetWithColor(p, char, r.hintColor)
+		}
+	}
+	// Fall back to regular set
+	return canvas.Set(p, char)
+}
+
+// applyHintStyle modifies the line style based on the hint.
+func (r *PathRenderer) applyHintStyle(style string) {
+	switch style {
+	case "dashed":
+		if r.caps.UnicodeLevel >= UnicodeBasic {
+			r.style.Horizontal = '╌' // Box drawing light dashed
+			r.style.Vertical = '╎'   // Box drawing light dashed vertical
+		} else {
+			r.style.Horizontal = '-'
+			r.style.Vertical = '|'
+		}
+	case "dotted":
+		if r.caps.UnicodeLevel >= UnicodeBasic {
+			r.style.Horizontal = '·' // Middle dot
+			r.style.Vertical = '·'   // Middle dot
+		} else {
+			r.style.Horizontal = '.'
+			r.style.Vertical = '.'
+		}
+	case "double":
+		if r.caps.UnicodeLevel >= UnicodeFull {
+			r.style.Horizontal = '═' // Box drawing double horizontal
+			r.style.Vertical = '║'   // Box drawing double vertical
+			// Update corners for double lines
+			r.style.TopLeft = '╚'     // Box drawing double up and right
+			r.style.TopRight = '╝'    // Box drawing double up and left
+			r.style.BottomLeft = '╔'  // Box drawing double down and right
+			r.style.BottomRight = '╗' // Box drawing double down and left
+		} else {
+			r.style.Horizontal = '='
+			r.style.Vertical = '|'
+		}
+	// "solid" or default - no change needed
+	}
+}
+
+// getLineChar returns the appropriate character for a line segment based on style hints.
+// For dashed and dotted styles, this creates the pattern effect.
+func (r *PathRenderer) getLineChar(horizontal bool, position int) rune {
+	switch r.hintStyle {
+	case "dashed":
+		// For dashed, use the dashed characters consistently
+		if horizontal {
+			return r.style.Horizontal
+		}
+		return r.style.Vertical
+	case "dotted":
+		// For dotted, space out the dots
+		if position%2 == 0 {
+			if horizontal {
+				return r.style.Horizontal
+			}
+			return r.style.Vertical
+		}
+		return ' '
+	default:
+		// Solid or double - use the normal style
+		if horizontal {
+			return r.style.Horizontal
+		}
+		return r.style.Vertical
+	}
 }
 
 // RenderPathWithOptions draws a path with additional rendering options.
@@ -137,7 +250,7 @@ func (r *PathRenderer) RenderPathWithOptions(canvas Canvas, path core.Path, hasA
 				}
 				
 				if branchChar != 0 {
-					canvas.Set(from, branchChar)
+					r.setWithColor(canvas, from, branchChar)
 				}
 			} else {
 				// Not a clean edge, draw normally
@@ -164,7 +277,7 @@ func (r *PathRenderer) RenderPathWithOptions(canvas Canvas, path core.Path, hasA
 	
 	// Phase 3: Place all corners
 	for pos, corner := range corners {
-		canvas.Set(pos, corner)
+		r.setWithColor(canvas, pos, corner)
 	}
 	
 	return nil
@@ -261,9 +374,9 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 				}
 				// Debug: print when placing arrows
 				//fmt.Printf("Placing arrow %c at (%d,%d)\n", arrowChar, p.X, p.Y)
-				canvas.Set(p, arrowChar)
+				r.setWithColor(canvas, p, arrowChar)
 			} else {
-				canvas.Set(p, r.style.Horizontal)
+				r.setWithColor(canvas, p, r.style.Horizontal)
 			}
 		}
 		return nil
@@ -295,9 +408,9 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 				if step < 0 {
 					arrowChar = r.style.ArrowUp
 				}
-				canvas.Set(p, arrowChar)
+				r.setWithColor(canvas, p, arrowChar)
 			} else {
-				canvas.Set(p, r.style.Vertical)
+				r.setWithColor(canvas, p, r.style.Vertical)
 			}
 		}
 		return nil

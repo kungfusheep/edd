@@ -232,7 +232,27 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	
 	// Step 5: Calculate bounds including paths and create canvas
 	bounds := calculateBounds(layoutNodes, paths)
-	c := canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
+	
+	// Check if any connections have color hints
+	hasColors := false
+	for _, conn := range diagram.Connections {
+		if conn.Hints != nil {
+			if _, hasColor := conn.Hints["color"]; hasColor {
+				hasColors = true
+				break
+			}
+		}
+	}
+	
+	// Create appropriate canvas type
+	var c canvas.Canvas
+	var coloredCanvas *canvas.ColoredMatrixCanvas
+	if hasColors {
+		coloredCanvas = canvas.NewColoredMatrixCanvas(bounds.Width(), bounds.Height())
+		c = coloredCanvas
+	} else {
+		c = canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
+	}
 	
 	// Create offset canvas that handles coordinate translation
 	offsetCanvas := newOffsetCanvas(c, bounds.Min)
@@ -267,11 +287,17 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	
 	// Step 8: Render all connections (no endpoint adjustment needed)
 	// Note: connectionsWithArrows maintains the same order as diagram.Connections
-	for _, cwa := range connectionsWithArrows {
+	for i, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
 		
-		// Use RenderPathWithOptions to enable connection endpoint handling
-		r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
+		// Check if this connection has hints
+		if i < len(diagram.Connections) && diagram.Connections[i].Hints != nil && len(diagram.Connections[i].Hints) > 0 {
+			// Use RenderPathWithHints to apply visual hints
+			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, diagram.Connections[i].Hints)
+		} else {
+			// Use RenderPathWithOptions to enable connection endpoint handling
+			r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
+		}
 	}
 	
 	// Step 8a: Render connection labels after all paths are drawn
@@ -288,7 +314,18 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	}
 	
 	// Step 9: Convert canvas to string output
-	output := c.String()
+	var output string
+	if coloredCanvas != nil {
+		// Use colored output if we have a colored canvas
+		output = coloredCanvas.ColoredString()
+	} else {
+		// Regular output
+		if mc, ok := c.(*canvas.MatrixCanvas); ok {
+			output = mc.String()
+		} else {
+			output = c.String()
+		}
+	}
 	
 	// Step 10: Validate output if validator is enabled
 	if r.validator != nil {
@@ -648,13 +685,13 @@ func getEdgeName(edge obstacles.EdgeSide) string {
 	}
 }
 
-// offsetCanvas wraps a MatrixCanvas and translates coordinates by an offset
+// offsetCanvas wraps a Canvas and translates coordinates by an offset
 type offsetCanvas struct {
-	canvas *canvas.MatrixCanvas
+	canvas canvas.Canvas
 	offset core.Point
 }
 
-func newOffsetCanvas(c *canvas.MatrixCanvas, offset core.Point) *offsetCanvas {
+func newOffsetCanvas(c canvas.Canvas, offset core.Point) *offsetCanvas {
 	return &offsetCanvas{
 		canvas: c,
 		offset: offset,
@@ -667,6 +704,21 @@ func (oc *offsetCanvas) Set(p core.Point, char rune) error {
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
+	return oc.canvas.Set(translated, char)
+}
+
+// SetWithColor sets a character with color if the underlying canvas supports it
+func (oc *offsetCanvas) SetWithColor(p core.Point, char rune, color string) error {
+	// Translate coordinates
+	translated := core.Point{
+		X: p.X - oc.offset.X,
+		Y: p.Y - oc.offset.Y,
+	}
+	// Try to set with color if the underlying canvas supports it
+	if coloredCanvas, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+		return coloredCanvas.SetWithColor(translated, char, color)
+	}
+	// Fall back to regular set
 	return oc.canvas.Set(translated, char)
 }
 
@@ -693,7 +745,13 @@ func (oc *offsetCanvas) String() string {
 
 // Matrix returns direct access to the underlying matrix for label rendering
 func (oc *offsetCanvas) Matrix() [][]rune {
-	return oc.canvas.Matrix()
+	if mc, ok := oc.canvas.(*canvas.MatrixCanvas); ok {
+		return mc.Matrix()
+	}
+	if cc, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+		return cc.Matrix()
+	}
+	return nil
 }
 
 // Offset returns the offset for coordinate translation
