@@ -1,7 +1,6 @@
-package rendering
+package canvas
 
 import (
-	"edd/canvas"
 	"edd/core"
 	"fmt"
 )
@@ -66,12 +65,12 @@ func (r *PathRenderer) SetRenderMode(mode PathRenderMode) {
 }
 
 // RenderPath draws a path on the canvas with appropriate line characters.
-func (r *PathRenderer) RenderPath(canvas canvas.Canvas, path core.Path, hasArrow bool) error {
+func (r *PathRenderer) RenderPath(canvas Canvas, path core.Path, hasArrow bool) error {
 	return r.RenderPathWithOptions(canvas, path, hasArrow, false)
 }
 
 // RenderPathWithOptions draws a path with additional rendering options.
-func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Path, hasArrow bool, isConnection bool) error {
+func (r *PathRenderer) RenderPathWithOptions(canvas Canvas, path core.Path, hasArrow bool, isConnection bool) error {
 	if path.IsEmpty() {
 		return nil
 	}
@@ -173,7 +172,7 @@ func (r *PathRenderer) RenderPathWithOptions(canvas canvas.Canvas, path core.Pat
 
 // placeStartBranch places a corner character at the start of a connection
 // This corner will merge with the box edge (─ or │) to create a branch character (├, ┤, ┬, ┴)
-func (r *PathRenderer) placeStartBranch(canvas canvas.Canvas, from, to core.Point) {
+func (r *PathRenderer) placeStartBranch(canvas Canvas, from, to core.Point) {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -226,11 +225,11 @@ func (r *PathRenderer) placeStartBranch(canvas canvas.Canvas, from, to core.Poin
 
 // drawSegmentSkippingCorners draws a line segment while skipping any positions marked as corners
 // If skipFirst is true, skip drawing at the first point (used for connection starts)
-func (r *PathRenderer) drawSegmentSkippingCorners(canvas canvas.Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool) error {
+func (r *PathRenderer) drawSegmentSkippingCorners(canvas Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool) error {
 	return r.drawSegmentSkippingCornersWithOptions(canvas, from, to, corners, drawArrow, false)
 }
 
-func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas canvas.Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool, skipFirst bool) error {
+func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from, to core.Point, corners map[core.Point]rune, drawArrow bool, skipFirst bool) error {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -310,7 +309,7 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas canvas.Canva
 
 // drawSegmentInclusive draws a line segment including the endpoint.
 // For multi-segment paths, we skip the start point if it's a potential corner location.
-func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.Point, drawArrow bool) error {
+func (r *PathRenderer) drawSegmentInclusive(canvas Canvas, from, to core.Point, drawArrow bool) error {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -420,7 +419,7 @@ func (r *PathRenderer) drawSegmentInclusive(canvas canvas.Canvas, from, to core.
 }
 
 // drawSegmentForClosedPath draws a line segment for closed paths, skipping both endpoints to leave room for corners.
-func (r *PathRenderer) drawSegmentForClosedPath(canvas canvas.Canvas, from, to core.Point) error {
+func (r *PathRenderer) drawSegmentForClosedPath(canvas Canvas, from, to core.Point) error {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -478,7 +477,7 @@ func (r *PathRenderer) drawSegmentForClosedPath(canvas canvas.Canvas, from, to c
 }
 
 // drawSegmentWithOptions draws a line segment with options to skip start/end points.
-func (r *PathRenderer) drawSegmentWithOptions(canvas canvas.Canvas, from, to core.Point, drawArrow bool, skipStart bool) error {
+func (r *PathRenderer) drawSegmentWithOptions(canvas Canvas, from, to core.Point, drawArrow bool, skipStart bool) error {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -574,7 +573,7 @@ func (r *PathRenderer) drawSegmentWithOptions(canvas canvas.Canvas, from, to cor
 }
 
 // drawSegment draws a line segment between two points.
-func (r *PathRenderer) drawSegment(canvas canvas.Canvas, from, to core.Point, drawArrow bool) error {
+func (r *PathRenderer) drawSegment(canvas Canvas, from, to core.Point, drawArrow bool) error {
 	return r.drawSegmentWithOptions(canvas, from, to, drawArrow, false)
 }
 
@@ -763,13 +762,6 @@ func selectLineStyle(caps TerminalCapabilities) LineStyle {
 	}
 }
 
-// abs returns the absolute value of an integer.
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
 
 // isJunctionChar checks if a character is a junction character.
 func isJunctionChar(r rune) bool {

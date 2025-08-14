@@ -374,6 +374,19 @@ func (c *MatrixCanvas) DrawSmartPath(points []core.Point) error {
 	return nil
 }
 
+// getDirection returns the direction from p1 to p2 as a rune.
+func getDirection(p1, p2 core.Point) rune {
+	if p2.X > p1.X {
+		return 'E'
+	} else if p2.X < p1.X {
+		return 'W'
+	} else if p2.Y > p1.Y {
+		return 'S'
+	} else {
+		return 'N'
+	}
+}
+
 // selectCorner chooses the appropriate corner character based on direction.
 func (c *MatrixCanvas) selectCorner(prev, curr, next core.Point) rune {
 	fromDir := getDirection(prev, curr)
@@ -401,18 +414,6 @@ func (c *MatrixCanvas) selectCorner(prev, curr, next core.Point) rune {
 	}
 }
 
-// getDirection returns the direction from p1 to p2.
-func getDirection(p1, p2 core.Point) rune {
-	if p2.X > p1.X {
-		return 'E'
-	} else if p2.X < p1.X {
-		return 'W'
-	} else if p2.Y > p1.Y {
-		return 'S'
-	} else {
-		return 'N'
-	}
-}
 
 // setClipped sets a character with bounds checking (no error).
 func (c *MatrixCanvas) setClipped(x, y int, char rune) {

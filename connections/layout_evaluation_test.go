@@ -4,7 +4,6 @@ import (
 	"edd/canvas"
 	"edd/core"
 	"edd/pathfinding"
-	"edd/rendering"
 	"fmt"
 	"strings"
 	"testing"
@@ -163,9 +162,9 @@ func TestLayoutQualityEvaluation(t *testing.T) {
 			c := canvas.NewMatrixCanvas(tt.width, tt.height)
 
 			// Create renderer
-			caps := rendering.TerminalCapabilities{UnicodeLevel: rendering.UnicodeFull}
-			renderer := rendering.NewPathRenderer(caps)
-			renderer.SetRenderMode(rendering.RenderModePreserveCorners)
+			caps := canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull}
+			renderer := canvas.NewPathRenderer(caps)
+			renderer.SetRenderMode(canvas.RenderModePreserveCorners)
 
 			// Draw nodes
 			for _, node := range tt.nodes {

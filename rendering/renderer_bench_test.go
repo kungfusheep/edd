@@ -1,4 +1,4 @@
-package main
+package rendering
 
 import (
 	"edd/core"

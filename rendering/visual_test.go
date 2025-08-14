@@ -118,14 +118,14 @@ func TestVisualRendering(t *testing.T) {
 			// Test both Unicode and ASCII modes
 			for _, unicodeMode := range []bool{true, false} {
 				modeName := "Unicode"
-				caps := TerminalCapabilities{UnicodeLevel: UnicodeFull}
+				caps := canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull}
 				if !unicodeMode {
 					modeName = "ASCII"
-					caps = TerminalCapabilities{UnicodeLevel: UnicodeNone}
+					caps = canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeNone}
 				}
 
 				c := canvas.NewMatrixCanvas(tt.width, tt.height)
-				renderer := NewPathRenderer(caps)
+				renderer := canvas.NewPathRenderer(caps)
 				// Use preserve corners mode for better box appearance
 				renderer.SetRenderMode(RenderModePreserveCorners)
 
@@ -152,7 +152,7 @@ func TestVisualRendering(t *testing.T) {
 // TestOverlappingPaths tests junction resolution with overlapping paths
 func TestOverlappingPaths(t *testing.T) {
 	c := canvas.NewMatrixCanvas(15, 10)
-	renderer := NewPathRenderer(TerminalCapabilities{UnicodeLevel: UnicodeFull})
+	renderer := canvas.NewPathRenderer(canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull})
 	// Use standard mode to test junction resolution
 	// (preserve corners mode would keep separate boxes visually distinct)
 

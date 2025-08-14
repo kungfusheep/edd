@@ -4,7 +4,6 @@ import (
 	"edd/canvas"
 	"edd/core"
 	"edd/pathfinding"
-	"edd/rendering"
 	"fmt"
 	"strings"
 	"testing"
@@ -93,9 +92,9 @@ func TestSpreadingAnalysis(t *testing.T) {
 			c := canvas.NewMatrixCanvas(width, height)
 
 			// Create renderer
-			caps := rendering.TerminalCapabilities{UnicodeLevel: rendering.UnicodeFull}
-			renderer := rendering.NewPathRenderer(caps)
-			renderer.SetRenderMode(rendering.RenderModePreserveCorners)
+			caps := canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull}
+			renderer := canvas.NewPathRenderer(caps)
+			renderer.SetRenderMode(canvas.RenderModePreserveCorners)
 
 			// Draw nodes
 			for _, node := range nodes {
@@ -261,9 +260,9 @@ func TestBidirectionalSpacing(t *testing.T) {
 	c := canvas.NewMatrixCanvas(45, 16)
 
 	// Create renderer
-	caps := rendering.TerminalCapabilities{UnicodeLevel: rendering.UnicodeFull}
-	renderer := rendering.NewPathRenderer(caps)
-	renderer.SetRenderMode(rendering.RenderModePreserveCorners)
+	caps := canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull}
+	renderer := canvas.NewPathRenderer(caps)
+	renderer.SetRenderMode(canvas.RenderModePreserveCorners)
 
 	// Draw nodes
 	for _, node := range nodes {

@@ -70,20 +70,6 @@ var (
 	}
 )
 
-// LineStyle defines characters for drawing lines
-type LineStyle struct {
-	Horizontal rune
-	Vertical   rune
-	TopLeft    rune
-	TopRight   rune
-	BottomLeft rune
-	BottomRight rune
-	Cross      rune
-	TeeUp      rune
-	TeeDown    rune
-	TeeLeft    rune
-	TeeRight   rune
-}
 
 // DefaultLineStyle uses Unicode box-drawing characters
 var DefaultLineStyle = LineStyle{

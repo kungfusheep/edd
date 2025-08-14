@@ -1,9 +1,9 @@
-package main
+package tests
 
 import (
 	"edd/canvas"
 	"edd/core"
-	"edd/rendering"
+	"edd/validation"
 	"testing"
 )
 
@@ -43,8 +43,8 @@ func TestJunctionConflict(t *testing.T) {
 
 	// Render the diagram
 	c := canvas.NewMatrixCanvas(30, 10)
-	caps := rendering.TerminalCapabilities{UnicodeLevel: rendering.UnicodeFull}
-	renderer := rendering.NewPathRenderer(caps)
+	caps := canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull}
+	renderer := canvas.NewPathRenderer(caps)
 
 	// First draw the boxes
 	for _, node := range nodes {
@@ -85,7 +85,7 @@ func TestJunctionConflict(t *testing.T) {
 	// Actual: junction characters at box edges
 	
 	// Let's also check with the validator
-	validator := NewLineValidator()
+	validator := validation.NewLineValidator()
 	errors := validator.Validate(output)
 	
 	if len(errors) > 0 {
@@ -149,8 +149,8 @@ func TestConnectionPointOptions(t *testing.T) {
 			// Draw the connection based on approach
 			path := core.Path{Points: []core.Point{tt.startPoint, tt.endPoint}}
 			
-			caps := rendering.TerminalCapabilities{UnicodeLevel: rendering.UnicodeFull}
-			renderer := rendering.NewPathRenderer(caps)
+			caps := canvas.TerminalCapabilities{UnicodeLevel: canvas.UnicodeFull}
+			renderer := canvas.NewPathRenderer(caps)
 			renderer.RenderPath(c, path, true)
 
 			output := c.String()

@@ -1,7 +1,8 @@
-package main
+package tests
 
 import (
 	"edd/core"
+	"edd/rendering"
 	"fmt"
 	"strings"
 	"testing"
@@ -22,7 +23,7 @@ func TestRoutingDebug(t *testing.T) {
 		},
 	}
 
-	renderer := NewRenderer()
+	renderer := rendering.NewRenderer()
 	renderer.EnableDebug()
 	
 	output1, err := renderer.Render(diagram1)
@@ -100,7 +101,7 @@ func TestVirtualObstacleAuthority(t *testing.T) {
 		},
 	}
 
-	renderer := NewRenderer()
+	renderer := rendering.NewRenderer()
 	renderer.EnableDebug()
 	
 	output, err := renderer.Render(diagram)

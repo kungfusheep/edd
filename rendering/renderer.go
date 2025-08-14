@@ -1,4 +1,4 @@
-package main
+package rendering
 
 import (
 	"edd/canvas"
@@ -7,7 +7,7 @@ import (
 	"edd/layout"
 	"edd/obstacles"
 	"edd/pathfinding"
-	"edd/rendering"
+	"edd/validation"
 	"fmt"
 	"os"
 )
@@ -18,12 +18,12 @@ type Renderer struct {
 	layout        core.LayoutEngine
 	pathfinder    core.PathFinder
 	router        *connections.Router
-	capabilities  rendering.TerminalCapabilities // Cached to avoid repeated detection
-	pathRenderer  *rendering.PathRenderer         // Reused across renders
-	labelRenderer *rendering.LabelRenderer        // Handles connection labels
-	validator     *LineValidator                  // Optional output validator
-	debugMode     bool                            // Enable debug obstacle visualization
-	showObstacles bool                            // Show virtual obstacles as dots in standard rendering
+	capabilities  canvas.TerminalCapabilities // Cached to avoid repeated detection
+	pathRenderer  *canvas.PathRenderer         // Reused across renders
+	labelRenderer *canvas.LabelRenderer        // Handles connection labels
+	validator     *validation.LineValidator // Optional output validator
+	debugMode     bool                  // Enable debug obstacle visualization
+	showObstacles bool                  // Show virtual obstacles as dots in standard rendering
 }
 
 // NewRenderer creates a new renderer with sensible defaults.
@@ -54,20 +54,20 @@ func NewRenderer() *Renderer {
 		pathfinder:    cachedPathfinder,
 		router:        router,
 		capabilities:  caps,
-		pathRenderer:  rendering.NewPathRenderer(caps),
-		labelRenderer: rendering.NewLabelRenderer(),
+		pathRenderer:  canvas.NewPathRenderer(caps),
+		labelRenderer: canvas.NewLabelRenderer(),
 		validator:     nil, // Validator is optional, enabled via SetValidator
 	}
 }
 
 // SetValidator enables output validation with the given validator.
-func (r *Renderer) SetValidator(v *LineValidator) {
+func (r *Renderer) SetValidator(v *validation.LineValidator) {
 	r.validator = v
 }
 
 // EnableValidation enables output validation with default settings.
 func (r *Renderer) EnableValidation() {
-	r.validator = NewLineValidator()
+	r.validator = validation.NewLineValidator()
 }
 
 // EnableDebug enables debug mode to show obstacle visualization.
@@ -195,11 +195,11 @@ func (r *Renderer) renderNode(c canvas.Canvas, node core.Node) error {
 }
 
 // detectTerminalCapabilities returns the current terminal's capabilities.
-func detectTerminalCapabilities() rendering.TerminalCapabilities {
+func detectTerminalCapabilities() canvas.TerminalCapabilities {
 	// For now, return a simple default. In the future, this could
 	// actually detect the terminal type and capabilities.
-	return rendering.TerminalCapabilities{
-		UnicodeLevel: rendering.UnicodeFull,
+	return canvas.TerminalCapabilities{
+		UnicodeLevel: canvas.UnicodeFull,
 		SupportsColor: true,
 	}
 }
@@ -278,7 +278,7 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	// This ensures labels are placed on top of the lines
 	for i, conn := range diagram.Connections {
 		if conn.Label != "" && i < len(connectionsWithArrows) {
-			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, rendering.LabelMiddle)
+			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, canvas.LabelMiddle)
 		}
 	}
 	
@@ -466,7 +466,11 @@ func (r *Renderer) isInVirtualObstacleZone(p core.Point, node core.Node, sourceI
 		}
 		
 		// For source/target nodes, only block very close diagonal approaches
-		if abs(p.X - (node.X + node.Width/2)) <= 1 && abs(p.Y - (node.Y + node.Height/2)) <= 1 {
+		dx := p.X - (node.X + node.Width/2)
+		dy := p.Y - (node.Y + node.Height/2)
+		if dx < 0 { dx = -dx }
+		if dy < 0 { dy = -dy }
+		if dx <= 1 && dy <= 1 {
 			// Very close to node center - check if it's a diagonal approach that we should block
 			if p.X != node.X + node.Width/2 && p.Y != node.Y + node.Height/2 {
 				return true // Block diagonal approaches very close to the node
@@ -642,14 +646,6 @@ func getEdgeName(edge obstacles.EdgeSide) string {
 	default:
 		return "Unknown"
 	}
-}
-
-// abs returns the absolute value of an integer (helper function).
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 // offsetCanvas wraps a MatrixCanvas and translates coordinates by an offset

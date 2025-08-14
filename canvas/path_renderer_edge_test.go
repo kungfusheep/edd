@@ -1,10 +1,9 @@
-package rendering
+package canvas
 
 import (
 	"strings"
 	"testing"
 
-	"edd/canvas"
 	"edd/core"
 )
 

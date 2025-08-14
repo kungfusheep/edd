@@ -1,7 +1,6 @@
-package rendering
+package canvas
 
 import (
-	"edd/canvas"
 	"edd/core"
 	"strings"
 )
@@ -37,7 +36,7 @@ type Segment struct {
 }
 
 // RenderLabel renders a label on a path at the specified position
-func (lr *LabelRenderer) RenderLabel(c canvas.Canvas, path core.Path, label string, position LabelPosition) {
+func (lr *LabelRenderer) RenderLabel(c Canvas, path core.Path, label string, position LabelPosition) {
 	if label == "" || len(path.Points) < 2 {
 		return
 	}
@@ -107,11 +106,11 @@ func (lr *LabelRenderer) combineConsecutiveSegments(path core.Path) []Segment {
 	segments := []Segment{}
 	currentStart := path.Points[0]
 	currentEnd := path.Points[1]
-	currentDirection := getDirection(currentStart, currentEnd)
+	currentDirection := getSegmentDirection(currentStart, currentEnd)
 	
 	for i := 2; i < len(path.Points); i++ {
 		nextPoint := path.Points[i]
-		nextDirection := getDirection(currentEnd, nextPoint)
+		nextDirection := getSegmentDirection(currentEnd, nextPoint)
 		
 		// If direction changes, save the current segment and start a new one
 		if nextDirection != currentDirection {
@@ -144,8 +143,8 @@ func (lr *LabelRenderer) combineConsecutiveSegments(path core.Path) []Segment {
 	return segments
 }
 
-// getDirection returns a simple direction indicator for a segment
-func getDirection(from, to core.Point) string {
+// getSegmentDirection returns a simple direction indicator for a segment
+func getSegmentDirection(from, to core.Point) string {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	
@@ -189,7 +188,7 @@ func (lr *LabelRenderer) findAnySegmentForLabel(path core.Path, label string, po
 }
 
 // renderInlineLabel renders a label inline on a segment, replacing the line characters
-func (lr *LabelRenderer) renderInlineLabel(c canvas.Canvas, segment *Segment, label string) {
+func (lr *LabelRenderer) renderInlineLabel(c Canvas, segment *Segment, label string) {
 	if segment.IsHorizontal {
 		lr.renderHorizontalInlineLabel(c, segment, label)
 	} else if segment.IsVertical {
@@ -198,7 +197,7 @@ func (lr *LabelRenderer) renderInlineLabel(c canvas.Canvas, segment *Segment, la
 }
 
 // renderHorizontalInlineLabel renders a label inline on a horizontal segment
-func (lr *LabelRenderer) renderHorizontalInlineLabel(c canvas.Canvas, segment *Segment, label string) {
+func (lr *LabelRenderer) renderHorizontalInlineLabel(c Canvas, segment *Segment, label string) {
 	labelLen := len(label)
 	segmentLen := abs(segment.End.X - segment.Start.X)
 	
@@ -229,7 +228,7 @@ func (lr *LabelRenderer) renderHorizontalInlineLabel(c canvas.Canvas, segment *S
 	var xOffset, yOffset int
 	
 	// Check if we can access the canvas as a MatrixCanvas for direct access
-	if mc, ok := c.(*canvas.MatrixCanvas); ok {
+	if mc, ok := c.(*MatrixCanvas); ok {
 		matrix = mc.Matrix()
 		xOffset = 0
 		yOffset = 0
@@ -280,7 +279,7 @@ func (lr *LabelRenderer) formatLabel(label string) string {
 }
 
 // renderVerticalInlineLabel renders a label inline on a vertical segment
-func (lr *LabelRenderer) renderVerticalInlineLabel(c canvas.Canvas, segment *Segment, label string) {
+func (lr *LabelRenderer) renderVerticalInlineLabel(c Canvas, segment *Segment, label string) {
 	// For vertical segments, we'll render the label vertically
 	labelLen := len(label)
 	segmentLen := abs(segment.End.Y - segment.Start.Y)
@@ -311,7 +310,7 @@ func (lr *LabelRenderer) renderVerticalInlineLabel(c canvas.Canvas, segment *Seg
 	var xOffset, yOffset int
 	
 	// Check if we can access the canvas as a MatrixCanvas for direct access
-	if mc, ok := c.(*canvas.MatrixCanvas); ok {
+	if mc, ok := c.(*MatrixCanvas); ok {
 		matrix = mc.Matrix()
 		xOffset = 0
 		yOffset = 0

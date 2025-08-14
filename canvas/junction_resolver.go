@@ -1,4 +1,4 @@
-package rendering
+package canvas
 
 // JunctionResolver determines the appropriate junction character when lines intersect.
 type JunctionResolver struct {

@@ -5,7 +5,6 @@ import (
 	"edd/layout"
 	"edd/pathfinding"
 	"edd/connections"
-	"edd/rendering"
 	"edd/canvas"
 	"fmt"
 	"strings"
@@ -16,9 +15,9 @@ type RealRenderer struct {
 	layout     core.LayoutEngine
 	pathfinder core.PathFinder
 	router     *connections.Router
-	capabilities rendering.TerminalCapabilities
-	pathRenderer *rendering.PathRenderer
-	labelRenderer *rendering.LabelRenderer
+	capabilities canvas.TerminalCapabilities
+	pathRenderer *canvas.PathRenderer
+	labelRenderer *canvas.LabelRenderer
 	
 	// Edit state for rendering cursor in nodes
 	editingNodeID int
@@ -66,8 +65,8 @@ func NewRealRenderer() *RealRenderer {
 	router := connections.NewRouter(cachedPathfinder)
 	
 	// Terminal capabilities
-	caps := rendering.TerminalCapabilities{
-		UnicodeLevel: rendering.UnicodeFull,
+	caps := canvas.TerminalCapabilities{
+		UnicodeLevel: canvas.UnicodeFull,
 		SupportsColor: true,
 	}
 	
@@ -76,8 +75,8 @@ func NewRealRenderer() *RealRenderer {
 		pathfinder:    cachedPathfinder,
 		router:        router,
 		capabilities:  caps,
-		pathRenderer:  rendering.NewPathRenderer(caps),
-		labelRenderer: rendering.NewLabelRenderer(),
+		pathRenderer:  canvas.NewPathRenderer(caps),
+		labelRenderer: canvas.NewLabelRenderer(),
 		editingNodeID: -1,
 	}
 }
@@ -212,7 +211,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	// Render labels
 	for i, conn := range diagram.Connections {
 		if conn.Label != "" && i < len(connectionsWithArrows) {
-			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, rendering.LabelMiddle)
+			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, canvas.LabelMiddle)
 		}
 	}
 	
@@ -273,7 +272,7 @@ func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
 	}
 }
 
-func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *rendering.PathRenderer, isEditing bool, editText string, cursorPos int) {
+func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *canvas.PathRenderer, isEditing bool, editText string, cursorPos int) {
 	// Draw box
 	boxPath := core.Path{
 		Points: []core.Point{

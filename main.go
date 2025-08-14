@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"edd/core"
+	"edd/rendering"
+	"edd/tui"
+	"edd/validation"
 	"flag"
 	"fmt"
 	"io"
@@ -49,7 +52,7 @@ func main() {
 	// Handle interactive mode
 	if *interactive || *edit || (len(args) == 0 && !*validate && !*debug && !*showObstacles) {
 		// Launch TUI
-		if err := RunInteractive(filename); err != nil {
+		if err := tui.RunInteractive(filename); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -71,7 +74,7 @@ func main() {
 	}
 	
 	// Create renderer
-	renderer := NewRenderer()
+	renderer := rendering.NewRenderer()
 	
 	// Enable validation if requested
 	if *validate {
@@ -102,7 +105,7 @@ func main() {
 	if *validate {
 		// The renderer already validated during render and printed warnings
 		// Here we could do additional validation or exit with error code if needed
-		validator := NewLineValidator()
+		validator := validation.NewLineValidator()
 		errors := validator.Validate(output)
 		if len(errors) > 0 {
 			os.Exit(2) // Exit with error code to indicate validation issues

@@ -1,11 +1,12 @@
 package rendering
 
 import (
+	"edd/canvas"
 	"testing"
 )
 
 func TestJunctionResolver_ArrowMeetsLine(t *testing.T) {
-	jr := NewJunctionResolver()
+	jr := canvas.NewJunctionResolver()
 	
 	tests := []struct {
 		name     string
@@ -48,7 +49,7 @@ func TestJunctionResolver_ArrowMeetsLine(t *testing.T) {
 }
 
 func TestJunctionResolver_ArrowMeetsCorner(t *testing.T) {
-	jr := NewJunctionResolver()
+	jr := canvas.NewJunctionResolver()
 	
 	tests := []struct {
 		name     string
@@ -79,7 +80,7 @@ func TestJunctionResolver_ArrowMeetsCorner(t *testing.T) {
 }
 
 func TestJunctionResolver_ArrowMeetsArrow(t *testing.T) {
-	jr := NewJunctionResolver()
+	jr := canvas.NewJunctionResolver()
 	
 	tests := []struct {
 		name     string

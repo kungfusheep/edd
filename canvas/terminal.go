@@ -1,5 +1,5 @@
 // Package rendering provides path rendering with terminal awareness.
-package rendering
+package canvas
 
 import (
 	"os"

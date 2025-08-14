@@ -1,8 +1,9 @@
-package main
+package tests
 
 import (
 	"encoding/json"
 	"edd/core"
+	"edd/rendering"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func TestIntegrationDiagrams(t *testing.T) {
 		t.Skip("No test diagrams found")
 	}
 
-	renderer := NewRenderer()
+	renderer := rendering.NewRenderer()
 
 	for _, file := range files {
 		name := filepath.Base(file)
@@ -109,7 +110,7 @@ func TestRendererEndToEnd(t *testing.T) {
 		},
 	}
 
-	renderer := NewRenderer()
+	renderer := rendering.NewRenderer()
 	output, err := renderer.Render(diagram)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)

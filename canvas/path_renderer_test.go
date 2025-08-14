@@ -1,4 +1,4 @@
-package rendering
+package canvas
 
 import (
 	"strings"
