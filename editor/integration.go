@@ -8,6 +8,7 @@ import (
 	"edd/rendering"
 	"edd/canvas"
 	"fmt"
+	"strings"
 )
 
 // RealRenderer wraps our actual modular renderer for the TUI
@@ -107,16 +108,30 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	// Layout
 	layoutNodes, err := r.layout.Layout(nodes, diagram.Connections)
 	
-	// After layout, adjust width for editing node if needed
+	// After layout, adjust dimensions for editing node if needed
 	if r.editingNodeID >= 0 {
 		for i := range layoutNodes {
 			if layoutNodes[i].ID == r.editingNodeID {
-				// Recalculate width for edit text
-				minWidth := len([]rune(r.editText)) + 4  // text + padding (no cursor char)
+				// Split edit text into lines for multi-line support
+				lines := strings.Split(r.editText, "\n")
+				
+				// Recalculate width - find the longest line
+				maxWidth := 0
+				for _, line := range lines {
+					lineWidth := len([]rune(line))
+					if lineWidth > maxWidth {
+						maxWidth = lineWidth
+					}
+				}
+				minWidth := maxWidth + 4  // text + padding
 				if minWidth < 8 {
 					minWidth = 8
 				}
 				layoutNodes[i].Width = minWidth
+				
+				// Recalculate height for multi-line text
+				layoutNodes[i].Height = len(lines) + 2  // lines + borders
+				
 				break
 			}
 		}
@@ -270,22 +285,24 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *rendering
 	
 	// Draw text with cursor if editing
 	if isEditing {
-		// Draw the edit text with cursor
-		y := node.Y + 1
-		x := node.X + 2
+		// Draw the edit text with cursor, handling multi-line
+		// Split text by newlines
+		lines := strings.Split(editText, "\n")
 		
-		// Convert to runes for proper Unicode handling
-		runes := []rune(editText)
-		
-		// Ensure cursorPos is within bounds
-		if cursorPos > len(runes) {
-			cursorPos = len(runes)
-		}
-		
-		// Draw all text (no cursor character needed - using terminal cursor)
-		for i := 0; i < len(runes); i++ {
-			if x+i < node.X+node.Width-2 {
-				c.Set(core.Point{X: x + i, Y: y}, runes[i])
+		for lineIdx, line := range lines {
+			y := node.Y + 1 + lineIdx
+			x := node.X + 2
+			
+			// Don't draw lines outside the box
+			if y >= node.Y+node.Height-1 {
+				break
+			}
+			
+			// Draw each character of this line
+			for i, ch := range line {
+				if x+i < node.X+node.Width-2 {
+					c.Set(core.Point{X: x + i, Y: y}, ch)
+				}
 			}
 		}
 	} else {

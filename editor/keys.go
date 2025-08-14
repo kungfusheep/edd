@@ -85,7 +85,38 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 				e.textBuffer[e.cursorPos:]...,
 			)
 			e.cursorPos--
+			e.updateCursorPosition()
 		}
+		
+	case 14: // Ctrl+N - insert newline for multi-line editing
+		e.insertNewline()
+	
+	case 23: // Ctrl+W - delete word backward
+		e.deleteWordBackward()
+	
+	case 21: // Ctrl+U - delete to beginning of line
+		e.deleteToBeginningOfLine()
+	
+	case 11: // Ctrl+K - delete to end of line
+		e.deleteToEndOfLine()
+	
+	case 1: // Ctrl+A - move to beginning of line
+		e.moveCursorToBeginningOfLine()
+	
+	case 5: // Ctrl+E - move to end of line
+		e.moveCursorToEndOfLine()
+	
+	case 6: // Ctrl+F - move forward one character
+		e.moveCursorForward()
+	
+	case 2: // Ctrl+B - move backward one character
+		e.moveCursorBackward()
+	
+	case 16: // Ctrl+P - move up one line (previous)
+		e.moveCursorUp()
+	
+	case 22: // Ctrl+V - move down one line (since Ctrl+N is for newline)
+		e.moveCursorDown()
 		
 	case 13, 10: // Enter - commit text
 		// Save the mode before committing (in case commit changes it)
@@ -115,6 +146,7 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 				append([]rune{key}, e.textBuffer[e.cursorPos:]...)...,
 			)
 			e.cursorPos++
+			e.updateCursorPosition()
 		}
 	}
 	
@@ -201,29 +233,41 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 
 // commitText saves the current text buffer to the selected node or connection
 func (e *TUIEditor) commitText() {
-	text := string(e.textBuffer)
-	
 	// Check if we're editing a connection
 	if e.selectedConnection >= 0 {
+		// Connection labels are single line only
+		text := strings.TrimSpace(string(e.textBuffer))
 		// Connection labels can be empty (to clear them)
 		e.UpdateConnectionLabel(e.selectedConnection, text)
 		e.selectedConnection = -1
 		return
 	}
 	
-	// Otherwise we're editing a node
+	// Otherwise we're editing a node - support multi-line
 	if e.selected < 0 {
 		return
 	}
 	
-	text = strings.TrimSpace(text)
+	// Get text as lines for multi-line support
+	lines := e.GetTextAsLines()
+	
+	// Trim empty lines at the end
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	
 	// In INSERT mode, we allow empty text (user might just press Enter to create empty nodes)
-	if text == "" && e.mode != ModeInsert {
+	if len(lines) == 0 && e.mode != ModeInsert {
 		return
 	}
 	
-	// Update the node text
-	e.UpdateNodeText(e.selected, []string{text})
+	// If completely empty, use a single empty line
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+	
+	// Update the node text with multiple lines
+	e.UpdateNodeText(e.selected, lines)
 }
 
 // executeCommand executes a command mode command

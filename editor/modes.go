@@ -56,14 +56,16 @@ func (e *TUIEditor) SetMode(mode Mode) {
 	if mode == ModeInsert || mode == ModeEdit {
 		e.textBuffer = []rune{}
 		e.cursorPos = 0
+		e.cursorLine = 0
+		e.cursorCol = 0
 		
-		// If editing existing node, load its text
+		// If editing existing node, load its text (support multi-line)
 		if mode == ModeEdit && e.selected >= 0 {
 			for _, node := range e.diagram.Nodes {
 				if node.ID == e.selected {
 					if len(node.Text) > 0 {
-						e.textBuffer = []rune(node.Text[0])
-						e.cursorPos = len(e.textBuffer)
+						// Load all lines, not just the first
+						e.SetTextFromLines(node.Text)
 					}
 					break
 				}

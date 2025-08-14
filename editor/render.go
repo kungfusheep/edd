@@ -14,6 +14,8 @@ type TUIState struct {
 	JumpLabels map[int]rune   // Jump labels for nodes
 	TextBuffer []rune         // Current text being edited
 	CursorPos  int            // Cursor position in text buffer
+	CursorLine int            // Current line in multi-line edit (0-based)
+	CursorCol  int            // Current column in current line (0-based)
 	EddFrame   string         // Current Ed mascot frame
 	Width      int            // Terminal width
 	Height     int            // Terminal height

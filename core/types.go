@@ -88,6 +88,38 @@ type Diagram struct {
 	Metadata    Metadata     `json:"metadata,omitempty"`
 }
 
+// Clone creates a deep copy of the diagram
+func (d *Diagram) Clone() *Diagram {
+	if d == nil {
+		return nil
+	}
+	
+	clone := &Diagram{
+		Nodes:       make([]Node, len(d.Nodes)),
+		Connections: make([]Connection, len(d.Connections)),
+		Metadata:    d.Metadata, // Metadata is a simple struct, can be copied directly
+	}
+	
+	// Deep copy nodes (need to copy the Text slice)
+	for i, node := range d.Nodes {
+		textCopy := make([]string, len(node.Text))
+		copy(textCopy, node.Text)
+		clone.Nodes[i] = Node{
+			ID:     node.ID,
+			Text:   textCopy,
+			X:      node.X,
+			Y:      node.Y,
+			Width:  node.Width,
+			Height: node.Height,
+		}
+	}
+	
+	// Copy connections (they're simple value types)
+	copy(clone.Connections, d.Connections)
+	
+	return clone
+}
+
 // Metadata contains optional diagram metadata.
 type Metadata struct {
 	Name    string `json:"name,omitempty"`

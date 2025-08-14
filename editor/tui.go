@@ -26,6 +26,8 @@ type TUIEditor struct {
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
 	cursorPos     int    // Position in text buffer
+	cursorLine    int    // Current line in multi-line edit (0-based)
+	cursorCol     int    // Current column in current line (0-based)
 	commandBuffer []rune // Separate buffer for command mode
 
 	// Ed mascot
@@ -43,7 +45,7 @@ type TUIEditor struct {
 	jsonScrollOffset    int  // Current scroll position in JSON view
 	
 	// History management
-	history            *SimpleHistory  // Undo/redo history
+	history            *StructHistory  // Undo/redo history (optimized struct-based)
 }
 
 // NewTUIEditor creates a new TUI editor instance
@@ -67,7 +69,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		continuousConnect:  false,
 		continuousDelete:   false,
 		jsonScrollOffset:   0,
-		history:            NewSimpleHistory(50), // 50 states max
+		history:            NewStructHistory(50), // 50 states max (optimized)
 	}
 	
 	// Save initial empty state
@@ -167,6 +169,8 @@ func (e *TUIEditor) GetState() TUIState {
 		JumpLabels: e.jumpLabels,
 		TextBuffer: e.textBuffer,
 		CursorPos:  e.cursorPos,
+		CursorLine: e.cursorLine,
+		CursorCol:  e.cursorCol,
 		EddFrame:   e.edd.GetFrame(e.mode),
 		Width:      e.width,
 		Height:     e.height,

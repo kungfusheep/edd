@@ -276,11 +276,11 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 	width, height := getTerminalSize()
 	tui.SetTerminalSize(width, height)
 
-	// Create a channel for keyboard input
-	keyChan := make(chan rune)
+	// Create a channel for keyboard input with support for special keys
+	keyChan := make(chan editor.KeyEvent)
 	go func() {
 		for {
-			keyChan <- readSingleKey()
+			keyChan <- readKeyWithEscape()
 		}
 	}()
 
@@ -333,23 +333,34 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string) error {
 
 		// Handle input or animation
 		select {
-		case key := <-keyChan:
-			// Handle key
-			switch tui.GetMode() {
-			case editor.ModeNormal:
-				if handleNormalMode(tui, key, &filename) {
-					return nil // Exit requested
+		case keyEvent := <-keyChan:
+			// Handle special keys or regular keys
+			if keyEvent.IsSpecial() {
+				// Handle special keys (arrows, etc.)
+				switch tui.GetMode() {
+				case editor.ModeInsert, editor.ModeEdit:
+					handleSpecialKeyInTextMode(tui, keyEvent.SpecialKey)
+				// Could add special key handling for other modes here
 				}
-			case editor.ModeInsert, editor.ModeEdit:
-				handleTextMode(tui, key)
-			case editor.ModeJump:
-				handleJumpMode(tui, key)
-			case editor.ModeCommand:
-				if handleCommandMode(tui, key, &filename) {
-					return nil // Exit requested
+			} else {
+				// Handle regular keys
+				key := keyEvent.Rune
+				switch tui.GetMode() {
+				case editor.ModeNormal:
+					if handleNormalMode(tui, key, &filename) {
+						return nil // Exit requested
+					}
+				case editor.ModeInsert, editor.ModeEdit:
+					handleTextMode(tui, key)
+				case editor.ModeJump:
+					handleJumpMode(tui, key)
+				case editor.ModeCommand:
+					if handleCommandMode(tui, key, &filename) {
+						return nil // Exit requested
+					}
+				case editor.ModeJSON:
+					handleJSONMode(tui, key)
 				}
-			case editor.ModeJSON:
-				handleJSONMode(tui, key)
 			}
 
 		case <-animTicker.C:
@@ -363,6 +374,49 @@ func readSingleKey() rune {
 	var b [1]byte
 	os.Stdin.Read(b[:])
 	return rune(b[0])
+}
+
+// readKeyWithEscape reads a key and handles escape sequences for special keys
+func readKeyWithEscape() editor.KeyEvent {
+	var b [3]byte
+	n, _ := os.Stdin.Read(b[:1])
+	
+	if n == 0 {
+		return editor.KeyEvent{Rune: 0}
+	}
+	
+	// Check for ESC sequence
+	if b[0] == 27 { // ESC
+		// Try to read the next two bytes for escape sequence
+		// Set a very short timeout using non-blocking read
+		n2, _ := os.Stdin.Read(b[1:2])
+		if n2 > 0 && b[1] == '[' {
+			// This is an escape sequence
+			n3, _ := os.Stdin.Read(b[2:3])
+			if n3 > 0 {
+				// Parse the escape sequence
+				switch b[2] {
+				case 'A':
+					return editor.KeyEvent{SpecialKey: editor.KeyArrowUp}
+				case 'B':
+					return editor.KeyEvent{SpecialKey: editor.KeyArrowDown}
+				case 'C':
+					return editor.KeyEvent{SpecialKey: editor.KeyArrowRight}
+				case 'D':
+					return editor.KeyEvent{SpecialKey: editor.KeyArrowLeft}
+				case 'H':
+					return editor.KeyEvent{SpecialKey: editor.KeyHome}
+				case 'F':
+					return editor.KeyEvent{SpecialKey: editor.KeyEnd}
+				}
+			}
+		}
+		// Just ESC by itself
+		return editor.KeyEvent{Rune: 27}
+	}
+	
+	// Regular character
+	return editor.KeyEvent{Rune: rune(b[0])}
 }
 
 func positionCursor(tui *editor.TUIEditor) {
@@ -381,12 +435,11 @@ func positionCursor(tui *editor.TUIEditor) {
 
 	// Get cursor position in text
 	state := tui.GetState()
-	cursorPos := state.CursorPos
-
-	// Calculate actual cursor position on screen
+	
+	// Calculate actual cursor position on screen using line and column
 	// Node text starts at X+2, Y+1 (inside the box)
-	cursorX := pos.X + 2 + cursorPos + 1 // +1 for terminal indexing
-	cursorY := pos.Y + 1 + 1             // +1 for terminal indexing
+	cursorX := pos.X + 2 + state.CursorCol + 1 // +1 for terminal indexing
+	cursorY := pos.Y + 1 + state.CursorLine + 1 // +1 for terminal indexing
 
 	// Move cursor to position and show it
 	fmt.Printf("\033[%d;%dH", cursorY, cursorX)
@@ -738,6 +791,23 @@ func handleTextMode(tui *editor.TUIEditor, key rune) {
 	tui.HandleTextInput(key)
 }
 
+func handleSpecialKeyInTextMode(tui *editor.TUIEditor, key editor.SpecialKey) {
+	switch key {
+	case editor.KeyArrowUp:
+		tui.HandleArrowKey('U') // Use a special marker for up
+	case editor.KeyArrowDown:
+		tui.HandleArrowKey('D') // Use a special marker for down
+	case editor.KeyArrowLeft:
+		tui.HandleArrowKey('L') // Use a special marker for left
+	case editor.KeyArrowRight:
+		tui.HandleArrowKey('R') // Use a special marker for right
+	case editor.KeyHome:
+		tui.HandleArrowKey('H') // Home key
+	case editor.KeyEnd:
+		tui.HandleArrowKey('E') // End key
+	}
+}
+
 func handleJumpMode(tui *editor.TUIEditor, key rune) {
 	tui.HandleJumpInput(key)
 }
@@ -882,8 +952,23 @@ func showHelp() {
 	fmt.Println("  :wq        - Save and quit")
 	fmt.Println()
 	fmt.Println("Text Editing:")
-	fmt.Println("  ESC   - Exit to normal mode")
-	fmt.Println("  Enter - Confirm text")
+	fmt.Println("  ESC    - Exit to normal mode")
+	fmt.Println("  Enter  - Confirm text")
+	fmt.Println()
+	fmt.Println("  Movement:")
+	fmt.Println("    Arrow Keys - Move cursor (↑ ↓ ← →)")
+	fmt.Println("    Ctrl+a / Home - Move to beginning of line")
+	fmt.Println("    Ctrl+e / End  - Move to end of line")
+	fmt.Println("    Ctrl+f - Move forward one character")
+	fmt.Println("    Ctrl+b - Move backward one character")
+	fmt.Println("    Ctrl+p - Move up one line")
+	fmt.Println("    Ctrl+v - Move down one line")
+	fmt.Println()
+	fmt.Println("  Editing:")
+	fmt.Println("    Ctrl+n - Insert newline (multi-line)")
+	fmt.Println("    Ctrl+w - Delete word backward")
+	fmt.Println("    Ctrl+u - Delete to beginning of line")
+	fmt.Println("    Ctrl+k - Delete to end of line")
 	fmt.Println()
 	fmt.Println("JSON View Mode:")
 	fmt.Println("  j/q/ESC - Return to diagram")
