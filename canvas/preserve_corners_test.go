@@ -1,7 +1,6 @@
 package canvas
 
 import (
-	"edd/canvas"
 	"edd/core"
 	"testing"
 )
@@ -63,7 +62,7 @@ func TestPreserveCornersMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create canvas and renderer
-			c := canvas.NewMatrixCanvas(tt.width, tt.height)
+			c := NewMatrixCanvas(tt.width, tt.height)
 			renderer := NewPathRenderer(TerminalCapabilities{
 				UnicodeLevel: UnicodeFull,
 			})
@@ -111,7 +110,7 @@ func TestPreserveCornersVsStandardMode(t *testing.T) {
 	
 	// Test with standard mode
 	t.Run("standard mode creates junction", func(t *testing.T) {
-		c := canvas.NewMatrixCanvas(5, 3)
+		c := NewMatrixCanvas(5, 3)
 		renderer := NewPathRenderer(TerminalCapabilities{UnicodeLevel: UnicodeFull})
 		renderer.SetRenderMode(RenderModeStandard)
 		
@@ -133,7 +132,7 @@ func TestPreserveCornersVsStandardMode(t *testing.T) {
 	
 	// Test with preserve corners mode
 	t.Run("preserve corners mode keeps corners", func(t *testing.T) {
-		c := canvas.NewMatrixCanvas(5, 3)
+		c := NewMatrixCanvas(5, 3)
 		renderer := NewPathRenderer(TerminalCapabilities{UnicodeLevel: UnicodeFull})
 		renderer.SetRenderMode(RenderModePreserveCorners)
 		

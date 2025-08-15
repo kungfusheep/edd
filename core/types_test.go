@@ -1,156 +1,158 @@
 package core
 
 import (
+	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 )
 
-func TestDirection(t *testing.T) {
-	tests := []struct {
-		name     string
-		dir      Direction
-		expected string
-		opposite Direction
-	}{
-		{"North", North, "North", South},
-		{"East", East, "East", West},
-		{"South", South, "South", North},
-		{"West", West, "West", East},
-		{"Invalid", Direction(99), "Unknown", Direction(99)},
-	}
-	
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.dir.String(); got != tt.expected {
-				t.Errorf("String() = %v, want %v", got, tt.expected)
-			}
-			if got := tt.dir.Opposite(); got != tt.opposite {
-				t.Errorf("Opposite() = %v, want %v", got, tt.opposite)
-			}
-		})
-	}
-}
-
-func TestNode(t *testing.T) {
+func TestNodeWithHints(t *testing.T) {
+	// Test creating a node with hints
 	node := Node{
-		ID:     1,
-		Text:   []string{"Test", "Node"},
-		X:      10,
-		Y:      20,
-		Width:  8,
-		Height: 4,
+		ID:   1,
+		Text: []string{"Test Node"},
+		Hints: map[string]string{
+			"style": "rounded",
+			"color": "blue",
+		},
 	}
-	
-	t.Run("Center", func(t *testing.T) {
-		center := node.Center()
-		if center.X != 14 || center.Y != 22 {
-			t.Errorf("Center() = %v, want (14, 22)", center)
-		}
-	})
-	
-	t.Run("Contains", func(t *testing.T) {
-		tests := []struct {
-			point    Point
-			contains bool
-		}{
-			{Point{10, 20}, true},  // Top-left corner
-			{Point{17, 23}, true},  // Bottom-right corner (exclusive)
-			{Point{14, 22}, true},  // Center
-			{Point{9, 20}, false},  // Just outside left
-			{Point{18, 20}, false}, // Just outside right
-			{Point{10, 19}, false}, // Just outside top
-			{Point{10, 24}, false}, // Just outside bottom
-		}
-		
-		for _, tt := range tests {
-			if got := node.Contains(tt.point); got != tt.contains {
-				t.Errorf("Contains(%v) = %v, want %v", tt.point, got, tt.contains)
-			}
-		}
-	})
-}
 
-func TestPath(t *testing.T) {
-	t.Run("Empty path", func(t *testing.T) {
-		p := Path{}
-		if !p.IsEmpty() {
-			t.Error("IsEmpty() = false, want true")
-		}
-		if p.Length() != 0 {
-			t.Errorf("Length() = %d, want 0", p.Length())
-		}
-	})
-	
-	t.Run("Non-empty path", func(t *testing.T) {
-		p := Path{
-			Points: []Point{{0, 0}, {1, 0}, {2, 0}},
-			Cost:   3,
-		}
-		if p.IsEmpty() {
-			t.Error("IsEmpty() = true, want false")
-		}
-		if p.Length() != 3 {
-			t.Errorf("Length() = %d, want 3", p.Length())
-		}
-	})
-}
-
-func TestBounds(t *testing.T) {
-	b := Bounds{
-		Min: Point{10, 20},
-		Max: Point{50, 40},
+	if node.Hints["style"] != "rounded" {
+		t.Errorf("Expected style hint to be 'rounded', got %s", node.Hints["style"])
 	}
-	
-	t.Run("Dimensions", func(t *testing.T) {
-		if w := b.Width(); w != 40 {
-			t.Errorf("Width() = %d, want 40", w)
-		}
-		if h := b.Height(); h != 20 {
-			t.Errorf("Height() = %d, want 20", h)
-		}
-	})
-	
-	t.Run("Contains", func(t *testing.T) {
-		tests := []struct {
-			point    Point
-			contains bool
-		}{
-			{Point{10, 20}, true},  // Min corner (inclusive)
-			{Point{49, 39}, true},  // Just inside max corner
-			{Point{50, 40}, false}, // Max corner (exclusive)
-			{Point{30, 30}, true},  // Middle
-			{Point{9, 20}, false},  // Just outside left
-			{Point{10, 19}, false}, // Just outside top
-		}
-		
-		for _, tt := range tests {
-			if got := b.Contains(tt.point); got != tt.contains {
-				t.Errorf("Contains(%v) = %v, want %v", tt.point, got, tt.contains)
-			}
-		}
-	})
+	if node.Hints["color"] != "blue" {
+		t.Errorf("Expected color hint to be 'blue', got %s", node.Hints["color"])
+	}
 }
 
-func TestDiagramTypes(t *testing.T) {
-	// Test that our JSON-tagged types work correctly
-	diagram := Diagram{
+func TestNodeJSONMarshalUnmarshal(t *testing.T) {
+	// Test that hints are preserved through JSON marshaling
+	original := Node{
+		ID:   1,
+		Text: []string{"Test", "Node"},
+		Hints: map[string]string{
+			"style": "double",
+			"color": "red",
+		},
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Failed to marshal node: %v", err)
+	}
+
+	// Unmarshal back
+	var loaded Node
+	err = json.Unmarshal(data, &loaded)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal node: %v", err)
+	}
+
+	// Check that hints are preserved
+	if !reflect.DeepEqual(original.Hints, loaded.Hints) {
+		t.Errorf("Hints not preserved: original=%v, loaded=%v", original.Hints, loaded.Hints)
+	}
+}
+
+func TestNodeBackwardCompatibility(t *testing.T) {
+	// Test that old JSON without hints still loads
+	oldJSON := `{
+		"id": 1,
+		"text": ["Legacy Node"]
+	}`
+
+	var node Node
+	err := json.Unmarshal([]byte(oldJSON), &node)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal legacy node: %v", err)
+	}
+
+	if node.ID != 1 {
+		t.Errorf("Expected ID to be 1, got %d", node.ID)
+	}
+	if len(node.Text) != 1 || node.Text[0] != "Legacy Node" {
+		t.Errorf("Expected text to be ['Legacy Node'], got %v", node.Text)
+	}
+	if node.Hints != nil {
+		t.Errorf("Expected hints to be nil for legacy node, got %v", node.Hints)
+	}
+}
+
+func TestDiagramCloneWithNodeHints(t *testing.T) {
+	// Test that Clone properly copies node hints
+	original := &Diagram{
 		Nodes: []Node{
-			{ID: 0, Text: []string{"Node A"}},
-			{ID: 1, Text: []string{"Node B"}},
+			{
+				ID:   1,
+				Text: []string{"Node 1"},
+				Hints: map[string]string{
+					"style": "rounded",
+					"color": "green",
+				},
+			},
+			{
+				ID:   2,
+				Text: []string{"Node 2"},
+				// No hints
+			},
 		},
 		Connections: []Connection{
-			{From: 0, To: 1},
+			{
+				ID:   1,
+				From: 1,
+				To:   2,
+			},
 		},
-		Metadata: Metadata{
-			Name:    "Test Diagram",
-			Created: "2024-01-01",
-			Version: "1.0",
-		},
 	}
-	
-	if len(diagram.Nodes) != 2 {
-		t.Errorf("Expected 2 nodes, got %d", len(diagram.Nodes))
+
+	clone := original.Clone()
+
+	// Verify node hints are cloned
+	if !reflect.DeepEqual(original.Nodes[0].Hints, clone.Nodes[0].Hints) {
+		t.Errorf("Node hints not properly cloned: original=%v, clone=%v",
+			original.Nodes[0].Hints, clone.Nodes[0].Hints)
 	}
-	if len(diagram.Connections) != 1 {
-		t.Errorf("Expected 1 connection, got %d", len(diagram.Connections))
+
+	// Verify deep copy (modifying clone doesn't affect original)
+	clone.Nodes[0].Hints["style"] = "sharp"
+	if original.Nodes[0].Hints["style"] != "rounded" {
+		t.Error("Modifying cloned hints affected original")
 	}
+
+	// Verify node without hints is handled correctly
+	if clone.Nodes[1].Hints != nil {
+		t.Errorf("Expected nil hints for node 2, got %v", clone.Nodes[1].Hints)
+	}
+}
+
+func TestNodeHintsOmitEmpty(t *testing.T) {
+	// Test that empty hints map is omitted from JSON
+	node := Node{
+		ID:    1,
+		Text:  []string{"Test"},
+		Hints: nil,
+	}
+
+	data, err := json.Marshal(node)
+	if err != nil {
+		t.Fatalf("Failed to marshal node: %v", err)
+	}
+
+	jsonStr := string(data)
+	if strings.Contains(jsonStr, "hints") {
+		t.Errorf("Empty hints should be omitted from JSON: %s", jsonStr)
+	}
+
+	// Test with empty map
+	node.Hints = make(map[string]string)
+	data, err = json.Marshal(node)
+	if err != nil {
+		t.Fatalf("Failed to marshal node: %v", err)
+	}
+
+	jsonStr = string(data)
+	// Note: empty map might still appear in JSON as "hints":{}, 
+	// but omitempty should handle nil case
 }

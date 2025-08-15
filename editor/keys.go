@@ -50,8 +50,8 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 		// This will be handled by the main loop since it needs file system access
 		return false
 		
-	case 'H': // Edit connection hints
-		if len(e.diagram.Connections) > 0 {
+	case 'H': // Edit hints for nodes and connections
+		if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
 			e.startJump(JumpActionHint)
 		}
 		
@@ -66,7 +66,7 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 		e.Redo()
 		
 	case '?', 'h': // Help
-		// TODO: Show help
+		e.SetMode(ModeHelp)
 		
 	case ':': // Command mode
 		e.SetMode(ModeCommand)
@@ -361,7 +361,20 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 			e.clearJumpLabels()
 			e.SetMode(ModeNormal)
 		}
+		
+	case JumpActionHint:
+		// Enter hint menu for this node
+		e.editingHintNode = nodeID
+		e.clearJumpLabels()
+		e.SetMode(ModeHintMenu)
 	}
+}
+
+// handleHelpKey processes keys in help mode
+func (e *TUIEditor) handleHelpKey(key rune) bool {
+	// Any key exits help mode
+	e.SetMode(ModeNormal)
+	return false
 }
 
 // handleJSONKey processes keys in JSON view mode

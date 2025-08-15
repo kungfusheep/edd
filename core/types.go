@@ -50,12 +50,13 @@ func (d Direction) Opposite() Direction {
 
 // Node represents a box in the diagram.
 type Node struct {
-	ID     int      `json:"id"`
-	Text   []string `json:"text"`
-	X      int      `json:"-"` // Set by layout engine
-	Y      int      `json:"-"` // Set by layout engine
-	Width  int      `json:"-"` // Calculated from text
-	Height int      `json:"-"` // Calculated from text
+	ID     int               `json:"id"`
+	Text   []string          `json:"text"`
+	Hints  map[string]string `json:"hints,omitempty"` // Visual hints (style, color, etc.)
+	X      int               `json:"-"` // Set by layout engine
+	Y      int               `json:"-"` // Set by layout engine
+	Width  int               `json:"-"` // Calculated from text
+	Height int               `json:"-"` // Calculated from text
 }
 
 // Center returns the center point of the node.
@@ -101,7 +102,7 @@ func (d *Diagram) Clone() *Diagram {
 		Metadata:    d.Metadata, // Metadata is a simple struct, can be copied directly
 	}
 	
-	// Deep copy nodes (need to copy the Text slice)
+	// Deep copy nodes (need to copy the Text slice and Hints map)
 	for i, node := range d.Nodes {
 		textCopy := make([]string, len(node.Text))
 		copy(textCopy, node.Text)
@@ -112,6 +113,13 @@ func (d *Diagram) Clone() *Diagram {
 			Y:      node.Y,
 			Width:  node.Width,
 			Height: node.Height,
+		}
+		// Deep copy hints map if it exists
+		if node.Hints != nil {
+			clone.Nodes[i].Hints = make(map[string]string)
+			for k, v := range node.Hints {
+				clone.Nodes[i].Hints[k] = v
+			}
 		}
 	}
 	

@@ -20,6 +20,7 @@ type Renderer struct {
 	router        *connections.Router
 	capabilities  canvas.TerminalCapabilities // Cached to avoid repeated detection
 	pathRenderer  *canvas.PathRenderer         // Reused across renders
+	nodeRenderer  *canvas.NodeRenderer         // Handles node rendering with styles
 	labelRenderer *canvas.LabelRenderer        // Handles connection labels
 	validator     *validation.LineValidator // Optional output validator
 	debugMode     bool                  // Enable debug obstacle visualization
@@ -55,6 +56,7 @@ func NewRenderer() *Renderer {
 		router:        router,
 		capabilities:  caps,
 		pathRenderer:  canvas.NewPathRenderer(caps),
+		nodeRenderer:  canvas.NewNodeRenderer(caps),
 		labelRenderer: canvas.NewLabelRenderer(),
 		validator:     nil, // Validator is optional, enabled via SetValidator
 	}
@@ -165,33 +167,8 @@ func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
 
 // renderNode draws a single node on the canvas.
 func (r *Renderer) renderNode(c canvas.Canvas, node core.Node) error {
-	// Draw the box
-	boxPath := core.Path{
-		Points: []core.Point{
-			{X: node.X, Y: node.Y},
-			{X: node.X + node.Width - 1, Y: node.Y},
-			{X: node.X + node.Width - 1, Y: node.Y + node.Height - 1},
-			{X: node.X, Y: node.Y + node.Height - 1},
-			{X: node.X, Y: node.Y},
-		},
-	}
-	
-	// Use the cached path renderer to draw the box
-	r.pathRenderer.RenderPath(c, boxPath, false)
-	
-	// Draw the text inside the box
-	for i, line := range node.Text {
-		y := node.Y + 1 + i
-		x := node.X + 2 // 2 chars padding from left border
-		
-		for j, ch := range line {
-			if x+j < node.X+node.Width-2 { // Keep text within borders
-				c.Set(core.Point{X: x + j, Y: y}, ch)
-			}
-		}
-	}
-	
-	return nil
+	// Use the NodeRenderer to draw the node with any hints
+	return r.nodeRenderer.RenderNode(c, node)
 }
 
 // detectTerminalCapabilities returns the current terminal's capabilities.
@@ -233,13 +210,23 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	// Step 5: Calculate bounds including paths and create canvas
 	bounds := calculateBounds(layoutNodes, paths)
 	
-	// Check if any connections have color hints
+	// Check if any nodes or connections have color hints
 	hasColors := false
-	for _, conn := range diagram.Connections {
-		if conn.Hints != nil {
-			if _, hasColor := conn.Hints["color"]; hasColor {
+	for _, node := range layoutNodes {
+		if node.Hints != nil {
+			if _, hasColor := node.Hints["color"]; hasColor {
 				hasColors = true
 				break
+			}
+		}
+	}
+	if !hasColors {
+		for _, conn := range diagram.Connections {
+			if conn.Hints != nil {
+				if _, hasColor := conn.Hints["color"]; hasColor {
+					hasColors = true
+					break
+				}
 			}
 		}
 	}
@@ -257,16 +244,22 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 	// Create offset canvas that handles coordinate translation
 	offsetCanvas := newOffsetCanvas(c, bounds.Min)
 	
-	// Step 6: Render all nodes
+	// Step 5.1: Debug mode - visualize obstacles if enabled
+	if r.debugMode {
+		return r.renderDebugObstacles(layoutNodes, diagram.Connections, paths, bounds), nil
+	}
+	
+	// Step 6a: Render shadows first (so connections can overwrite them)
+	for _, node := range layoutNodes {
+		r.nodeRenderer.RenderShadowOnly(offsetCanvas, node)
+	}
+	
+	// Step 6b: Render nodes (boxes and text) before connections
+	// This allows connections to properly connect to node edges
 	for _, node := range layoutNodes {
 		if err := r.renderNode(offsetCanvas, node); err != nil {
 			return "", fmt.Errorf("failed to render node %d: %w", node.ID, err)
 		}
-	}
-	
-	// Step 5.1: Debug mode - visualize obstacles if enabled
-	if r.debugMode {
-		return r.renderDebugObstacles(layoutNodes, diagram.Connections, paths, bounds), nil
 	}
 	
 	// Step 5.5: Self-loops are already handled by the router, no need to override
@@ -300,7 +293,7 @@ func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
 		}
 	}
 	
-	// Step 8a: Render connection labels after all paths are drawn
+	// Step 8b: Render connection labels after all paths are drawn
 	// This ensures labels are placed on top of the lines
 	for i, conn := range diagram.Connections {
 		if conn.Label != "" && i < len(connectionsWithArrows) {

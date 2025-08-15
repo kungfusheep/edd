@@ -11,6 +11,7 @@ const (
 	ModeJump                // Jump selection active
 	ModeJSON                // JSON view mode
 	ModeHintMenu            // Editing connection hints
+	ModeHelp                // Help display mode
 )
 
 // String returns the mode name for display
@@ -30,6 +31,8 @@ func (m Mode) String() string {
 		return "JSON"
 	case ModeHintMenu:
 		return "HINTS"
+	case ModeHelp:
+		return "HELP"
 	default:
 		return "UNKNOWN"
 	}
@@ -44,7 +47,7 @@ const (
 	JumpActionDelete                        // Delete the selected node
 	JumpActionConnectFrom                   // Start connection from this node
 	JumpActionConnectTo                     // Complete connection to this node
-	JumpActionHint                          // Edit connection hints
+	JumpActionHint                          // Edit hints for nodes and connections
 )
 
 // SetMode changes the editor mode

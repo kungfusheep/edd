@@ -129,7 +129,7 @@ func TestPathRenderer_EdgeCases(t *testing.T) {
 			// Skip special tests that need custom handling
 			if tt.name == "crossing paths horizontal/vertical" {
 				// Test crossing paths
-				c := canvas.NewMatrixCanvas(tt.width, tt.height)
+				c := NewMatrixCanvas(tt.width, tt.height)
 				renderer := NewPathRenderer(tt.caps)
 				
 				// Render horizontal line
@@ -156,7 +156,7 @@ func TestPathRenderer_EdgeCases(t *testing.T) {
 			
 			if tt.name == "path with junction at corner" {
 				// Test junction at a corner
-				c := canvas.NewMatrixCanvas(tt.width, tt.height)
+				c := NewMatrixCanvas(tt.width, tt.height)
 				renderer := NewPathRenderer(tt.caps)
 				
 				// Render L-shaped path
@@ -182,7 +182,7 @@ func TestPathRenderer_EdgeCases(t *testing.T) {
 			}
 			
 			// Regular test case
-			c := canvas.NewMatrixCanvas(tt.width, tt.height)
+			c := NewMatrixCanvas(tt.width, tt.height)
 			renderer := NewPathRenderer(tt.caps)
 			
 			err := renderer.RenderPath(c, tt.path, tt.hasArrow)
@@ -237,7 +237,7 @@ func TestPathRenderer_TerminalFallback(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := canvas.NewMatrixCanvas(8, 4)
+			c := NewMatrixCanvas(8, 4)
 			renderer := NewPathRenderer(tt.caps)
 			// Use preserve corners mode for cleaner output
 			renderer.SetRenderMode(RenderModePreserveCorners)

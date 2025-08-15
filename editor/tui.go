@@ -23,6 +23,7 @@ type TUIEditor struct {
 	continuousConnect  bool           // Whether to continue connecting after each connection
 	continuousDelete   bool           // Whether to continue deleting after each deletion
 	editingHintConn    int            // Connection being edited for hints (-1 for none)
+	editingHintNode    int            // Node being edited for hints (-1 for none)
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -134,6 +135,11 @@ func (e *TUIEditor) Render() string {
 		return e.renderJSON()
 	}
 	
+	// If in Help mode, render help text
+	if e.mode == ModeHelp {
+		return GetHelpText()
+	}
+	
 	// If we have a real renderer that can provide positions, use it
 	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
 		// Set edit state if we're editing or inserting
@@ -195,6 +201,8 @@ func (e *TUIEditor) handleKey(key rune) bool {
 		return e.handleCommandKey(key)
 	case ModeJSON:
 		return e.handleJSONKey(key)
+	case ModeHelp:
+		return e.handleHelpKey(key)
 	}
 
 	return false

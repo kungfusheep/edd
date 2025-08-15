@@ -31,6 +31,12 @@ func (m *CharacterMerger) Merge(existing, new rune) rune {
 		return existing
 	}
 	
+	// Shadow characters should always be overwritten by non-space characters
+	// This allows connection lines to pass through shadows
+	if isShadow(existing) && new != ' ' {
+		return new
+	}
+	
 	// Arrow preservation: arrows should never be overwritten
 	if isArrow(existing) {
 		return existing
@@ -51,6 +57,11 @@ func (m *CharacterMerger) Merge(existing, new rune) rune {
 	
 	// Default: keep existing character
 	return existing
+}
+
+// isShadow checks if a character is a shadow character
+func isShadow(r rune) bool {
+	return r == '░' || r == '▒' || r == '▓'
 }
 
 // isArrow checks if a character is an arrow

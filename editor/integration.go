@@ -17,6 +17,7 @@ type RealRenderer struct {
 	router     *connections.Router
 	capabilities canvas.TerminalCapabilities
 	pathRenderer *canvas.PathRenderer
+	nodeRenderer *canvas.NodeRenderer
 	labelRenderer *canvas.LabelRenderer
 	
 	// Edit state for rendering cursor in nodes
@@ -76,6 +77,7 @@ func NewRealRenderer() *RealRenderer {
 		router:        router,
 		capabilities:  caps,
 		pathRenderer:  canvas.NewPathRenderer(caps),
+		nodeRenderer:  canvas.NewNodeRenderer(caps),
 		labelRenderer: canvas.NewLabelRenderer(),
 		editingNodeID: -1,
 	}
@@ -148,13 +150,23 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	// Calculate bounds
 	bounds := calculateBounds(layoutNodes, paths)
 	
-	// Check if any connections have color hints
+	// Check if any nodes or connections have color hints
 	hasColors := false
-	for _, conn := range diagram.Connections {
-		if conn.Hints != nil {
-			if _, hasColor := conn.Hints["color"]; hasColor {
+	for _, node := range layoutNodes {
+		if node.Hints != nil {
+			if _, hasColor := node.Hints["color"]; hasColor {
 				hasColors = true
 				break
+			}
+		}
+	}
+	if !hasColors {
+		for _, conn := range diagram.Connections {
+			if conn.Hints != nil {
+				if _, hasColor := conn.Hints["color"]; hasColor {
+					hasColors = true
+					break
+				}
 			}
 		}
 	}
@@ -200,6 +212,11 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 		positions.ConnectionPaths[i] = adjustedPath
 	}
 	
+	// Render shadows first (so connections can overwrite them)
+	for _, node := range layoutNodes {
+		r.nodeRenderer.RenderShadowOnly(offsetCanvas, node)
+	}
+	
 	// Render nodes
 	for _, node := range layoutNodes {
 		// Check if this node is being edited
@@ -210,7 +227,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 			editText = r.editText
 			cursorPos = r.cursorPos
 		}
-		renderNodeWithEdit(offsetCanvas, node, r.pathRenderer, isEditing, editText, cursorPos)
+		renderNodeWithEdit(offsetCanvas, node, r.nodeRenderer, isEditing, editText, cursorPos)
 	}
 	
 	// Apply arrows to connections
@@ -309,18 +326,40 @@ func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
 	}
 }
 
-func renderNodeWithEdit(c canvas.Canvas, node core.Node, pathRenderer *canvas.PathRenderer, isEditing bool, editText string, cursorPos int) {
-	// Draw box
-	boxPath := core.Path{
-		Points: []core.Point{
-			{X: node.X, Y: node.Y},
-			{X: node.X + node.Width - 1, Y: node.Y},
-			{X: node.X + node.Width - 1, Y: node.Y + node.Height - 1},
-			{X: node.X, Y: node.Y + node.Height - 1},
-			{X: node.X, Y: node.Y},
-		},
+// drawSimpleBox draws a basic box without any special styling
+func drawSimpleBox(c canvas.Canvas, node core.Node, style canvas.NodeStyle) {
+	// Top border
+	c.Set(core.Point{X: node.X, Y: node.Y}, style.TopLeft)
+	for x := node.X + 1; x < node.X + node.Width - 1; x++ {
+		c.Set(core.Point{X: x, Y: node.Y}, style.Horizontal)
 	}
-	pathRenderer.RenderPath(c, boxPath, false)
+	c.Set(core.Point{X: node.X + node.Width - 1, Y: node.Y}, style.TopRight)
+	
+	// Side borders
+	for y := node.Y + 1; y < node.Y + node.Height - 1; y++ {
+		c.Set(core.Point{X: node.X, Y: y}, style.Vertical)
+		c.Set(core.Point{X: node.X + node.Width - 1, Y: y}, style.Vertical)
+	}
+	
+	// Bottom border
+	c.Set(core.Point{X: node.X, Y: node.Y + node.Height - 1}, style.BottomLeft)
+	for x := node.X + 1; x < node.X + node.Width - 1; x++ {
+		c.Set(core.Point{X: x, Y: node.Y + node.Height - 1}, style.Horizontal)
+	}
+	c.Set(core.Point{X: node.X + node.Width - 1, Y: node.Y + node.Height - 1}, style.BottomRight)
+}
+
+func renderNodeWithEdit(c canvas.Canvas, node core.Node, nodeRenderer *canvas.NodeRenderer, isEditing bool, editText string, cursorPos int) {
+	// If not editing, use NodeRenderer to draw with styles
+	if !isEditing {
+		nodeRenderer.RenderNode(c, node)
+		return
+	}
+	
+	// When editing, draw a simple box without special styles
+	// (to avoid visual noise during editing)
+	style := canvas.NodeStyles["sharp"] // Use sharp style for editing
+	drawSimpleBox(c, node, style)
 	
 	// Draw text with cursor if editing
 	if isEditing {

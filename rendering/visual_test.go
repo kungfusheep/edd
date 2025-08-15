@@ -127,7 +127,7 @@ func TestVisualRendering(t *testing.T) {
 				c := canvas.NewMatrixCanvas(tt.width, tt.height)
 				renderer := canvas.NewPathRenderer(caps)
 				// Use preserve corners mode for better box appearance
-				renderer.SetRenderMode(RenderModePreserveCorners)
+				renderer.SetRenderMode(canvas.RenderModePreserveCorners)
 
 				// Draw all paths
 				for _, path := range tt.paths {

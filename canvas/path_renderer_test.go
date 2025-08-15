@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"edd/canvas"
 	"edd/core"
 )
 
@@ -125,7 +124,7 @@ func TestPathRenderer_RenderPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create canvas
-			c := canvas.NewMatrixCanvas(tt.width, tt.height)
+			c := NewMatrixCanvas(tt.width, tt.height)
 			
 			// Create renderer
 			renderer := NewPathRenderer(tt.caps)
