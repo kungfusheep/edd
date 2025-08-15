@@ -82,13 +82,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			node.Hints["shadow-density"] = "light"
 		}
 		e.history.SaveState(e.diagram)
-	case 'x': // Shadow south
-		node.Hints["shadow"] = "south"
-		if node.Hints["shadow-density"] == "" {
-			node.Hints["shadow-density"] = "light"
-		}
-		e.history.SaveState(e.diagram)
-	case 'v': // No shadow
+	case 'x': // No shadow
 		delete(node.Hints, "shadow")
 		delete(node.Hints, "shadow-density")
 		e.history.SaveState(e.diagram)
@@ -100,7 +94,11 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 		}
 		e.history.SaveState(e.diagram)
 		
-	case 27, 13: // ESC or Enter - exit hint menu
+	case 27: // ESC - go back to jump menu
+		e.editingHintNode = -1
+		// Re-enter jump mode for hints
+		e.startJump(JumpActionHint)
+	case 13: // Enter - exit to normal mode
 		e.editingHintNode = -1
 		e.SetMode(ModeNormal)
 	}
@@ -160,7 +158,11 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		delete(conn.Hints, "color") // Remove to use default
 		e.history.SaveState(e.diagram)
 		
-	case 27, 13: // ESC or Enter - exit hint menu
+	case 27: // ESC - go back to jump menu
+		e.editingHintConn = -1
+		// Re-enter jump mode for hints
+		e.startJump(JumpActionHint)
+	case 13: // Enter - exit to normal mode
 		e.editingHintConn = -1
 		e.SetMode(ModeNormal)
 	}
@@ -234,9 +236,9 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		"  [u] Blue   [m] Magenta [n] Cyan\n" +
 		"  [w] Default\n\n" +
 		"Shadow Options:\n" +
-		"  [z] Southeast ░░  [x] South ░░  [v] None\n" +
+		"  [z] Add shadow ░░  [x] Remove shadow\n" +
 		"  [l] Toggle density (light/medium)\n\n" +
-		"[ESC/Enter] Exit"
+		"[ESC] Back to selection  [Enter] Exit to normal mode"
 }
 
 // getConnectionHintMenuDisplay returns the hint menu display for a connection
@@ -287,5 +289,5 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 		"  [r] Red    [g] Green   [y] Yellow\n" +
 		"  [u] Blue   [m] Magenta [n] Cyan\n" +
 		"  [w] Default\n\n" +
-		"[ESC/Enter] Exit"
+		"[ESC] Back to selection  [Enter] Exit to normal mode"
 }

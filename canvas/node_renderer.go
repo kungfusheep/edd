@@ -72,9 +72,9 @@ func (r *NodeRenderer) drawShadow(canvas Canvas, node core.Node, direction strin
 		shadowChar = '░'
 	}
 	
-	// Draw shadow based on direction
-	switch direction {
-	case "southeast":
+	// Draw shadow based on direction (default to southeast if specified)
+	// We only support southeast shadow for clarity
+	if direction == "southeast" || direction != "" {
 		// Right edge shadow
 		for y := node.Y + 1; y <= node.Y + node.Height - 1; y++ {
 			r.setChar(canvas, core.Point{X: node.X + node.Width, Y: y}, shadowChar, "")
@@ -82,18 +82,6 @@ func (r *NodeRenderer) drawShadow(canvas Canvas, node core.Node, direction strin
 		// Bottom edge shadow (full width + corner)
 		for x := node.X + 1; x <= node.X + node.Width; x++ {
 			r.setChar(canvas, core.Point{X: x, Y: node.Y + node.Height}, shadowChar, "")
-		}
-		
-	case "south":
-		// Bottom edge shadow only
-		for x := node.X; x < node.X + node.Width; x++ {
-			r.setChar(canvas, core.Point{X: x, Y: node.Y + node.Height}, shadowChar, "")
-		}
-		
-	case "east":
-		// Right edge shadow only
-		for y := node.Y; y < node.Y + node.Height; y++ {
-			r.setChar(canvas, core.Point{X: node.X + node.Width, Y: y}, shadowChar, "")
 		}
 	}
 }
