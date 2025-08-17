@@ -9,6 +9,7 @@ import (
 type ColoredMatrixCanvas struct {
 	*MatrixCanvas
 	colors [][]string // Color code for each position
+	styles [][]string // Style code for each position (e.g., bold)
 }
 
 // NewColoredMatrixCanvas creates a new colored matrix canvas
@@ -19,9 +20,16 @@ func NewColoredMatrixCanvas(width, height int) *ColoredMatrixCanvas {
 		colors[i] = make([]string, width)
 	}
 	
+	// Initialize style matrix
+	styles := make([][]string, height)
+	for i := range styles {
+		styles[i] = make([]string, width)
+	}
+	
 	return &ColoredMatrixCanvas{
 		MatrixCanvas: NewMatrixCanvas(width, height),
 		colors:       colors,
+		styles:       styles,
 	}
 }
 
@@ -40,28 +48,73 @@ func (c *ColoredMatrixCanvas) SetWithColor(p core.Point, char rune, color string
 	return nil
 }
 
+// SetWithStyle sets a character with a specific style
+func (c *ColoredMatrixCanvas) SetWithStyle(p core.Point, char rune, style string) error {
+	// Set the character
+	if err := c.MatrixCanvas.Set(p, char); err != nil {
+		return err
+	}
+	
+	// Store the style code
+	if p.Y >= 0 && p.Y < len(c.styles) && p.X >= 0 && p.X < len(c.styles[0]) {
+		c.styles[p.Y][p.X] = GetStyleCode(style)
+	}
+	
+	return nil
+}
+
+// SetWithColorAndStyle sets a character with both color and style
+func (c *ColoredMatrixCanvas) SetWithColorAndStyle(p core.Point, char rune, color string, style string) error {
+	// Set the character
+	if err := c.MatrixCanvas.Set(p, char); err != nil {
+		return err
+	}
+	
+	// Store the color and style codes
+	if p.Y >= 0 && p.Y < len(c.colors) && p.X >= 0 && p.X < len(c.colors[0]) {
+		c.colors[p.Y][p.X] = GetColorCode(color)
+		c.styles[p.Y][p.X] = GetStyleCode(style)
+	}
+	
+	return nil
+}
+
 // ColoredString returns the canvas as a string with ANSI color codes
 func (c *ColoredMatrixCanvas) ColoredString() string {
 	var sb strings.Builder
 	
 	for y := 0; y < c.height; y++ {
 		currentColor := ""
+		currentStyle := ""
 		for x := 0; x < c.width; x++ {
 			char := c.matrix[y][x]
 			color := ""
+			style := ""
 			if y < len(c.colors) && x < len(c.colors[y]) {
 				color = c.colors[y][x]
 			}
+			if y < len(c.styles) && x < len(c.styles[y]) {
+				style = c.styles[y][x]
+			}
 			
-			// Change color if needed
-			if color != currentColor {
-				if currentColor != "" {
+			// Check if we need to change color or style
+			if color != currentColor || style != currentStyle {
+				// Reset if we had any formatting
+				if currentColor != "" || currentStyle != "" {
 					sb.WriteString(ColorReset)
 				}
+				
+				// Apply new style first (if any)
+				if style != "" {
+					sb.WriteString(style)
+				}
+				// Then apply color (if any)
 				if color != "" {
 					sb.WriteString(color)
 				}
+				
 				currentColor = color
+				currentStyle = style
 			}
 			
 			// Write the character
@@ -72,8 +125,8 @@ func (c *ColoredMatrixCanvas) ColoredString() string {
 			}
 		}
 		
-		// Reset color at end of line if needed
-		if currentColor != "" {
+		// Reset formatting at end of line if needed
+		if currentColor != "" || currentStyle != "" {
 			sb.WriteString(ColorReset)
 		}
 		

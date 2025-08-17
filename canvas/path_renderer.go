@@ -23,6 +23,8 @@ type PathRenderer struct {
 	renderMode PathRenderMode
 	hintStyle  string // Current hint style (solid, dashed, dotted, double)
 	hintColor  string // Current hint color
+	hintBold   bool   // Current hint bold setting
+	hintItalic bool   // Current hint italic setting
 }
 
 // LineStyle represents the visual style for rendering lines.
@@ -77,6 +79,8 @@ func (r *PathRenderer) RenderPathWithHints(canvas Canvas, path core.Path, hasArr
 	oldStyle := r.style
 	oldHintStyle := r.hintStyle
 	oldHintColor := r.hintColor
+	oldHintBold := r.hintBold
+	oldHintItalic := r.hintItalic
 	
 	// Apply hints
 	if hints != nil {
@@ -87,31 +91,58 @@ func (r *PathRenderer) RenderPathWithHints(canvas Canvas, path core.Path, hasArr
 		if color, ok := hints["color"]; ok {
 			r.hintColor = color
 		}
+		if bold, ok := hints["bold"]; ok && bold == "true" {
+			r.hintBold = true
+		}
+		if italic, ok := hints["italic"]; ok && italic == "true" {
+			r.hintItalic = true
+		}
 	}
 	
-	// Render the path (color will be applied via setWithColor method)
+	// Render the path (color, bold, and italic will be applied via setWithColor method)
 	err := r.RenderPathWithOptions(canvas, path, hasArrow, true)
 	
 	// Restore original style
 	r.style = oldStyle
 	r.hintStyle = oldHintStyle
 	r.hintColor = oldHintColor
+	r.hintBold = oldHintBold
+	r.hintItalic = oldHintItalic
 	
 	return err
 }
 
-// setWithColor sets a character on the canvas, applying color if the canvas supports it
+// setWithColor sets a character on the canvas, applying color and style if the canvas supports it
 func (r *PathRenderer) setWithColor(canvas Canvas, p core.Point, char rune) error {
-	if r.hintColor != "" {
-		// Try to set with color if the canvas supports it
-		if coloredCanvas, ok := canvas.(*ColoredMatrixCanvas); ok {
-			return coloredCanvas.SetWithColor(p, char, r.hintColor)
+	// If we have color, bold, or italic, use SetWithColorAndStyle
+	if r.hintColor != "" || r.hintBold || r.hintItalic {
+		// Build style string
+		style := ""
+		if r.hintBold && r.hintItalic {
+			style = "bold+italic"
+		} else if r.hintBold {
+			style = "bold"
+		} else if r.hintItalic {
+			style = "italic"
 		}
-		// Also check if it's a type that supports SetWithColor method (like offsetCanvas)
-		if colorSetter, ok := canvas.(interface {
-			SetWithColor(core.Point, rune, string) error
+		
+		// Try to set with color and style if the canvas supports it
+		if coloredCanvas, ok := canvas.(*ColoredMatrixCanvas); ok {
+			return coloredCanvas.SetWithColorAndStyle(p, char, r.hintColor, style)
+		}
+		// Also check if it's a type that supports SetWithColorAndStyle method (like offsetCanvas)
+		if styleSetter, ok := canvas.(interface {
+			SetWithColorAndStyle(core.Point, rune, string, string) error
 		}); ok {
-			return colorSetter.SetWithColor(p, char, r.hintColor)
+			return styleSetter.SetWithColorAndStyle(p, char, r.hintColor, style)
+		}
+		// Fall back to just color if available
+		if r.hintColor != "" {
+			if colorSetter, ok := canvas.(interface {
+				SetWithColor(core.Point, rune, string) error
+			}); ok {
+				return colorSetter.SetWithColor(p, char, r.hintColor)
+			}
 		}
 	}
 	// Fall back to regular set

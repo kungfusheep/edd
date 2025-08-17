@@ -114,9 +114,9 @@ func (e *TUIEditor) StartCommand() {
 	e.commandBuffer = []rune{}
 }
 
-// StartHintEdit starts hint editing mode for connections
+// StartHintEdit starts hint editing mode for nodes and connections
 func (e *TUIEditor) StartHintEdit() {
-	if len(e.diagram.Connections) > 0 {
+	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
 		e.startJump(JumpActionHint)
 	}
 }

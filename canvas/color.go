@@ -12,6 +12,12 @@ const (
 	ColorMagenta = "\033[35m"
 	ColorCyan    = "\033[36m"
 	ColorWhite   = "\033[37m"
+	
+	// Text style codes
+	StyleBold    = "\033[1m"
+	StyleDim     = "\033[2m"
+	StyleItalic  = "\033[3m"
+	StyleReset   = "\033[0m"
 )
 
 // ColorCanvas wraps a canvas and applies color to characters
@@ -102,6 +108,22 @@ func GetColorCode(color string) string {
 		return ColorCyan
 	case "white":
 		return ColorWhite
+	default:
+		return ""
+	}
+}
+
+// GetStyleCode returns the ANSI style code for a style name
+func GetStyleCode(style string) string {
+	switch style {
+	case "bold":
+		return StyleBold
+	case "dim":
+		return StyleDim
+	case "italic":
+		return StyleItalic
+	case "bold+italic":
+		return StyleBold + StyleItalic
 	default:
 		return ""
 	}

@@ -150,12 +150,16 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	// Calculate bounds
 	bounds := calculateBounds(layoutNodes, paths)
 	
-	// Check if any nodes or connections have color hints
+	// Check if any nodes or connections have color or style hints
 	hasColors := false
 	for _, node := range layoutNodes {
 		if node.Hints != nil {
 			if _, hasColor := node.Hints["color"]; hasColor {
 				hasColors = true
+				break
+			}
+			if _, hasBold := node.Hints["bold"]; hasBold {
+				hasColors = true  // We use the colored canvas for styles too
 				break
 			}
 		}
@@ -165,6 +169,10 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 			if conn.Hints != nil {
 				if _, hasColor := conn.Hints["color"]; hasColor {
 					hasColors = true
+					break
+				}
+				if _, hasBold := conn.Hints["bold"]; hasBold {
+					hasColors = true  // We use the colored canvas for styles too
 					break
 				}
 			}
@@ -430,6 +438,20 @@ func (oc *offsetCanvas) SetWithColor(p core.Point, char rune, color string) erro
 	}
 	// Fall back to regular set
 	return oc.canvas.Set(translated, char)
+}
+
+// SetWithColorAndStyle sets a character with color and style if the underlying canvas supports it
+func (oc *offsetCanvas) SetWithColorAndStyle(p core.Point, char rune, color string, style string) error {
+	translated := core.Point{
+		X: p.X - oc.offset.X,
+		Y: p.Y - oc.offset.Y,
+	}
+	// Try to set with color and style if the underlying canvas supports it
+	if coloredCanvas, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+		return coloredCanvas.SetWithColorAndStyle(translated, char, color, style)
+	}
+	// Fall back to regular set with color
+	return oc.SetWithColor(p, char, color)
 }
 
 func (oc *offsetCanvas) Get(p core.Point) rune {

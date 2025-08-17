@@ -376,7 +376,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 		// Normal mode - read from keyboard
 		go func() {
 			for {
-				keyChan <- readKeyWithEscape()
+				// Pass the TUI so we can check the mode
+				keyChan <- readKeyWithMode(tui)
 			}
 		}()
 	}
@@ -548,6 +549,49 @@ func readSingleKey() rune {
 	return rune(b[0])
 }
 
+// readKeyWithMode reads a key and handles escape sequences only in edit modes
+func readKeyWithMode(tui *editor.TUIEditor) editor.KeyEvent {
+	var b [1]byte
+	n, _ := os.Stdin.Read(b[:])
+	
+	if n == 0 {
+		return editor.KeyEvent{Rune: 0}
+	}
+	
+	// Only check for escape sequences in edit modes
+	mode := tui.GetMode()
+	if (mode == editor.ModeEdit || mode == editor.ModeInsert) && b[0] == 27 {
+		// In edit mode and got ESC - check for arrow keys
+		var seq [10]byte
+		seq[0] = b[0]
+		
+		// Set a very short timeout for reading the rest of the sequence
+		oldFlags, _ := fcntl(int(os.Stdin.Fd()), syscall.F_GETFL, 0)
+		syscall.SetNonblock(int(os.Stdin.Fd()), true)
+		n, _ := os.Stdin.Read(seq[1:])
+		fcntl(int(os.Stdin.Fd()), syscall.F_SETFL, oldFlags)
+		
+		if n > 0 {
+			// Parse escape sequence
+			return parseEscapeSequence(seq[:n+1])
+		}
+		// Just ESC
+		return editor.KeyEvent{Rune: 27}
+	}
+	
+	// Normal key
+	return editor.KeyEvent{Rune: rune(b[0])}
+}
+
+// fcntl is a wrapper around the fcntl system call
+func fcntl(fd int, cmd int, arg int) (int, error) {
+	val, _, err := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(cmd), uintptr(arg))
+	if err != 0 {
+		return 0, err
+	}
+	return int(val), nil
+}
+
 // readKeyWithEscape reads a key and handles escape sequences for special keys
 func readKeyWithEscape() editor.KeyEvent {
 	var b [1]byte
@@ -557,9 +601,83 @@ func readKeyWithEscape() editor.KeyEvent {
 		return editor.KeyEvent{Rune: 0}
 	}
 	
-	// For now, don't handle escape sequences - they're causing double keypress issues
-	// Just return the key as-is
+	// Just return the raw key - we'll handle escape sequences separately when needed
 	return editor.KeyEvent{Rune: rune(b[0])}
+}
+
+// readKeyWithArrowSupport reads a key and handles arrow keys in edit modes
+func readKeyWithArrowSupport() editor.KeyEvent {
+	var b [1]byte
+	n, _ := os.Stdin.Read(b[:])
+	
+	if n == 0 {
+		return editor.KeyEvent{Rune: 0}
+	}
+	
+	// Check for escape sequences
+	if b[0] == 27 { // ESC character
+		// Try to read more bytes for escape sequence
+		var seq [10]byte
+		seq[0] = b[0]
+		
+		// Use a select with a very short timeout to check if more data is immediately available
+		done := make(chan int)
+		go func() {
+			n, _ := os.Stdin.Read(seq[1:])
+			done <- n
+		}()
+		
+		select {
+		case n := <-done:
+			if n > 0 {
+				// Parse escape sequence
+				return parseEscapeSequence(seq[:n+1])
+			}
+		case <-time.After(10 * time.Millisecond):
+			// No more bytes quickly available, it's just ESC
+		}
+		
+		return editor.KeyEvent{Rune: 27} // Just ESC
+	}
+	
+	return editor.KeyEvent{Rune: rune(b[0])}
+}
+
+// parseEscapeSequence parses ANSI escape sequences into special keys
+func parseEscapeSequence(seq []byte) editor.KeyEvent {
+	// Handle common escape sequences
+	seqStr := string(seq)
+	
+	// Arrow keys
+	if seqStr == "\033[A" || seqStr == "\033OA" {
+		return editor.KeyEvent{SpecialKey: editor.KeyArrowUp}
+	}
+	if seqStr == "\033[B" || seqStr == "\033OB" {
+		return editor.KeyEvent{SpecialKey: editor.KeyArrowDown}
+	}
+	if seqStr == "\033[C" || seqStr == "\033OC" {
+		return editor.KeyEvent{SpecialKey: editor.KeyArrowRight}
+	}
+	if seqStr == "\033[D" || seqStr == "\033OD" {
+		return editor.KeyEvent{SpecialKey: editor.KeyArrowLeft}
+	}
+	
+	// Home/End keys
+	if seqStr == "\033[H" || seqStr == "\033[1~" || seqStr == "\033OH" {
+		return editor.KeyEvent{SpecialKey: editor.KeyHome}
+	}
+	if seqStr == "\033[F" || seqStr == "\033[4~" || seqStr == "\033OF" {
+		return editor.KeyEvent{SpecialKey: editor.KeyEnd}
+	}
+	
+	// Alt+Backspace (word delete) - various terminals send different sequences
+	if len(seq) == 2 && seq[0] == 27 && seq[1] == 127 {
+		// Alt+Backspace - treat as Ctrl+W (delete word backward)
+		return editor.KeyEvent{Rune: 23} // Ctrl+W
+	}
+	
+	// If we don't recognize it, return ESC
+	return editor.KeyEvent{Rune: 27}
 }
 
 func positionCursor(tui *editor.TUIEditor) {
@@ -698,6 +816,9 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 				if jumpAction == editor.JumpActionEdit {
 					// Yellow background for edit mode
 					fmt.Printf("\033[43;30;1m %c \033[0m", label) // Yellow bg, black text
+				} else if jumpAction == editor.JumpActionHint {
+					// Magenta background for hint mode
+					fmt.Printf("\033[45;97;1m %c \033[0m", label) // Magenta bg, white text
 				} else {
 					// Red background for delete mode
 					fmt.Printf("\033[41;97;1m %c \033[0m", label) // Red bg, white text
@@ -718,6 +839,8 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 		fmt.Print("\033[91mDelete Connection:\033[0m ")
 	} else if jumpAction == editor.JumpActionEdit {
 		fmt.Print("\033[93mEdit Connection Label:\033[0m ")
+	} else if jumpAction == editor.JumpActionHint {
+		fmt.Print("\033[95mEdit Hints - Connections:\033[0m ")
 	} else {
 		fmt.Print("\033[91mConnection Labels:\033[0m ")
 	}
@@ -733,14 +856,18 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 			for _, node := range diagram.Nodes {
 				if node.ID == conn.From && len(node.Text) > 0 {
 					fromText = node.Text[0]
-					if len(fromText) > 6 {
-						fromText = fromText[:6] // Shorter truncation for legend
+					// Truncate by runes, not bytes
+					runes := []rune(fromText)
+					if len(runes) > 8 {
+						fromText = string(runes[:8])
 					}
 				}
 				if node.ID == conn.To && len(node.Text) > 0 {
 					toText = node.Text[0]
-					if len(toText) > 6 {
-						toText = toText[:6]
+					// Truncate by runes, not bytes
+					runes := []rune(toText)
+					if len(runes) > 8 {
+						toText = string(runes[:8])
 					}
 				}
 			}
@@ -749,6 +876,9 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 			if jumpAction == editor.JumpActionEdit {
 				// Yellow background for edit mode
 				fmt.Printf("\033[43;30m%c\033[0m=%s→%s  ", label, fromText, toText)
+			} else if jumpAction == editor.JumpActionHint {
+				// Magenta background for hint mode
+				fmt.Printf("\033[45;97m%c\033[0m=%s→%s  ", label, fromText, toText)
 			} else {
 				// Red background for delete mode
 				fmt.Printf("\033[41;97m%c\033[0m=%s→%s  ", label, fromText, toText)

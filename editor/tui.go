@@ -70,6 +70,8 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		connectionPaths:    make(map[int]core.Path),
 		continuousConnect:  false,
 		continuousDelete:   false,
+		editingHintConn:    -1,  // Initialize to -1 (no connection being edited)
+		editingHintNode:    -1,  // Initialize to -1 (no node being edited)
 		jsonScrollOffset:   0,
 		history:            NewStructHistory(50), // 50 states max (optimized)
 	}

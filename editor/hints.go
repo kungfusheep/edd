@@ -75,6 +75,22 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 		delete(node.Hints, "color")
 		e.history.SaveState(e.diagram)
 		
+	// Text style options
+	case 'o': // Toggle bold
+		if node.Hints["bold"] == "true" {
+			delete(node.Hints, "bold")
+		} else {
+			node.Hints["bold"] = "true"
+		}
+		e.history.SaveState(e.diagram)
+	case 'i': // Toggle italic
+		if node.Hints["italic"] == "true" {
+			delete(node.Hints, "italic")
+		} else {
+			node.Hints["italic"] = "true"
+		}
+		e.history.SaveState(e.diagram)
+		
 	// Shadow options
 	case 'z': // Shadow southeast
 		node.Hints["shadow"] = "southeast"
@@ -92,6 +108,38 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 		} else {
 			node.Hints["shadow-density"] = "light"
 		}
+		e.history.SaveState(e.diagram)
+		
+	// Layout position hints
+	case '1': // Top-left
+		node.Hints["position"] = "top-left"
+		e.history.SaveState(e.diagram)
+	case '2': // Top-center
+		node.Hints["position"] = "top-center"
+		e.history.SaveState(e.diagram)
+	case '3': // Top-right
+		node.Hints["position"] = "top-right"
+		e.history.SaveState(e.diagram)
+	case '4': // Middle-left
+		node.Hints["position"] = "middle-left"
+		e.history.SaveState(e.diagram)
+	case '5': // Center
+		node.Hints["position"] = "center"
+		e.history.SaveState(e.diagram)
+	case '6': // Middle-right
+		node.Hints["position"] = "middle-right"
+		e.history.SaveState(e.diagram)
+	case '7': // Bottom-left
+		node.Hints["position"] = "bottom-left"
+		e.history.SaveState(e.diagram)
+	case '8': // Bottom-center
+		node.Hints["position"] = "bottom-center"
+		e.history.SaveState(e.diagram)
+	case '9': // Bottom-right
+		node.Hints["position"] = "bottom-right"
+		e.history.SaveState(e.diagram)
+	case '0': // Clear position hint
+		delete(node.Hints, "position")
 		e.history.SaveState(e.diagram)
 		
 	case 27: // ESC - go back to jump menu
@@ -158,6 +206,39 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		delete(conn.Hints, "color") // Remove to use default
 		e.history.SaveState(e.diagram)
 		
+	// Text style options
+	case 'o': // Toggle bold
+		if conn.Hints["bold"] == "true" {
+			delete(conn.Hints, "bold")
+		} else {
+			conn.Hints["bold"] = "true"
+		}
+		e.history.SaveState(e.diagram)
+	case 'i': // Toggle italic
+		if conn.Hints["italic"] == "true" {
+			delete(conn.Hints, "italic")
+		} else {
+			conn.Hints["italic"] = "true"
+		}
+		e.history.SaveState(e.diagram)
+		
+	// Flow direction hints
+	case 'f': // Cycle through flow directions
+		currentFlow := conn.Hints["flow"]
+		switch currentFlow {
+		case "right":
+			conn.Hints["flow"] = "down"
+		case "down":
+			conn.Hints["flow"] = "left"
+		case "left":
+			conn.Hints["flow"] = "up"
+		case "up":
+			delete(conn.Hints, "flow") // Remove to go back to auto
+		default:
+			conn.Hints["flow"] = "right" // Start with right
+		}
+		e.history.SaveState(e.diagram)
+		
 	case 27: // ESC - go back to jump menu
 		e.editingHintConn = -1
 		// Re-enter jump mode for hints
@@ -214,6 +295,21 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		shadowDensity = d
 	}
 	
+	bold := "off"
+	if b, ok := node.Hints["bold"]; ok && b == "true" {
+		bold = "on"
+	}
+	
+	italic := "off"
+	if i, ok := node.Hints["italic"]; ok && i == "true" {
+		italic = "on"
+	}
+	
+	position := "auto"
+	if p, ok := node.Hints["position"]; ok {
+		position = p
+	}
+	
 	// Get node text
 	nodeText := "Node"
 	if len(node.Text) > 0 {
@@ -225,7 +321,8 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 	
 	return "\n" +
 		"Node: " + nodeText + "\n" +
-		"Current: style=" + style + ", color=" + color + ", shadow=" + shadow + " (" + shadowDensity + ")\n\n" +
+		"Current: style=" + style + ", color=" + color + ", bold=" + bold + ", italic=" + italic + "\n" +
+		"         shadow=" + shadow + " (" + shadowDensity + "), position=" + position + "\n\n" +
 		"Style Options:\n" +
 		"  [a] Rounded ╭──╮\n" +
 		"  [b] Sharp   ┌──┐\n" +
@@ -235,9 +332,17 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		"  [r] Red    [g] Green   [y] Yellow\n" +
 		"  [u] Blue   [m] Magenta [n] Cyan\n" +
 		"  [w] Default\n\n" +
+		"Text Options:\n" +
+		"  [o] Toggle bold text\n" +
+		"  [i] Toggle italic text\n\n" +
 		"Shadow Options:\n" +
 		"  [z] Add shadow ░░  [x] Remove shadow\n" +
 		"  [l] Toggle density (light/medium)\n\n" +
+		"Layout Position Hints:\n" +
+		"  [1] Top-left     [2] Top-center    [3] Top-right\n" +
+		"  [4] Middle-left  [5] Center        [6] Middle-right\n" +
+		"  [7] Bottom-left  [8] Bottom-center [9] Bottom-right\n" +
+		"  [0] Auto (clear position hint)\n\n" +
 		"[ESC] Back to selection  [Enter] Exit to normal mode"
 }
 
@@ -249,7 +354,7 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 	
 	conn := &e.diagram.Connections[e.editingHintConn]
 	
-	// Get current style and color
+	// Get current style, color, and bold
 	style := "solid"
 	if s, ok := conn.Hints["style"]; ok {
 		style = s
@@ -258,6 +363,21 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 	color := "default"
 	if c, ok := conn.Hints["color"]; ok {
 		color = c
+	}
+	
+	bold := "off"
+	if b, ok := conn.Hints["bold"]; ok && b == "true" {
+		bold = "on"
+	}
+	
+	italic := "off"
+	if i, ok := conn.Hints["italic"]; ok && i == "true" {
+		italic = "on"
+	}
+	
+	flow := "auto"
+	if f, ok := conn.Hints["flow"]; ok {
+		flow = f
 	}
 	
 	// Find connection info
@@ -279,7 +399,8 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 	
 	return "\n" +
 		"Connection: " + fromText + " → " + toText + "\n" +
-		"Current: style=" + style + ", color=" + color + "\n\n" +
+		"Current: style=" + style + ", color=" + color + ", bold=" + bold + ", italic=" + italic + "\n" +
+		"         flow=" + flow + "\n\n" +
 		"Style Options:\n" +
 		"  [a] Solid ────\n" +
 		"  [b] Dashed ╌╌╌╌\n" +
@@ -289,5 +410,11 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 		"  [r] Red    [g] Green   [y] Yellow\n" +
 		"  [u] Blue   [m] Magenta [n] Cyan\n" +
 		"  [w] Default\n\n" +
+		"Text Options:\n" +
+		"  [o] Toggle bold lines\n" +
+		"  [i] Toggle italic lines\n\n" +
+		"Flow Direction:\n" +
+		"  [f] Cycle flow direction (→ ↓ ← ↑ auto)\n" +
+		"      Current: " + flow + "\n\n" +
 		"[ESC] Back to selection  [Enter] Exit to normal mode"
 }

@@ -113,10 +113,14 @@ func (r *NodeRenderer) drawBox(canvas Canvas, node core.Node, style NodeStyle, c
 
 // drawText draws the text content inside a node
 func (r *NodeRenderer) drawText(canvas Canvas, node core.Node, hints map[string]string) error {
-	// Get text color from hints (if any)
+	// Get text color and style from hints (if any)
 	var textColor string
+	var isBold bool
+	var isItalic bool
 	if hints != nil {
 		textColor = hints["textColor"]
+		isBold = hints["bold"] == "true"
+		isItalic = hints["italic"] == "true"
 	}
 	
 	// Draw each line of text
@@ -125,19 +129,19 @@ func (r *NodeRenderer) drawText(canvas Canvas, node core.Node, hints map[string]
 		x := node.X + 1 // 1 char padding from left border
 		
 		// Add space before text
-		r.setChar(canvas, core.Point{X: x, Y: y}, ' ', textColor)
+		r.setCharWithStyle(canvas, core.Point{X: x, Y: y}, ' ', textColor, isBold, isItalic)
 		x++
 		
 		for j, ch := range line {
 			if x+j < node.X+node.Width-1 { // Keep text within borders
-				r.setChar(canvas, core.Point{X: x + j, Y: y}, ch, textColor)
+				r.setCharWithStyle(canvas, core.Point{X: x + j, Y: y}, ch, textColor, isBold, isItalic)
 			}
 		}
 		
 		// Add space after text if there's room
 		textEnd := x + len(line)
 		if textEnd < node.X+node.Width-1 {
-			r.setChar(canvas, core.Point{X: textEnd, Y: y}, ' ', textColor)
+			r.setCharWithStyle(canvas, core.Point{X: textEnd, Y: y}, ' ', textColor, isBold, isItalic)
 		}
 	}
 	
@@ -162,4 +166,32 @@ func (r *NodeRenderer) setChar(canvas Canvas, p core.Point, char rune, color str
 	}
 	// Fall back to regular set
 	canvas.Set(p, char)
+}
+
+// setCharWithStyle sets a character on the canvas with optional color and style
+func (r *NodeRenderer) setCharWithStyle(canvas Canvas, p core.Point, char rune, color string, bold bool, italic bool) {
+	// Build style string
+	style := ""
+	if bold && italic {
+		style = "bold+italic"
+	} else if bold {
+		style = "bold"
+	} else if italic {
+		style = "italic"
+	}
+	
+	// Try to set with color and style if the canvas supports it
+	if coloredCanvas, ok := canvas.(*ColoredMatrixCanvas); ok {
+		coloredCanvas.SetWithColorAndStyle(p, char, color, style)
+		return
+	}
+	// Check if it's an offset canvas that wraps a colored canvas
+	if offsetSetter, ok := canvas.(interface {
+		SetWithColorAndStyle(core.Point, rune, string, string) error
+	}); ok {
+		offsetSetter.SetWithColorAndStyle(p, char, color, style)
+		return
+	}
+	// Fall back to color-only setting
+	r.setChar(canvas, p, char, color)
 }
