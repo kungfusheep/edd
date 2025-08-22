@@ -2,6 +2,7 @@ package layout
 
 import (
 	"edd/core"
+	"edd/utils"
 	"fmt"
 	"math"
 	"sort"
@@ -290,10 +291,10 @@ func (s *SimpleLayout) applyPositionHintsWithRelationships(nodes []core.Node, hi
 			dy := node.Y - neighbor.Y
 			
 			// Apply gentle pull (30% strength)
-			if abs(dx) > s.horizontalSpacing*3 {
+			if utils.Abs(dx) > s.horizontalSpacing*3 {
 				neighbor.X += dx / 3
 			}
-			if abs(dy) > s.verticalSpacing*3 {
+			if utils.Abs(dy) > s.verticalSpacing*3 {
 				neighbor.Y += dy / 3
 			}
 		}
@@ -443,7 +444,7 @@ func (s *SimpleLayout) separateNodes(a, b *core.Node, spacing int) {
 	}
 	
 	// Determine primary separation direction (horizontal or vertical)
-	if abs(dx) > abs(dy) {
+	if utils.Abs(dx) > utils.Abs(dy) {
 		// Separate horizontally
 		if dx > 0 {
 			// B is to the right of A
@@ -476,13 +477,6 @@ func (s *SimpleLayout) separateNodes(a, b *core.Node, spacing int) {
 	}
 }
 
-// abs returns the absolute value of an integer
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
 
 // assignLayers determines which vertical layer each node belongs to.
 // Uses a modified topological sort for O(n + e) complexity.

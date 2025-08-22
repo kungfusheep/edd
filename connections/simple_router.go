@@ -3,6 +3,7 @@ package connections
 import (
 	"edd/core"
 	"edd/obstacles"
+	"edd/utils"
 	"fmt"
 )
 
@@ -70,7 +71,7 @@ func (sr *SimpleRouter) RouteConnection(conn core.Connection, nodes []core.Node)
 	// 	fmt.Printf("  Target node: pos=(%d,%d) size=(%dx%d) center=(%d,%d)\n",
 	// 		targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height, targetCenter.X, targetCenter.Y)
 	// 	fmt.Printf("  Distance: dx=%d, dy=%d, |dy|=%d\n", 
-	// 		targetCenter.X - sourceCenter.X, targetCenter.Y - sourceCenter.Y, abs(targetCenter.Y - sourceCenter.Y))
+	// 		targetCenter.X - sourceCenter.X, targetCenter.Y - sourceCenter.Y, utils.Abs(targetCenter.Y - sourceCenter.Y))
 	// 	
 	// 	// Check the Y ranges
 	// 	fmt.Printf("  Source Y range: %d to %d\n", sourceNode.Y, sourceNode.Y + sourceNode.Height - 1)
@@ -268,7 +269,7 @@ func findNodeEdgeIntersection(from, to core.Point, node *core.Node, isExit bool)
 	centerY := node.Y + node.Height/2
 	
 	// Determine which edge based on direction
-	if abs(to.X - centerX) > abs(to.Y - centerY) {
+	if utils.Abs(to.X - centerX) > utils.Abs(to.Y - centerY) {
 		// Horizontal edge
 		if to.X > centerX {
 			return core.Point{X: right, Y: centerY}
@@ -308,7 +309,7 @@ func getNodeEdgePoint(fromNode, toNode *core.Node) core.Point {
 	dy := toCenter.Y - fromCenter.Y
 	
 	// Choose edge point based on direction
-	if abs(dx) > abs(dy) {
+	if utils.Abs(dx) > utils.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Exit from right edge

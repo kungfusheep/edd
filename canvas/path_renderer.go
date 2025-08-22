@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"edd/core"
+	"edd/utils"
 	"fmt"
 )
 
@@ -731,16 +732,16 @@ func (r *PathRenderer) getCornerChar(prev, current, next core.Point) rune {
 	
 	// Normalize to directions (-1, 0, 1)
 	if dxIn != 0 {
-		dxIn = dxIn / abs(dxIn)
+		dxIn = dxIn / utils.Abs(dxIn)
 	}
 	if dyIn != 0 {
-		dyIn = dyIn / abs(dyIn)
+		dyIn = dyIn / utils.Abs(dyIn)
 	}
 	if dxOut != 0 {
-		dxOut = dxOut / abs(dxOut)
+		dxOut = dxOut / utils.Abs(dxOut)
 	}
 	if dyOut != 0 {
-		dyOut = dyOut / abs(dyOut)
+		dyOut = dyOut / utils.Abs(dyOut)
 	}
 	
 	// Determine which corner to use based on the turn direction

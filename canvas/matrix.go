@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"edd/core"
+	"edd/utils"
 	"errors"
 	"fmt"
 	"strings"
@@ -247,8 +248,8 @@ func (c *MatrixCanvas) DrawVerticalLine(x, y1, y2 int, char rune) error {
 // DrawLine draws a line between two points using Bresenham's algorithm.
 func (c *MatrixCanvas) DrawLine(p1, p2 core.Point, char rune) error {
 	// Bresenham's line algorithm
-	dx := abs(p2.X - p1.X)
-	dy := abs(p2.Y - p1.Y)
+	dx := utils.Abs(p2.X - p1.X)
+	dy := utils.Abs(p2.Y - p1.Y)
 	
 	x, y := p1.X, p1.Y
 	
@@ -422,10 +423,3 @@ func (c *MatrixCanvas) setClipped(x, y int, char rune) {
 	}
 }
 
-// abs returns the absolute value of an integer.
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}

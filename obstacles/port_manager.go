@@ -2,6 +2,7 @@ package obstacles
 
 import (
 	"edd/core"
+	"edd/utils"
 	"fmt"
 	"sync"
 )
@@ -117,7 +118,7 @@ func (pm *portManagerImpl) ReservePort(nodeID int, edge EdgeSide, connectionID i
 		for _, existingPort := range pm.ports {
 			if existingPort.NodeID == nodeID && existingPort.Edge == edge && 
 			   existingPort.ConnectionID != -1 && existingPort.StackLevel == 0 {
-				if abs(port.Position - existingPort.Position) < minSeparation {
+				if utils.Abs(port.Position - existingPort.Position) < minSeparation {
 					tooClose = true
 					break
 				}
@@ -172,7 +173,7 @@ func (pm *portManagerImpl) ReservePort(nodeID int, edge EdgeSide, connectionID i
 	
 	for i := range availablePorts {
 		port := &availablePorts[i]
-		distance := abs(port.Position - centerPos)
+		distance := utils.Abs(port.Position - centerPos)
 		if distance < minDistance {
 			minDistance = distance
 			bestPort = port
@@ -215,7 +216,7 @@ func (pm *portManagerImpl) ReservePortWithHint(nodeID int, edge EdgeSide, connec
 		for _, existingPort := range pm.ports {
 			if existingPort.NodeID == nodeID && existingPort.Edge == edge && 
 			   existingPort.ConnectionID != -1 && existingPort.StackLevel == 0 {
-				if abs(port.Position - existingPort.Position) < minSeparation {
+				if utils.Abs(port.Position - existingPort.Position) < minSeparation {
 					tooClose = true
 					break
 				}
@@ -267,10 +268,10 @@ func (pm *portManagerImpl) ReservePortWithHint(nodeID int, edge EdgeSide, connec
 		switch edge {
 		case North, South:
 			// For horizontal edges, compare X positions
-			distance = abs(port.Point.X - preferredPos.X)
+			distance = utils.Abs(port.Point.X - preferredPos.X)
 		case East, West:
 			// For vertical edges, compare Y positions
-			distance = abs(port.Point.Y - preferredPos.Y)
+			distance = utils.Abs(port.Point.Y - preferredPos.Y)
 		}
 		
 		if distance < minDistance {
@@ -399,12 +400,6 @@ func edgeName(edge EdgeSide) string {
 	return "Unknown"
 }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
 
 // findBestStackingPosition finds the position with the least stacking
 func (pm *portManagerImpl) findBestStackingPosition(nodeID int, edge EdgeSide) (int, int) {
@@ -440,7 +435,7 @@ func (pm *portManagerImpl) findBestStackingPosition(nodeID int, edge EdgeSide) (
 	minDistanceFromCenter := edgeLength
 	
 	for pos, stackLevel := range stackCounts {
-		distFromCenter := abs(pos - centerPos)
+		distFromCenter := utils.Abs(pos - centerPos)
 		if stackLevel < minStackLevel || (stackLevel == minStackLevel && distFromCenter < minDistanceFromCenter) {
 			bestPos = pos
 			minStackLevel = stackLevel

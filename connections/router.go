@@ -3,6 +3,7 @@ package connections
 import (
 	"edd/core"
 	"edd/obstacles"
+	"edd/utils"
 	"fmt"
 	"math"
 )
@@ -25,7 +26,6 @@ type Router struct {
 	simpleRouter     *SimpleRouter
 	areaRouter       *AreaRouter
 	routerType       RouterType
-	useSimpleRouter  bool // Deprecated: use routerType instead
 }
 
 // NewRouter creates a new connection router.
@@ -38,7 +38,6 @@ func NewRouter(pathFinder core.PathFinder) *Router {
 		pathFinder:      pathFinder,
 		obstacleManager: obstacleManager,
 		routerType:      RouterTypeArea, // Default to area-based routing
-		useSimpleRouter: false,          // Deprecated but kept for compatibility
 	}
 	
 	// Create two-phase router
@@ -73,22 +72,9 @@ func (r *Router) SetPortManager(pm obstacles.PortManager) {
 	r.twoPhaseRouter.SetPortManager(pm)
 }
 
-// SetUseSimpleRouter enables or disables the simple center-to-center router
-// Deprecated: Use SetRouterType instead
-func (r *Router) SetUseSimpleRouter(useSimple bool) {
-	r.useSimpleRouter = useSimple
-	if useSimple {
-		r.routerType = RouterTypeSimple
-	} else {
-		r.routerType = RouterTypeTwoPhase
-	}
-}
-
 // SetRouterType sets the type of router to use
 func (r *Router) SetRouterType(routerType RouterType) {
 	r.routerType = routerType
-	// Update deprecated flag for backward compatibility
-	r.useSimpleRouter = (routerType == RouterTypeSimple)
 }
 
 // RouteConnection finds the best path for a connection between two nodes.
@@ -137,7 +123,7 @@ func getConnectionPoint(fromNode, toNode *core.Node) core.Point {
 	// Choose connection point based on direction
 	// Connection points are placed ON the box edges for proper connection termination
 	// Prefer horizontal connections over vertical when possible
-	if abs(dx) > abs(dy) {
+	if utils.Abs(dx) > utils.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Connect from right side (on the edge)
@@ -189,7 +175,7 @@ func getEdgePoint(fromNode, toNode *core.Node) core.Point {
 	
 	// Choose edge point based on direction
 	// Edge points are ON the box edges for proper junction creation
-	if abs(dx) > abs(dy) {
+	if utils.Abs(dx) > utils.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Connect from right side (at the edge)
@@ -222,13 +208,6 @@ func getEdgePoint(fromNode, toNode *core.Node) core.Point {
 	}
 }
 
-// abs returns the absolute value of an integer.
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
 
 
 // routeConnectionsWithDynamicObstacles routes connections with dynamic obstacle updates.

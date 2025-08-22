@@ -3,6 +3,7 @@ package connections
 import (
 	"edd/core"
 	"edd/obstacles"
+	"edd/utils"
 	"fmt"
 )
 
@@ -73,7 +74,7 @@ func (ar *AreaRouter) RouteConnection(conn core.Connection, nodes []core.Node) (
 	//     targetNode.ID, targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height, targetCenter.X, targetCenter.Y)
 	
 	// Choose exit point on source edge based on direction to target
-	if abs(dx) > abs(dy) {
+	if utils.Abs(dx) > utils.Abs(dy) {
 		// Primarily horizontal movement
 		if dx > 0 {
 			// Exit from right edge (one unit past the actual edge for pathfinding)

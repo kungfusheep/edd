@@ -2,6 +2,7 @@ package pathfinding
 
 import (
 	"edd/core"
+	"edd/utils"
 	"fmt"
 )
 
@@ -102,8 +103,8 @@ func (d *DirectPathFinder) middleSplitPath(start, end core.Point) []core.Point {
 	midY := (start.Y + end.Y) / 2
 	
 	// Choose which dimension to split on based on aspect ratio
-	dx := abs(end.X - start.X)
-	dy := abs(end.Y - start.Y)
+	dx := utils.Abs(end.X - start.X)
+	dy := utils.Abs(end.Y - start.Y)
 	
 	if dx > dy {
 		// Wider than tall - split vertically

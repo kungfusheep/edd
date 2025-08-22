@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"edd/core"
+	"edd/utils"
 	"strings"
 )
 
@@ -77,9 +78,9 @@ func (lr *LabelRenderer) findBestSegmentForLabel(path core.Path, label string, p
 	for _, seg := range segments {
 		var segLen int
 		if seg.IsHorizontal {
-			segLen = abs(seg.End.X - seg.Start.X)
+			segLen = utils.Abs(seg.End.X - seg.Start.X)
 		} else if seg.IsVertical {
-			segLen = abs(seg.End.Y - seg.Start.Y)
+			segLen = utils.Abs(seg.End.Y - seg.Start.Y)
 		} else {
 			continue // Skip diagonal segments
 		}
@@ -199,7 +200,7 @@ func (lr *LabelRenderer) renderInlineLabel(c Canvas, segment *Segment, label str
 // renderHorizontalInlineLabel renders a label inline on a horizontal segment
 func (lr *LabelRenderer) renderHorizontalInlineLabel(c Canvas, segment *Segment, label string) {
 	labelLen := len(label)
-	segmentLen := abs(segment.End.X - segment.Start.X)
+	segmentLen := utils.Abs(segment.End.X - segment.Start.X)
 	
 	// Calculate where to place the label (centered on the segment)
 	minX := min(segment.Start.X, segment.End.X)
@@ -282,7 +283,7 @@ func (lr *LabelRenderer) formatLabel(label string) string {
 func (lr *LabelRenderer) renderVerticalInlineLabel(c Canvas, segment *Segment, label string) {
 	// For vertical segments, we'll render the label vertically
 	labelLen := len(label)
-	segmentLen := abs(segment.End.Y - segment.Start.Y)
+	segmentLen := utils.Abs(segment.End.Y - segment.Start.Y)
 	
 	// Calculate where to place the label (centered on the segment)
 	minY := min(segment.Start.Y, segment.End.Y)

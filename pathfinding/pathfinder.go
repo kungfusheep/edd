@@ -3,6 +3,7 @@ package pathfinding
 
 import (
 	"edd/core"
+	"edd/utils"
 	"fmt"
 	"math"
 )
@@ -40,7 +41,7 @@ var EdgeHuggingPathCost = PathCost{
 
 // ManhattanDistance calculates the Manhattan distance between two points.
 func ManhattanDistance(p1, p2 core.Point) int {
-	return abs(p1.X-p2.X) + abs(p1.Y-p2.Y)
+	return utils.Abs(p1.X-p2.X) + utils.Abs(p1.Y-p2.Y)
 }
 
 // EuclideanDistance calculates the Euclidean distance between two points.
@@ -110,7 +111,7 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 		var primary, secondary []core.Point
 		
 		// Prioritize based on which axis has more distance to cover
-		if abs(dx) > abs(dy) {
+		if utils.Abs(dx) > utils.Abs(dy) {
 			// Horizontal is primary
 			if dx > 0 {
 				primary = append(primary, core.Point{X: p.X + 1, Y: p.Y}) // East
@@ -122,7 +123,7 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 			} else {
 				secondary = append(secondary, core.Point{X: p.X, Y: p.Y - 1}) // North
 			}
-		} else if abs(dy) > abs(dx) {
+		} else if utils.Abs(dy) > utils.Abs(dx) {
 			// Vertical is primary
 			if dy > 0 {
 				primary = append(primary, core.Point{X: p.X, Y: p.Y + 1}) // South
@@ -155,8 +156,8 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 			// Return both options first, then the opposite directions
 			// This ensures both paths are explored with equal priority
 			return []core.Point{horizontal, vertical,
-				{X: p.X - dx/abs(dx), Y: p.Y}, // Opposite horizontal
-				{X: p.X, Y: p.Y - dy/abs(dy)},  // Opposite vertical
+				{X: p.X - dx/utils.Abs(dx), Y: p.Y}, // Opposite horizontal
+				{X: p.X, Y: p.Y - dy/utils.Abs(dy)},  // Opposite vertical
 			}
 		}
 		
@@ -254,8 +255,8 @@ func OptimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
 // canConnectDirectly checks if two points can be connected with a straight line
 func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool {
 	// Use Bresenham's line algorithm to check all points on the line
-	dx := abs(p2.X - p1.X)
-	dy := abs(p2.Y - p1.Y)
+	dx := utils.Abs(p2.X - p1.X)
+	dy := utils.Abs(p2.Y - p1.Y)
 	
 	x, y := p1.X, p1.Y
 	
@@ -310,13 +311,6 @@ func PathToString(path core.Path) string {
 	return result
 }
 
-// abs returns the absolute value of an integer.
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
 
 // min returns the minimum of two integers.
 func min(a, b int) int {

@@ -2,6 +2,7 @@ package pathfinding
 
 import (
 	"edd/core"
+	"edd/utils"
 	"fmt"
 )
 
@@ -284,7 +285,7 @@ func (s *SmartPathFinder) alignSegments(path core.Path, obstacles func(core.Poin
 		p0, p1, p2, p3 := points[i-1], points[i], points[i+1], points[i+2]
 		
 		// Check if we can align horizontally
-		if p0.Y == p3.Y && abs(p1.Y-p0.Y) <= 3 && abs(p2.Y-p0.Y) <= 3 {
+		if p0.Y == p3.Y && utils.Abs(p1.Y-p0.Y) <= 3 && utils.Abs(p2.Y-p0.Y) <= 3 {
 			// Try to flatten this section
 			aligned1 := core.Point{X: p1.X, Y: p0.Y}
 			aligned2 := core.Point{X: p2.X, Y: p0.Y}
@@ -299,7 +300,7 @@ func (s *SmartPathFinder) alignSegments(path core.Path, obstacles func(core.Poin
 		}
 		
 		// Check if we can align vertically
-		if p0.X == p3.X && abs(p1.X-p0.X) <= 3 && abs(p2.X-p0.X) <= 3 {
+		if p0.X == p3.X && utils.Abs(p1.X-p0.X) <= 3 && utils.Abs(p2.X-p0.X) <= 3 {
 			// Try to straighten this section
 			aligned1 := core.Point{X: p0.X, Y: p1.Y}
 			aligned2 := core.Point{X: p0.X, Y: p2.Y}
