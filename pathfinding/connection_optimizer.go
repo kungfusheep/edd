@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/core"
-	"edd/utils"
+	"edd/geometry"
 	"math"
 )
 
@@ -57,7 +57,7 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 	dy := toCenter.Y - fromCenter.Y
 	
 	// Choose exit point on fromNode
-	if utils.Abs(dx) > utils.Abs(dy) {
+	if geometry.Abs(dx) > geometry.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// To node is to the right
@@ -93,7 +93,7 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 	dx = fromCenter.X - toCenter.X
 	dy = fromCenter.Y - toCenter.Y
 	
-	if utils.Abs(dx) > utils.Abs(dy) {
+	if geometry.Abs(dx) > geometry.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// From node is to the right

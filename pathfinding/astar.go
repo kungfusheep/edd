@@ -3,7 +3,7 @@ package pathfinding
 import (
 	"container/heap"
 	"edd/core"
-	"edd/utils"
+	"edd/geometry"
 	"fmt"
 	"math"
 )
@@ -208,8 +208,8 @@ func (a *AStarPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 // heuristic calculates the estimated cost to reach the goal.
 func (a *AStarPathFinder) heuristic(current, goal core.Point, currentDir Direction) int {
 	// Manhattan distance
-	dx := utils.Abs(goal.X - current.X)
-	dy := utils.Abs(goal.Y - current.Y)
+	dx := geometry.Abs(goal.X - current.X)
+	dy := geometry.Abs(goal.Y - current.Y)
 	distance := dx + dy
 	
 	// Base cost using straight movement
@@ -258,13 +258,13 @@ func (a *AStarPathFinder) calculateGCost(current *AStarNode, next core.Point, ne
 	if a.costs.DirectionBias != 0 {
 		if a.costs.DirectionBias > 0 && (nextDir == East || nextDir == West) {
 			// Prefer horizontal movement
-			bias := utils.Abs(a.costs.DirectionBias)
+			bias := geometry.Abs(a.costs.DirectionBias)
 			if bias < cost {
 				cost -= bias
 			}
 		} else if a.costs.DirectionBias < 0 && (nextDir == North || nextDir == South) {
 			// Prefer vertical movement
-			bias := utils.Abs(a.costs.DirectionBias)
+			bias := geometry.Abs(a.costs.DirectionBias)
 			if bias < cost {
 				cost -= bias
 			}
@@ -426,7 +426,7 @@ func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.No
 	// Check distance to each edge
 	// Top edge
 	if current.Y < targetNode.Y {
-		dist := utils.Abs(targetNode.Y - current.Y) + utils.Abs(current.X - (targetNode.X + targetNode.Width/2))
+		dist := geometry.Abs(targetNode.Y - current.Y) + geometry.Abs(current.X - (targetNode.X + targetNode.Width/2))
 		if dist < minDist {
 			minDist = dist
 		}
@@ -434,7 +434,7 @@ func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.No
 	
 	// Bottom edge
 	if current.Y > targetNode.Y + targetNode.Height - 1 {
-		dist := utils.Abs(current.Y - (targetNode.Y + targetNode.Height - 1)) + utils.Abs(current.X - (targetNode.X + targetNode.Width/2))
+		dist := geometry.Abs(current.Y - (targetNode.Y + targetNode.Height - 1)) + geometry.Abs(current.X - (targetNode.X + targetNode.Width/2))
 		if dist < minDist {
 			minDist = dist
 		}
@@ -442,7 +442,7 @@ func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.No
 	
 	// Left edge
 	if current.X < targetNode.X {
-		dist := utils.Abs(targetNode.X - current.X) + utils.Abs(current.Y - (targetNode.Y + targetNode.Height/2))
+		dist := geometry.Abs(targetNode.X - current.X) + geometry.Abs(current.Y - (targetNode.Y + targetNode.Height/2))
 		if dist < minDist {
 			minDist = dist
 		}
@@ -450,7 +450,7 @@ func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.No
 	
 	// Right edge
 	if current.X > targetNode.X + targetNode.Width - 1 {
-		dist := utils.Abs(current.X - (targetNode.X + targetNode.Width - 1)) + utils.Abs(current.Y - (targetNode.Y + targetNode.Height/2))
+		dist := geometry.Abs(current.X - (targetNode.X + targetNode.Width - 1)) + geometry.Abs(current.Y - (targetNode.Y + targetNode.Height/2))
 		if dist < minDist {
 			minDist = dist
 		}

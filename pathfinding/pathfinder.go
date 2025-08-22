@@ -3,7 +3,7 @@ package pathfinding
 
 import (
 	"edd/core"
-	"edd/utils"
+	"edd/geometry"
 	"fmt"
 	"math"
 )
@@ -41,7 +41,7 @@ var EdgeHuggingPathCost = PathCost{
 
 // ManhattanDistance calculates the Manhattan distance between two points.
 func ManhattanDistance(p1, p2 core.Point) int {
-	return utils.Abs(p1.X-p2.X) + utils.Abs(p1.Y-p2.Y)
+	return geometry.Abs(p1.X-p2.X) + geometry.Abs(p1.Y-p2.Y)
 }
 
 // EuclideanDistance calculates the Euclidean distance between two points.
@@ -111,7 +111,7 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 		var primary, secondary []core.Point
 		
 		// Prioritize based on which axis has more distance to cover
-		if utils.Abs(dx) > utils.Abs(dy) {
+		if geometry.Abs(dx) > geometry.Abs(dy) {
 			// Horizontal is primary
 			if dx > 0 {
 				primary = append(primary, core.Point{X: p.X + 1, Y: p.Y}) // East
@@ -123,7 +123,7 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 			} else {
 				secondary = append(secondary, core.Point{X: p.X, Y: p.Y - 1}) // North
 			}
-		} else if utils.Abs(dy) > utils.Abs(dx) {
+		} else if geometry.Abs(dy) > geometry.Abs(dx) {
 			// Vertical is primary
 			if dy > 0 {
 				primary = append(primary, core.Point{X: p.X, Y: p.Y + 1}) // South
@@ -156,8 +156,8 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 			// Return both options first, then the opposite directions
 			// This ensures both paths are explored with equal priority
 			return []core.Point{horizontal, vertical,
-				{X: p.X - dx/utils.Abs(dx), Y: p.Y}, // Opposite horizontal
-				{X: p.X, Y: p.Y - dy/utils.Abs(dy)},  // Opposite vertical
+				{X: p.X - dx/geometry.Abs(dx), Y: p.Y}, // Opposite horizontal
+				{X: p.X, Y: p.Y - dy/geometry.Abs(dy)},  // Opposite vertical
 			}
 		}
 		
@@ -255,8 +255,8 @@ func OptimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
 // canConnectDirectly checks if two points can be connected with a straight line
 func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool {
 	// Use Bresenham's line algorithm to check all points on the line
-	dx := utils.Abs(p2.X - p1.X)
-	dy := utils.Abs(p2.Y - p1.Y)
+	dx := geometry.Abs(p2.X - p1.X)
+	dy := geometry.Abs(p2.Y - p1.Y)
 	
 	x, y := p1.X, p1.Y
 	

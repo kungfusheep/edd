@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/core"
-	"edd/utils"
+	"edd/geometry"
 )
 
 // ObstacleChecker is a function that returns true if a point is blocked.
@@ -101,13 +101,13 @@ func (p PathObstacle) isPointOnSegment(point, start, end core.Point) bool {
 	// For horizontal or vertical lines, use simple distance
 	if start.X == end.X {
 		// Vertical line
-		return utils.Abs(point.X-start.X) <= p.Thickness &&
+		return geometry.Abs(point.X-start.X) <= p.Thickness &&
 			point.Y >= min(start.Y, end.Y) &&
 			point.Y <= max(start.Y, end.Y)
 	}
 	if start.Y == end.Y {
 		// Horizontal line
-		return utils.Abs(point.Y-start.Y) <= p.Thickness &&
+		return geometry.Abs(point.Y-start.Y) <= p.Thickness &&
 			point.X >= min(start.X, end.X) &&
 			point.X <= max(start.X, end.X)
 	}

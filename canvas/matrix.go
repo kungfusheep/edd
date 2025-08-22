@@ -2,7 +2,7 @@ package canvas
 
 import (
 	"edd/core"
-	"edd/utils"
+	"edd/geometry"
 	"errors"
 	"fmt"
 	"strings"
@@ -248,8 +248,8 @@ func (c *MatrixCanvas) DrawVerticalLine(x, y1, y2 int, char rune) error {
 // DrawLine draws a line between two points using Bresenham's algorithm.
 func (c *MatrixCanvas) DrawLine(p1, p2 core.Point, char rune) error {
 	// Bresenham's line algorithm
-	dx := utils.Abs(p2.X - p1.X)
-	dy := utils.Abs(p2.Y - p1.Y)
+	dx := geometry.Abs(p2.X - p1.X)
+	dy := geometry.Abs(p2.Y - p1.Y)
 	
 	x, y := p1.X, p1.Y
 	

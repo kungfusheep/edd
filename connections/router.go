@@ -3,7 +3,7 @@ package connections
 import (
 	"edd/core"
 	"edd/obstacles"
-	"edd/utils"
+	"edd/geometry"
 	"fmt"
 	"math"
 )
@@ -123,7 +123,7 @@ func getConnectionPoint(fromNode, toNode *core.Node) core.Point {
 	// Choose connection point based on direction
 	// Connection points are placed ON the box edges for proper connection termination
 	// Prefer horizontal connections over vertical when possible
-	if utils.Abs(dx) > utils.Abs(dy) {
+	if geometry.Abs(dx) > geometry.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Connect from right side (on the edge)
@@ -175,7 +175,7 @@ func getEdgePoint(fromNode, toNode *core.Node) core.Point {
 	
 	// Choose edge point based on direction
 	// Edge points are ON the box edges for proper junction creation
-	if utils.Abs(dx) > utils.Abs(dy) {
+	if geometry.Abs(dx) > geometry.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Connect from right side (at the edge)
