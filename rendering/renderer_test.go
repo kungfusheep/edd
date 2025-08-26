@@ -44,8 +44,8 @@ func TestRendererBasic(t *testing.T) {
 		t.Error("Expected output to contain 'World'")
 	}
 	
-	// Check for box drawing characters (the renderer is using └┌┐┘ style)
-	if !strings.Contains(output, "┌") || !strings.Contains(output, "┐") {
+	// Check for box drawing characters (the renderer uses rounded corners by default)
+	if !strings.Contains(output, "╭") || !strings.Contains(output, "╮") {
 		t.Error("Expected output to contain box drawing characters")
 	}
 }

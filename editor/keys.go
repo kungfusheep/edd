@@ -12,7 +12,15 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'q', 3: // q or Ctrl+C to quit
 		return true
 		
+	case 27: // ESC - if we have a previous jump action, restart that jump mode
+		if e.previousJumpAction != 0 {
+			action := e.previousJumpAction
+			e.previousJumpAction = 0  // Clear it
+			e.startJump(action)  // Restart jump mode with the same action
+		}
+		
 	case 'a', 'A': // Add new node (A is same as a since we're already in INSERT mode with continuation)
+		e.previousJumpAction = 0  // Clear any previous jump action
 		e.SetMode(ModeInsert)
 		nodeID := e.AddNode([]string{""})
 		e.selected = nodeID
@@ -79,9 +87,15 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 // handleTextKey processes keys in text input modes (Insert/Edit)
 func (e *TUIEditor) handleTextKey(key rune) bool {
 	switch key {
-	case 27: // ESC - save and return to normal mode
+	case 27: // ESC - save and return to normal mode (or jump mode if we came from there)
 		e.commitText()
-		e.SetMode(ModeNormal)
+		if e.previousJumpAction != 0 {
+			action := e.previousJumpAction
+			e.previousJumpAction = 0  // Clear it
+			e.startJump(action)  // Restart jump mode with the same action
+		} else {
+			e.SetMode(ModeNormal)
+		}
 		
 	case 127, 8: // Backspace
 		if e.cursorPos > 0 {
@@ -190,6 +204,7 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		e.clearJumpLabels()
 		e.continuousConnect = false // Exit continuous connect mode
 		e.continuousDelete = false  // Exit continuous delete mode
+		e.previousJumpAction = 0    // Clear the previous action since we're canceling
 		e.SetMode(ModeNormal)
 		return false
 	}
@@ -309,6 +324,9 @@ func (e *TUIEditor) executeCommand(cmd string) {
 
 // executeJumpAction executes the pending action after jump selection
 func (e *TUIEditor) executeJumpAction(nodeID int) {
+	// Save the action type before executing
+	e.previousJumpAction = e.jumpAction
+	
 	switch e.jumpAction {
 	case JumpActionSelect:
 		e.selected = nodeID

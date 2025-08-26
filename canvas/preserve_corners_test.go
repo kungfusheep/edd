@@ -55,7 +55,7 @@ func TestPreserveCornersMode(t *testing.T) {
 			expected: `│    
 │    
 │    
-└───→`,
+└──▶ `,
 		},
 	}
 

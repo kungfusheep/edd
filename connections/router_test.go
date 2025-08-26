@@ -2,6 +2,7 @@ package connections
 
 import (
 	"edd/core"
+	"edd/geometry"
 	"edd/pathfinding"
 	"testing"
 )
@@ -236,13 +237,13 @@ func isAdjacentToNode(point core.Point, node *core.Node) bool {
 	tolerance := 1
 	
 	// On left or right edge
-	if (abs(point.X-node.X) <= tolerance || abs(point.X-(node.X+node.Width)) <= tolerance) &&
+	if (geometry.Abs(point.X-node.X) <= tolerance || geometry.Abs(point.X-(node.X+node.Width)) <= tolerance) &&
 		point.Y >= node.Y-tolerance && point.Y <= node.Y+node.Height+tolerance {
 		return true
 	}
 	
 	// On top or bottom edge
-	if (abs(point.Y-node.Y) <= tolerance || abs(point.Y-(node.Y+node.Height)) <= tolerance) &&
+	if (geometry.Abs(point.Y-node.Y) <= tolerance || geometry.Abs(point.Y-(node.Y+node.Height)) <= tolerance) &&
 		point.X >= node.X-tolerance && point.X <= node.X+node.Width+tolerance {
 		return true
 	}

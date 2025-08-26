@@ -312,6 +312,24 @@ func (r *PathRenderer) RenderPathWithOptions(canvas Canvas, path core.Path, hasA
 		r.setWithColor(canvas, pos, corner)
 	}
 	
+	// Phase 4: For multi-segment non-arrow paths, ensure the final endpoint is drawn
+	// (it's not a corner and segments exclude endpoints)
+	if !hasArrow && !isClosed && len(points) > 2 {
+		lastPoint := points[len(points)-1]
+		// Only draw if it's not already a corner
+		if _, isCorner := corners[lastPoint]; !isCorner {
+			// Determine character based on the direction of the last segment
+			secondLast := points[len(points)-2]
+			if lastPoint.Y == secondLast.Y {
+				// Horizontal segment
+				r.setWithColor(canvas, lastPoint, r.style.Horizontal)
+			} else if lastPoint.X == secondLast.X {
+				// Vertical segment
+				r.setWithColor(canvas, lastPoint, r.style.Vertical)
+			}
+		}
+	}
+	
 	return nil
 }
 
@@ -385,7 +403,10 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 			step = -1
 		}
 		
-		for x := from.X; x != to.X+step; x += step {
+		// Always stop one before the endpoint (endpoint is exclusive)
+		endX := to.X - step
+		
+		for x := from.X; x != endX+step; x += step {
 			p := core.Point{X: x, Y: from.Y}
 			
 			// Skip the first point if requested
@@ -399,7 +420,7 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 			}
 			
 			// Handle endpoint with arrow
-			if x == to.X && drawArrow {
+			if x == endX && drawArrow {
 				arrowChar := r.style.ArrowRight
 				if step < 0 {
 					arrowChar = r.style.ArrowLeft
@@ -421,7 +442,10 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 			step = -1
 		}
 		
-		for y := from.Y; y != to.Y+step; y += step {
+		// Always stop one before the endpoint (endpoint is exclusive)
+		endY := to.Y - step
+		
+		for y := from.Y; y != endY+step; y += step {
 			p := core.Point{X: from.X, Y: y}
 			
 			// Skip the first point if requested
@@ -435,7 +459,7 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 			}
 			
 			// Handle endpoint with arrow
-			if y == to.Y && drawArrow {
+			if y == endY && drawArrow {
 				arrowChar := r.style.ArrowDown
 				if step < 0 {
 					arrowChar = r.style.ArrowUp

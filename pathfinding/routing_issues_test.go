@@ -2,6 +2,7 @@ package pathfinding
 
 import (
 	"edd/core"
+	"edd/geometry"
 	"fmt"
 	"testing"
 )
@@ -171,7 +172,7 @@ func getConnectionPoint(fromNode, toNode *core.Node) core.Point {
 	dx := toCenter.X - fromCenter.X
 	dy := toCenter.Y - fromCenter.Y
 	
-	if abs(dx) > abs(dy) {
+	if geometry.Abs(dx) > geometry.Abs(dy) {
 		if dx > 0 {
 			return core.Point{
 				X: fromNode.X + fromNode.Width - 1,
@@ -210,8 +211,8 @@ func createObstaclesFunctionWithPadding(nodes []core.Node, sourceID, targetID in
 			}
 			
 			// Check if point is inside the node with padding
-			if p.X >= node.X-padding && p.X <= node.X+node.Width+padding &&
-			   p.Y >= node.Y-padding && p.Y <= node.Y+node.Height+padding {
+			if p.X >= node.X-padding && p.X < node.X+node.Width+padding &&
+			   p.Y >= node.Y-padding && p.Y < node.Y+node.Height+padding {
 				return true
 			}
 		}

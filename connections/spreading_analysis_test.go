@@ -3,6 +3,7 @@ package connections
 import (
 	"edd/canvas"
 	"edd/core"
+	"edd/geometry"
 	"edd/pathfinding"
 	"fmt"
 	"strings"
@@ -179,7 +180,7 @@ func analyzeSpreadingQuality(t *testing.T, name string, nodes []core.Node, paths
 		
 		for i := 0; i < len(startPoints)-1; i++ {
 			for j := i + 1; j < len(startPoints); j++ {
-				dist := abs(startPoints[i].Y - startPoints[j].Y) + abs(startPoints[i].X - startPoints[j].X)
+				dist := geometry.Abs(startPoints[i].Y - startPoints[j].Y) + geometry.Abs(startPoints[i].X - startPoints[j].X)
 				if dist < minDist {
 					minDist = dist
 				}

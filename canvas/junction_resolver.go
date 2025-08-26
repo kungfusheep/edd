@@ -32,6 +32,13 @@ func (jr *JunctionResolver) Resolve(existing, newLine rune) rune {
 		return existing
 	}
 	
+	// Special case: when two arrows point in the same direction, preserve the existing arrow
+	if isArrowChar(existing) && isArrowChar(newLine) {
+		if arrowsPointSameDirection(existing, newLine) {
+			return existing
+		}
+	}
+	
 	
 	// Special handling for corners being placed where lines exist
 	// This improves aesthetics for simple paths
@@ -282,4 +289,25 @@ func isCornerChar(r rune) bool {
 // isSimpleLineChar checks if a character is a simple horizontal or vertical line.
 func isSimpleLineChar(r rune) bool {
 	return r == '─' || r == '│' || r == '-' || r == '|'
+}
+
+// arrowsPointSameDirection checks if two arrow characters point in the same direction
+func arrowsPointSameDirection(a, b rune) bool {
+	// Right-pointing arrows
+	if (a == '▶' || a == '→' || a == '>') && (b == '▶' || b == '→' || b == '>') {
+		return true
+	}
+	// Left-pointing arrows
+	if (a == '◀' || a == '←' || a == '<') && (b == '◀' || b == '←' || b == '<') {
+		return true
+	}
+	// Up-pointing arrows
+	if (a == '▲' || a == '↑' || a == '^') && (b == '▲' || b == '↑' || b == '^') {
+		return true
+	}
+	// Down-pointing arrows
+	if (a == '▼' || a == '↓' || a == 'v') && (b == '▼' || b == '↓' || b == 'v') {
+		return true
+	}
+	return false
 }

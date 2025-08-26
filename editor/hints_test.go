@@ -87,9 +87,132 @@ func TestHintMenuInput(t *testing.T) {
 		t.Errorf("Expected color=red, got %v", conn.Hints["color"])
 	}
 	
-	// Test ESC exits mode
+	// Test ESC exits mode (this test is for the old behavior)
+	// Now ESC should return to jump mode if previousJumpAction is set
 	tui.HandleHintMenuInput(27)
+	// Since we didn't come from jump mode, it should go to normal
 	if tui.GetMode() != ModeNormal {
-		t.Error("ESC should return to normal mode")
+		t.Error("ESC should return to normal mode when no previousJumpAction")
 	}
+}
+
+func TestHintMenuEnterExitsToNormal(t *testing.T) {
+	// Create a simple diagram with nodes
+	diagram := &core.Diagram{
+		Nodes: []core.Node{
+			{ID: 1, Text: []string{"Node 1"}},
+			{ID: 2, Text: []string{"Node 2"}},
+		},
+		Connections: []core.Connection{
+			{From: 1, To: 2, Label: "connects"},
+		},
+	}
+
+	// Create TUI editor
+	renderer := NewRealRenderer()
+	tui := NewTUIEditor(renderer)
+	tui.SetDiagram(diagram)
+
+	// Test node hints menu
+	t.Run("NodeHintsEnterKey", func(t *testing.T) {
+		// Press 'H' to enter hints jump mode
+		tui.HandleKey('H')
+		if tui.GetMode() != ModeJump {
+			t.Errorf("Expected ModeJump after 'H', got %v", tui.GetMode())
+		}
+
+		// Select first node (should have label 'a')
+		tui.HandleKey('a')
+		if tui.GetMode() != ModeHintMenu {
+			t.Errorf("Expected ModeHintMenu after selecting node, got %v", tui.GetMode())
+		}
+
+		// Press Enter - should exit to normal mode (test key code 13)
+		tui.HandleKey(13) // Enter key (CR)
+		if tui.GetMode() != ModeNormal {
+			t.Errorf("Expected ModeNormal after Enter(13) in hints menu, got %v", tui.GetMode())
+		}
+		
+		// Verify previousJumpAction was cleared
+		if tui.previousJumpAction != 0 {
+			t.Errorf("Expected previousJumpAction to be cleared, got %v", tui.previousJumpAction)
+		}
+		
+		// Test again with key code 10 (LF)
+		tui.HandleKey('H')
+		tui.HandleKey('a')
+		tui.HandleKey(10) // Enter key (LF)
+		if tui.GetMode() != ModeNormal {
+			t.Errorf("Expected ModeNormal after Enter(10) in hints menu, got %v", tui.GetMode())
+		}
+	})
+
+	// Test connection hints menu
+	t.Run("ConnectionHintsEnterKey", func(t *testing.T) {
+		// Press 'H' to enter hints jump mode
+		tui.HandleKey('H')
+		if tui.GetMode() != ModeJump {
+			t.Errorf("Expected ModeJump after 'H', got %v", tui.GetMode())
+		}
+
+		// Select first connection (should have label 'd' after nodes a,s)
+		tui.HandleKey('d')
+		if tui.GetMode() != ModeHintMenu {
+			t.Errorf("Expected ModeHintMenu after selecting connection, got %v", tui.GetMode())
+		}
+
+		// Press Enter - should exit to normal mode
+		tui.HandleKey(13) // Enter key
+		if tui.GetMode() != ModeNormal {
+			t.Errorf("Expected ModeNormal after Enter in hints menu, got %v", tui.GetMode())
+		}
+		
+		// Verify previousJumpAction was cleared
+		if tui.previousJumpAction != 0 {
+			t.Errorf("Expected previousJumpAction to be cleared, got %v", tui.previousJumpAction)
+		}
+	})
+}
+
+func TestHintMenuESCReturnsToJump(t *testing.T) {
+	// Create a simple diagram with nodes
+	diagram := &core.Diagram{
+		Nodes: []core.Node{
+			{ID: 1, Text: []string{"Node 1"}},
+			{ID: 2, Text: []string{"Node 2"}},
+		},
+		Connections: []core.Connection{
+			{From: 1, To: 2, Label: "connects"},
+		},
+	}
+
+	// Create TUI editor
+	renderer := NewRealRenderer()
+	tui := NewTUIEditor(renderer)
+	tui.SetDiagram(diagram)
+
+	// Test node hints menu ESC behavior
+	t.Run("NodeHintsESCKey", func(t *testing.T) {
+		// Press 'H' to enter hints jump mode
+		tui.HandleKey('H')
+		if tui.GetMode() != ModeJump {
+			t.Errorf("Expected ModeJump after 'H', got %v", tui.GetMode())
+		}
+		jumpAction := tui.GetJumpAction()
+
+		// Select first node
+		tui.HandleKey('a')
+		if tui.GetMode() != ModeHintMenu {
+			t.Errorf("Expected ModeHintMenu after selecting node, got %v", tui.GetMode())
+		}
+
+		// Press ESC - should return to jump mode with same action
+		tui.HandleKey(27) // ESC key
+		if tui.GetMode() != ModeJump {
+			t.Errorf("Expected ModeJump after ESC in hints menu, got %v", tui.GetMode())
+		}
+		if tui.GetJumpAction() != jumpAction {
+			t.Errorf("Expected jump action %v after ESC, got %v", jumpAction, tui.GetJumpAction())
+		}
+	})
 }

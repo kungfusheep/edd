@@ -77,11 +77,14 @@ func (v *LineValidator) checkCharacter(grid [][]rune, x, y int, char rune) {
 	switch char {
 	case '─', '-':
 		// Horizontal line - must connect horizontally
-		if !v.canConnectHorizontal(west) && west != ' ' && !isAlphaNum(west) {
+		// Allow perpendicular lines as they form implicit junctions
+		if !v.canConnectHorizontal(west) && west != ' ' && !isAlphaNum(west) && 
+		   !v.isJunctionOrCross(west) && !v.isVerticalOnly(west) {
 			v.addError(x, y, char, fmt.Sprintf("west=%c", west), 
 				"Horizontal line cannot connect to %c on the west", west)
 		}
-		if !v.canConnectHorizontal(east) && east != ' ' && !isAlphaNum(east) {
+		if !v.canConnectHorizontal(east) && east != ' ' && !isAlphaNum(east) && 
+		   !v.isJunctionOrCross(east) && !v.isVerticalOnly(east) {
 			v.addError(x, y, char, fmt.Sprintf("east=%c", east),
 				"Horizontal line cannot connect to %c on the east", east)
 		}
@@ -99,11 +102,14 @@ func (v *LineValidator) checkCharacter(grid [][]rune, x, y int, char rune) {
 		
 	case '│', '|':
 		// Vertical line - must connect vertically
-		if !v.canConnectVertical(north) && north != ' ' && !isAlphaNum(north) {
+		// Allow perpendicular lines as they form implicit junctions
+		if !v.canConnectVertical(north) && north != ' ' && !isAlphaNum(north) && 
+		   !v.isJunctionOrCross(north) && !v.isHorizontalOnly(north) {
 			v.addError(x, y, char, fmt.Sprintf("north=%c", north),
 				"Vertical line cannot connect to %c on the north", north)
 		}
-		if !v.canConnectVertical(south) && south != ' ' && !isAlphaNum(south) {
+		if !v.canConnectVertical(south) && south != ' ' && !isAlphaNum(south) && 
+		   !v.isJunctionOrCross(south) && !v.isHorizontalOnly(south) {
 			v.addError(x, y, char, fmt.Sprintf("south=%c", south),
 				"Vertical line cannot connect to %c on the south", south)
 		}
@@ -121,13 +127,15 @@ func (v *LineValidator) checkCharacter(grid [][]rune, x, y int, char rune) {
 		
 	case '┌', '╭':
 		// Top-left corner - connects right and down
-		if !v.canConnectHorizontal(east) && east != ' ' && !isAlphaNum(east) {
+		// We're lenient - corners can have spaces next to them
+		// Only complain if there's an incompatible character
+		if east != ' ' && !v.canConnectHorizontal(east) && !isAlphaNum(east) && !v.isJunctionOrCross(east) {
 			v.addError(x, y, char, fmt.Sprintf("east=%c", east),
-				"Top-left corner must connect horizontally to the east")
+				"Top-left corner cannot connect to %c on the east", east)
 		}
-		if !v.canConnectVertical(south) && south != ' ' && !isAlphaNum(south) {
+		if south != ' ' && !v.canConnectVertical(south) && !isAlphaNum(south) && !v.isJunctionOrCross(south) {
 			v.addError(x, y, char, fmt.Sprintf("south=%c", south),
-				"Top-left corner must connect vertically to the south")
+				"Top-left corner cannot connect to %c on the south", south)
 		}
 		
 	case '┐', '╮':
@@ -318,12 +326,12 @@ func (v *LineValidator) canConnectVertical(char rune) bool {
 
 // isHorizontalOnly checks if a character is purely horizontal (no vertical component).
 func (v *LineValidator) isHorizontalOnly(char rune) bool {
-	return (char == '─' || char == '-') && !v.canConnectVertical(char)
+	return char == '─' || char == '-'
 }
 
 // isVerticalOnly checks if a character is purely vertical (no horizontal component).
 func (v *LineValidator) isVerticalOnly(char rune) bool {
-	return (char == '│' || char == '|') && !v.canConnectHorizontal(char)
+	return char == '│' || char == '|'
 }
 
 // getChar safely gets a character from the grid.
@@ -351,6 +359,20 @@ func (v *LineValidator) addError(x, y int, char rune, context, format string, ar
 // isAlphaNum checks if a rune is alphanumeric.
 func isAlphaNum(r rune) bool {
 	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}
+
+// isJunctionOrCross checks if a character is a junction or cross that connects in all directions
+func (v *LineValidator) isJunctionOrCross(char rune) bool {
+	switch char {
+	case '┼': // Cross
+		return true
+	case '├', '┤', '┬', '┴': // T-junctions
+		return true
+	case '+':
+		return v.allowASCII
+	default:
+		return false
+	}
 }
 
 // String formats validation errors as a string.

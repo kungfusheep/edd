@@ -142,12 +142,18 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 		delete(node.Hints, "position")
 		e.history.SaveState(e.diagram)
 		
-	case 27: // ESC - go back to jump menu
+	case 27: // ESC - exit to normal mode or back to jump mode
 		e.editingHintNode = -1
-		// Re-enter jump mode for hints
-		e.startJump(JumpActionHint)
-	case 13: // Enter - exit to normal mode
+		if e.previousJumpAction != 0 {
+			action := e.previousJumpAction
+			e.previousJumpAction = 0  // Clear it
+			e.startJump(action)  // Restart jump mode with the same action
+		} else {
+			e.SetMode(ModeNormal)
+		}
+	case 13, 10: // Enter - exit to normal mode
 		e.editingHintNode = -1
+		e.previousJumpAction = 0  // Clear the previous action
 		e.SetMode(ModeNormal)
 	}
 }
@@ -239,12 +245,18 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		}
 		e.history.SaveState(e.diagram)
 		
-	case 27: // ESC - go back to jump menu
+	case 27: // ESC - exit to normal mode or back to jump mode
 		e.editingHintConn = -1
-		// Re-enter jump mode for hints
-		e.startJump(JumpActionHint)
-	case 13: // Enter - exit to normal mode
+		if e.previousJumpAction != 0 {
+			action := e.previousJumpAction
+			e.previousJumpAction = 0  // Clear it
+			e.startJump(action)  // Restart jump mode with the same action
+		} else {
+			e.SetMode(ModeNormal)
+		}
+	case 13, 10: // Enter - exit to normal mode
 		e.editingHintConn = -1
+		e.previousJumpAction = 0  // Clear the previous action
 		e.SetMode(ModeNormal)
 	}
 }

@@ -201,13 +201,13 @@ func TestTextEditingWithNewlines(t *testing.T) {
 	
 	// Type multi-line text
 	tui.textBuffer = []rune("first line\nsecond line\nthird line")
-	tui.cursorPos = 18 // at 'd' in "second line" (11 + 7)
+	tui.cursorPos = 18 // at 'l' in "line" of "second line"
 	tui.updateCursorPosition()
 	
 	// Delete to beginning of line
 	tui.deleteToBeginningOfLine()
 	
-	expected := "first line\nd line\nthird line"
+	expected := "first line\nline\nthird line"
 	if string(tui.textBuffer) != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, string(tui.textBuffer))
 	}

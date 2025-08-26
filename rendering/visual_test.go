@@ -47,11 +47,12 @@ func TestVisualRendering(t *testing.T) {
 				{[]core.Point{{15, 2}, {23, 2}, {23, 5}, {15, 5}, {15, 2}}, false},
 				// Box 3
 				{[]core.Point{{8, 7}, {18, 7}, {18, 10}, {8, 10}, {8, 7}}, false},
-				// Arrows
+				// Arrows between Box 1 and Box 2
 				{[]core.Point{{10, 3}, {15, 3}}, true},
 				{[]core.Point{{10, 4}, {15, 4}}, true},
-				{[]core.Point{{6, 5}, {13, 7}}, true},
-				{[]core.Point{{19, 5}, {13, 7}}, true},
+				// Arrows from boxes to Box 3 (using orthogonal paths)
+				{[]core.Point{{6, 5}, {6, 7}, {8, 7}}, true},
+				{[]core.Point{{19, 5}, {19, 7}}, true},
 			},
 			description: "Three boxes connected with arrows",
 		},

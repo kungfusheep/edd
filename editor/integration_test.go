@@ -131,8 +131,8 @@ func TestConnectionLabelPositioning(t *testing.T) {
 	}
 }
 
-func TestDeleteModeOnlyAssignsConnectionLabels(t *testing.T) {
-	// Test that connection labels are only assigned in delete mode
+func TestConnectionLabelAssignment(t *testing.T) {
+	// Test that connection labels are assigned in delete and edit modes, but not connect mode
 	diagram := &core.Diagram{
 		Nodes: []core.Node{
 			{ID: 1, Text: []string{"A"}},
@@ -147,10 +147,10 @@ func TestDeleteModeOnlyAssignsConnectionLabels(t *testing.T) {
 	tui := NewTUIEditor(renderer)
 	tui.SetDiagram(diagram)
 
-	// Test edit mode - should NOT assign connection labels
+	// Test edit mode - SHOULD assign connection labels (for editing connection labels)
 	tui.handleNormalKey('e')
-	if len(tui.GetConnectionLabels()) != 0 {
-		t.Error("Connection labels assigned in edit mode")
+	if len(tui.GetConnectionLabels()) != 1 {
+		t.Errorf("Expected 1 connection label in edit mode, got %d", len(tui.GetConnectionLabels()))
 	}
 	tui.handleKey(27) // ESC to cancel
 

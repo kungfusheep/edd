@@ -124,6 +124,23 @@ func (m *CharacterMerger) initializeMergeRules() {
 	m.mergeMap[mergePair{'─', '┬'}] = '┬'  // horizontal + top branch = top branch
 	m.mergeMap[mergePair{'─', '┴'}] = '┴'  // horizontal + bottom branch = bottom branch
 	
+	// Rounded corners - treat similar to regular corners
+	// When a rounded corner is placed on a line, it should remain as the corner
+	m.mergeMap[mergePair{'─', '╮'}] = '╮'  // horizontal + rounded top-right = keep corner
+	m.mergeMap[mergePair{'─', '╭'}] = '╭'  // horizontal + rounded top-left = keep corner
+	m.mergeMap[mergePair{'─', '╯'}] = '╯'  // horizontal + rounded bottom-right = keep corner
+	m.mergeMap[mergePair{'─', '╰'}] = '╰'  // horizontal + rounded bottom-left = keep corner
+	m.mergeMap[mergePair{'│', '╮'}] = '╮'  // vertical + rounded top-right = keep corner
+	m.mergeMap[mergePair{'│', '╭'}] = '╭'  // vertical + rounded top-left = keep corner
+	m.mergeMap[mergePair{'│', '╯'}] = '╯'  // vertical + rounded bottom-right = keep corner
+	m.mergeMap[mergePair{'│', '╰'}] = '╰'  // vertical + rounded bottom-left = keep corner
+	
+	// Rounded corners replacing crosses (for DrawSmartPath)
+	m.mergeMap[mergePair{'┼', '╮'}] = '╮'  // cross + rounded corner = keep corner
+	m.mergeMap[mergePair{'┼', '╭'}] = '╭'
+	m.mergeMap[mergePair{'┼', '╯'}] = '╯'
+	m.mergeMap[mergePair{'┼', '╰'}] = '╰'
+	
 	// ASCII fallbacks
 	m.mergeMap[mergePair{'-', '|'}] = '+'
 	m.mergeMap[mergePair{'|', '-'}] = '+'

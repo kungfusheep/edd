@@ -126,8 +126,8 @@ func TestRendererVisualOutput(t *testing.T) {
 				}
 			}
 
-			// Check for box characters
-			if !strings.Contains(output, "┌") || !strings.Contains(output, "┘") {
+			// Check for box characters (using rounded corners by default)
+			if !strings.Contains(output, "╭") || !strings.Contains(output, "╯") {
 				t.Error("Missing box drawing characters")
 			}
 			

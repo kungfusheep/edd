@@ -24,6 +24,7 @@ type TUIEditor struct {
 	continuousDelete   bool           // Whether to continue deleting after each deletion
 	editingHintConn    int            // Connection being edited for hints (-1 for none)
 	editingHintNode    int            // Node being edited for hints (-1 for none)
+	previousJumpAction JumpAction     // Remember the jump action for ESC handling
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -205,6 +206,9 @@ func (e *TUIEditor) handleKey(key rune) bool {
 		return e.handleJSONKey(key)
 	case ModeHelp:
 		return e.handleHelpKey(key)
+	case ModeHintMenu:
+		e.HandleHintMenuInput(key)
+		return false
 	}
 
 	return false
@@ -459,4 +463,9 @@ func (e *TUIEditor) SaveHistory() {
 // GetHistoryStats returns undo/redo statistics
 func (e *TUIEditor) GetHistoryStats() (current, total int) {
 	return e.history.Stats()
+}
+
+// HandleKey processes a key (exported for testing)
+func (e *TUIEditor) HandleKey(key rune) bool {
+	return e.handleKey(key)
 }

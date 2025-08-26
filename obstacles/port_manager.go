@@ -46,7 +46,7 @@ func (pm *portManagerImpl) GetAvailablePorts(nodeID int, edge EdgeSide) []Port {
 	
 	// Calculate available positions along the edge
 	// Leave space at corners for clean junctions
-	margin := 1 // Leave 1 unit at each corner (reduced from 2)
+	margin := 2 // Leave 2 units at each corner for cleaner routing
 	step := pm.portWidth
 	
 	for pos := margin; pos < edgeLength-margin; pos += step {
