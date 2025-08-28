@@ -85,6 +85,7 @@ type Connection struct {
 
 // Diagram represents a complete diagram with nodes and connections.
 type Diagram struct {
+	Type        string       `json:"type,omitempty"`      // Diagram type: "sequence", "flowchart", etc.
 	Nodes       []Node       `json:"nodes"`
 	Connections []Connection `json:"connections"`
 	Metadata    Metadata     `json:"metadata,omitempty"`
@@ -97,6 +98,7 @@ func (d *Diagram) Clone() *Diagram {
 	}
 	
 	clone := &Diagram{
+		Type:        d.Type,
 		Nodes:       make([]Node, len(d.Nodes)),
 		Connections: make([]Connection, len(d.Connections)),
 		Metadata:    d.Metadata, // Metadata is a simple struct, can be copied directly

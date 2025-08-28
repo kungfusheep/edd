@@ -7,6 +7,7 @@ import (
 	"edd/connections"
 	"edd/canvas"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -101,6 +102,11 @@ func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
 func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePositions, string, error) {
 	if diagram == nil || len(diagram.Nodes) == 0 {
 		return &NodePositions{Positions: make(map[int]core.Point)}, "", nil
+	}
+	
+	// Check if this is a sequence diagram
+	if diagram.Type == "sequence" {
+		return r.renderSequenceWithPositions(diagram)
 	}
 	
 	// Calculate node dimensions
@@ -278,6 +284,153 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	return positions, output, nil
+}
+
+// renderSequenceWithPositions renders a sequence diagram and returns positions
+func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*NodePositions, string, error) {
+	// Create sequence layout engine
+	seqLayout := layout.NewSequenceLayout()
+	
+	// Apply layout (this modifies node positions in place)
+	seqLayout.Layout(diagram)
+	
+	// Get bounds
+	width, height := seqLayout.GetDiagramBounds(diagram)
+	if width <= 0 || height <= 0 {
+		return nil, "", fmt.Errorf("invalid bounds: %dx%d", width, height)
+	}
+	
+	// Create canvas
+	c := canvas.NewMatrixCanvas(width, height)
+	
+	// Draw participants
+	for _, node := range diagram.Nodes {
+		if err := r.nodeRenderer.RenderNode(c, node); err != nil {
+			return nil, "", err
+		}
+	}
+	
+	// Draw lifelines
+	for _, node := range diagram.Nodes {
+		// Check if this is a participant
+		isParticipant := true
+		if node.Hints != nil {
+			if nodeType, ok := node.Hints["node-type"]; ok {
+				if nodeType != "participant" && nodeType != "actor" && nodeType != "" {
+					isParticipant = false
+				}
+			}
+		}
+		
+		if isParticipant {
+			// Draw lifeline
+			lifelineX := node.X + node.Width/2
+			startY := node.Y + node.Height
+			
+			for y := startY; y < height; y++ {
+				if (y-startY)%2 == 0 {
+					c.Set(core.Point{X: lifelineX, Y: y}, '│')
+				}
+			}
+		}
+	}
+	
+	// Draw messages
+	for _, conn := range diagram.Connections {
+		if conn.Hints == nil {
+			continue
+		}
+		
+		// Get positions from hints (set by layout)
+		yPosStr, hasY := conn.Hints["y-position"]
+		fromXStr, hasFromX := conn.Hints["from-x"]
+		toXStr, hasToX := conn.Hints["to-x"]
+		
+		if hasY && hasFromX && hasToX {
+			y, _ := strconv.Atoi(yPosStr)
+			fromX, _ := strconv.Atoi(fromXStr)
+			toX, _ := strconv.Atoi(toXStr)
+			
+			// Draw arrow
+			if fromX < toX {
+				// Left to right
+				for x := fromX; x <= toX; x++ {
+					if x == toX {
+						c.Set(core.Point{X: x, Y: y}, '▶')
+					} else {
+						c.Set(core.Point{X: x, Y: y}, '─')
+					}
+				}
+			} else if fromX > toX {
+				// Right to left
+				for x := toX; x <= fromX; x++ {
+					if x == toX {
+						c.Set(core.Point{X: x, Y: y}, '◀')
+					} else {
+						c.Set(core.Point{X: x, Y: y}, '─')
+					}
+				}
+			} else {
+				// Self message
+				loopWidth := 6
+				for i := 0; i < loopWidth; i++ {
+					c.Set(core.Point{X: fromX + i, Y: y}, '─')
+				}
+				c.Set(core.Point{X: fromX + loopWidth, Y: y}, '┐')
+				c.Set(core.Point{X: fromX + loopWidth, Y: y + 1}, '│')
+				c.Set(core.Point{X: fromX + loopWidth, Y: y + 2}, '┘')
+				for i := loopWidth; i > 0; i-- {
+					if i == 1 {
+						c.Set(core.Point{X: fromX + i, Y: y + 2}, '◀')
+					} else {
+						c.Set(core.Point{X: fromX + i, Y: y + 2}, '─')
+					}
+				}
+			}
+			
+			// Draw label
+			if conn.Label != "" {
+				labelX := (fromX + toX) / 2 - len(conn.Label)/2
+				if fromX == toX {
+					labelX = fromX + 1
+				}
+				for i, ch := range conn.Label {
+					c.Set(core.Point{X: labelX + i, Y: y - 1}, ch)
+				}
+			}
+		}
+	}
+	
+	// Collect positions
+	positions := &NodePositions{
+		Positions:       make(map[int]core.Point),
+		ConnectionPaths: make(map[int]core.Path),
+	}
+	for _, node := range diagram.Nodes {
+		positions.Positions[node.ID] = core.Point{X: node.X, Y: node.Y}
+	}
+	
+	// For connections, we can store simplified paths
+	for i, conn := range diagram.Connections {
+		if conn.Hints != nil {
+			if yStr, ok := conn.Hints["y-position"]; ok {
+				y, _ := strconv.Atoi(yStr)
+				fromXStr, _ := conn.Hints["from-x"]
+				toXStr, _ := conn.Hints["to-x"]
+				fromX, _ := strconv.Atoi(fromXStr)
+				toX, _ := strconv.Atoi(toXStr)
+				
+				positions.ConnectionPaths[i] = core.Path{
+					Points: []core.Point{
+						{X: fromX, Y: y},
+						{X: toX, Y: y},
+					},
+				}
+			}
+		}
+	}
+	
+	return positions, c.String(), nil
 }
 
 // Helper functions from renderer.go

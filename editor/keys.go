@@ -321,6 +321,21 @@ func (e *TUIEditor) executeCommand(cmd string) {
 		// Clear diagram
 		e.diagram = &core.Diagram{}
 		e.selected = -1
+		
+	case "type":
+		// Change diagram type
+		if len(parts) > 1 {
+			switch parts[1] {
+			case "sequence", "seq":
+				e.diagram.Type = "sequence"
+				e.SaveHistory()
+			case "flowchart", "flow", "":
+				e.diagram.Type = ""  // Empty means flowchart
+				e.SaveHistory()
+			default:
+				// Unknown type, ignore
+			}
+		}
 	}
 }
 

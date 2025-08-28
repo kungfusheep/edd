@@ -186,6 +186,11 @@ func detectTerminalCapabilities() canvas.TerminalCapabilities {
 // It performs layout, creates a canvas, renders nodes, routes connections,
 // and returns the final ASCII/Unicode output.
 func (r *Renderer) Render(diagram *core.Diagram) (string, error) {
+	// Check if this is a sequence diagram
+	if diagram.Type == "sequence" {
+		return r.renderSequenceDiagram(diagram)
+	}
+	
 	// Step 1: Calculate node dimensions from their text content
 	nodes := calculateNodeDimensions(diagram.Nodes)
 	
@@ -860,5 +865,64 @@ func (r *Renderer) renderObstacleDots(c canvas.Canvas, nodes []core.Node, connec
 			// Let's print all paths to understand better
 		}
 	}
+}
+
+// renderSequenceDiagram renders a UML sequence diagram
+func (r *Renderer) renderSequenceDiagram(diagram *core.Diagram) (string, error) {
+	// Create a sequence renderer
+	seqRenderer := NewSequenceRenderer(r.capabilities)
+	
+	// Get the required canvas size
+	width, height := seqRenderer.GetBounds(diagram)
+	if width <= 0 || height <= 0 {
+		return "", fmt.Errorf("invalid diagram bounds: %dx%d", width, height)
+	}
+	
+	// Create canvas
+	var c canvas.Canvas
+	// Check if any nodes or connections have color hints
+	hasColors := false
+	for _, node := range diagram.Nodes {
+		if node.Hints != nil && node.Hints["color"] != "" {
+			hasColors = true
+			break
+		}
+	}
+	if !hasColors {
+		for _, conn := range diagram.Connections {
+			if conn.Hints != nil && conn.Hints["color"] != "" {
+				hasColors = true
+				break
+			}
+		}
+	}
+	
+	if hasColors {
+		c = canvas.NewColoredMatrixCanvas(width, height)
+	} else {
+		c = canvas.NewMatrixCanvas(width, height)
+	}
+	
+	// Render the sequence diagram
+	if err := seqRenderer.Render(diagram, c); err != nil {
+		return "", fmt.Errorf("failed to render sequence diagram: %w", err)
+	}
+	
+	// Get the output
+	output := c.String()
+	
+	// Run validation if enabled
+	if r.validator != nil {
+		errors := r.validator.Validate(output)
+		if len(errors) > 0 {
+			fmt.Fprintf(os.Stderr, "\n=== Validation Errors ===\n")
+			for _, err := range errors {
+				fmt.Fprintf(os.Stderr, "  • %s\n", err)
+			}
+			fmt.Fprintf(os.Stderr, "========================\n\n")
+		}
+	}
+	
+	return output, nil
 }
 
