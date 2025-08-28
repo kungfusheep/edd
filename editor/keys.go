@@ -238,9 +238,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 					}
 				} else if e.jumpAction == JumpActionEdit {
 					// Edit the connection label
+					e.previousJumpAction = e.jumpAction  // Save the action for ESC handling
 					e.StartEditingConnection(connIndex)
 				} else if e.jumpAction == JumpActionHint {
 					// Enter hint menu for this connection
+					e.previousJumpAction = e.jumpAction  // Save the action for ESC handling
 					e.editingHintConn = connIndex
 					e.clearJumpLabels()
 					e.SetMode(ModeHintMenu)

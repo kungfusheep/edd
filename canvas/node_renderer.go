@@ -117,31 +117,46 @@ func (r *NodeRenderer) drawText(canvas Canvas, node core.Node, hints map[string]
 	var textColor string
 	var isBold bool
 	var isItalic bool
+	var isCenter bool
 	if hints != nil {
 		textColor = hints["textColor"]
 		isBold = hints["bold"] == "true"
 		isItalic = hints["italic"] == "true"
+		isCenter = hints["text-align"] == "center"
 	}
 	
 	// Draw each line of text
 	for i, line := range node.Text {
 		y := node.Y + 1 + i
-		x := node.X + 1 // 1 char padding from left border
+		x := node.X + 1 // 1 char padding from left border (default)
 		
-		// Add space before text
-		r.setCharWithStyle(canvas, core.Point{X: x, Y: y}, ' ', textColor, isBold, isItalic)
-		x++
+		// Calculate starting position for centered text
+		if isCenter {
+			textWidth := len(line)
+			availableWidth := node.Width - 2 // minus borders
+			if textWidth < availableWidth {
+				// Center the text
+				x = node.X + 1 + (availableWidth - textWidth) / 2
+			}
+		} else {
+			// Left-aligned: add space before text
+			r.setCharWithStyle(canvas, core.Point{X: x, Y: y}, ' ', textColor, isBold, isItalic)
+			x++
+		}
 		
+		// Draw the text
 		for j, ch := range line {
 			if x+j < node.X+node.Width-1 { // Keep text within borders
 				r.setCharWithStyle(canvas, core.Point{X: x + j, Y: y}, ch, textColor, isBold, isItalic)
 			}
 		}
 		
-		// Add space after text if there's room
-		textEnd := x + len(line)
-		if textEnd < node.X+node.Width-1 {
-			r.setCharWithStyle(canvas, core.Point{X: textEnd, Y: y}, ' ', textColor, isBold, isItalic)
+		// For left-aligned text, add space after text if there's room
+		if !isCenter {
+			textEnd := x + len(line)
+			if textEnd < node.X+node.Width-1 {
+				r.setCharWithStyle(canvas, core.Point{X: textEnd, Y: y}, ' ', textColor, isBold, isItalic)
+			}
 		}
 	}
 	

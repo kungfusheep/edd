@@ -70,30 +70,56 @@ func TestHintMenuInput(t *testing.T) {
 	id2 := tui.AddNode([]string{"B"})
 	tui.AddConnection(id1, id2, "")
 	
-	// Simulate entering hint menu for connection 0
-	tui.editingHintConn = 0
-	tui.SetMode(ModeHintMenu)
+	// Test node hints for text alignment
+	t.Run("NodeTextAlignment", func(t *testing.T) {
+		// Simulate entering hint menu for node
+		tui.editingHintNode = id1
+		tui.SetMode(ModeHintMenu)
+		
+		// Test toggling center alignment
+		tui.HandleHintMenuInput('t')
+		node := tui.GetDiagram().Nodes[0]
+		if node.Hints["text-align"] != "center" {
+			t.Errorf("Expected text-align=center, got %v", node.Hints["text-align"])
+		}
+		
+		// Toggle again should remove it (back to default left)
+		tui.HandleHintMenuInput('t')
+		if _, exists := node.Hints["text-align"]; exists {
+			t.Errorf("Expected text-align to be removed, but got %v", node.Hints["text-align"])
+		}
+		
+		// Exit mode
+		tui.HandleHintMenuInput(27)
+	})
 	
-	// Test setting style to dashed
-	tui.HandleHintMenuInput('b')
-	conn := tui.GetDiagram().Connections[0]
-	if conn.Hints["style"] != "dashed" {
-		t.Errorf("Expected style=dashed, got %v", conn.Hints["style"])
-	}
-	
-	// Test setting color to red
-	tui.HandleHintMenuInput('r')
-	if conn.Hints["color"] != "red" {
-		t.Errorf("Expected color=red, got %v", conn.Hints["color"])
-	}
-	
-	// Test ESC exits mode (this test is for the old behavior)
-	// Now ESC should return to jump mode if previousJumpAction is set
-	tui.HandleHintMenuInput(27)
-	// Since we didn't come from jump mode, it should go to normal
-	if tui.GetMode() != ModeNormal {
-		t.Error("ESC should return to normal mode when no previousJumpAction")
-	}
+	// Test connection hints
+	t.Run("ConnectionHints", func(t *testing.T) {
+		// Simulate entering hint menu for connection 0
+		tui.editingHintConn = 0
+		tui.SetMode(ModeHintMenu)
+		
+		// Test setting style to dashed
+		tui.HandleHintMenuInput('b')
+		conn := tui.GetDiagram().Connections[0]
+		if conn.Hints["style"] != "dashed" {
+			t.Errorf("Expected style=dashed, got %v", conn.Hints["style"])
+		}
+		
+		// Test setting color to red
+		tui.HandleHintMenuInput('r')
+		if conn.Hints["color"] != "red" {
+			t.Errorf("Expected color=red, got %v", conn.Hints["color"])
+		}
+		
+		// Test ESC exits mode (this test is for the old behavior)
+		// Now ESC should return to jump mode if previousJumpAction is set
+		tui.HandleHintMenuInput(27)
+		// Since we didn't come from jump mode, it should go to normal
+		if tui.GetMode() != ModeNormal {
+			t.Error("ESC should return to normal mode when no previousJumpAction")
+		}
+	})
 }
 
 func TestHintMenuEnterExitsToNormal(t *testing.T) {
@@ -210,6 +236,34 @@ func TestHintMenuESCReturnsToJump(t *testing.T) {
 		tui.HandleKey(27) // ESC key
 		if tui.GetMode() != ModeJump {
 			t.Errorf("Expected ModeJump after ESC in hints menu, got %v", tui.GetMode())
+		}
+		if tui.GetJumpAction() != jumpAction {
+			t.Errorf("Expected jump action %v after ESC, got %v", jumpAction, tui.GetJumpAction())
+		}
+		
+		// Clean up - exit jump mode
+		tui.HandleKey(27) // ESC to exit jump mode
+	})
+	
+	// Test connection hints menu ESC behavior
+	t.Run("ConnectionHintsESCKey", func(t *testing.T) {
+		// Press 'H' to enter hints jump mode
+		tui.HandleKey('H')
+		if tui.GetMode() != ModeJump {
+			t.Errorf("Expected ModeJump after 'H', got %v", tui.GetMode())
+		}
+		jumpAction := tui.GetJumpAction()
+
+		// Select first connection (should be 'd' after nodes a,s)
+		tui.HandleKey('d')
+		if tui.GetMode() != ModeHintMenu {
+			t.Errorf("Expected ModeHintMenu after selecting connection, got %v", tui.GetMode())
+		}
+
+		// Press ESC - should return to jump mode with same action
+		tui.HandleKey(27) // ESC key
+		if tui.GetMode() != ModeJump {
+			t.Errorf("Expected ModeJump after ESC in connection hints menu, got %v", tui.GetMode())
 		}
 		if tui.GetJumpAction() != jumpAction {
 			t.Errorf("Expected jump action %v after ESC, got %v", jumpAction, tui.GetJumpAction())

@@ -90,6 +90,13 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			node.Hints["italic"] = "true"
 		}
 		e.history.SaveState(e.diagram)
+	case 't': // Toggle text alignment (center/left)
+		if node.Hints["text-align"] == "center" {
+			delete(node.Hints, "text-align") // Back to default (left)
+		} else {
+			node.Hints["text-align"] = "center"
+		}
+		e.history.SaveState(e.diagram)
 		
 	// Shadow options
 	case 'z': // Shadow southeast
@@ -317,6 +324,11 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		italic = "on"
 	}
 	
+	textAlign := "left"
+	if a, ok := node.Hints["text-align"]; ok && a == "center" {
+		textAlign = "center"
+	}
+	
 	position := "auto"
 	if p, ok := node.Hints["position"]; ok {
 		position = p
@@ -333,7 +345,7 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 	
 	return "\n" +
 		"Node: " + nodeText + "\n" +
-		"Current: style=" + style + ", color=" + color + ", bold=" + bold + ", italic=" + italic + "\n" +
+		"Current: style=" + style + ", color=" + color + ", bold=" + bold + ", italic=" + italic + ", align=" + textAlign + "\n" +
 		"         shadow=" + shadow + " (" + shadowDensity + "), position=" + position + "\n\n" +
 		"Style Options:\n" +
 		"  [a] Rounded ╭──╮\n" +
@@ -346,7 +358,8 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		"  [w] Default\n\n" +
 		"Text Options:\n" +
 		"  [o] Toggle bold text\n" +
-		"  [i] Toggle italic text\n\n" +
+		"  [i] Toggle italic text\n" +
+		"  [t] Toggle center alignment\n\n" +
 		"Shadow Options:\n" +
 		"  [z] Add shadow ░░  [x] Remove shadow\n" +
 		"  [l] Toggle density (light/medium)\n\n" +
