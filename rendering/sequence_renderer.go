@@ -5,7 +5,6 @@ import (
 	"edd/core"
 	"edd/layout"
 	"fmt"
-	"strconv"
 )
 
 // SequenceRenderer handles rendering of sequence diagrams
@@ -30,23 +29,40 @@ func (r *SequenceRenderer) Render(diagram *core.Diagram, c canvas.Canvas) error 
 		return fmt.Errorf("diagram is nil")
 	}
 	
-	// Apply sequence layout
-	r.layout.Layout(diagram)
+	// Compute positions without modifying the diagram
+	positions := r.layout.ComputePositions(diagram)
 	
-	// Draw participants (nodes)
-	for i, node := range diagram.Nodes {
-		if err := r.nodeRenderer.RenderNode(c, node); err != nil {
-			return fmt.Errorf("failed to render node %d: %w", i, err)
+	// Draw participants
+	for nodeID, pos := range positions.Participants {
+		// Find the corresponding node
+		var node *core.Node
+		for i := range diagram.Nodes {
+			if diagram.Nodes[i].ID == nodeID {
+				node = &diagram.Nodes[i]
+				break
+			}
+		}
+		if node != nil {
+			// Create a temporary node with computed positions for rendering
+			tempNode := *node
+			tempNode.X = pos.X
+			tempNode.Y = pos.Y
+			tempNode.Width = pos.Width
+			tempNode.Height = pos.Height
+			
+			if err := r.nodeRenderer.RenderNode(c, tempNode); err != nil {
+				return fmt.Errorf("failed to render node %d: %w", nodeID, err)
+			}
 		}
 	}
 	
 	// Draw lifelines
-	if err := r.drawLifelines(diagram, c); err != nil {
+	if err := r.drawLifelines(diagram, positions, c); err != nil {
 		return fmt.Errorf("failed to draw lifelines: %w", err)
 	}
 	
-	// Draw messages (connections)
-	if err := r.drawMessages(diagram, c); err != nil {
+	// Draw messages
+	if err := r.drawMessages(positions, c); err != nil {
 		return fmt.Errorf("failed to draw messages: %w", err)
 	}
 	
@@ -54,28 +70,13 @@ func (r *SequenceRenderer) Render(diagram *core.Diagram, c canvas.Canvas) error 
 }
 
 // drawLifelines draws vertical dashed lines from each participant
-func (r *SequenceRenderer) drawLifelines(diagram *core.Diagram, c canvas.Canvas) error {
+func (r *SequenceRenderer) drawLifelines(diagram *core.Diagram, positions *layout.SequencePositions, c canvas.Canvas) error {
 	// Get diagram bounds to know how far down to draw
 	_, totalHeight := r.layout.GetDiagramBounds(diagram)
 	
-	for _, node := range diagram.Nodes {
-		// Check if this is a participant
-		isParticipant := true
-		if node.Hints != nil {
-			if nodeType, ok := node.Hints["node-type"]; ok {
-				if nodeType != "participant" && nodeType != "actor" && nodeType != "" {
-					isParticipant = false
-				}
-			}
-		}
-		
-		if !isParticipant {
-			continue
-		}
-		
-		// Calculate lifeline position (center of participant box)
-		lifelineX := node.X + node.Width/2
-		startY := node.Y + node.Height
+	for _, pos := range positions.Participants {
+		lifelineX := pos.LifelineX
+		startY := pos.Y + pos.Height
 		
 		// Draw dashed vertical line
 		for y := startY; y < totalHeight; y++ {
@@ -90,36 +91,18 @@ func (r *SequenceRenderer) drawLifelines(diagram *core.Diagram, c canvas.Canvas)
 }
 
 // drawMessages draws horizontal arrows between lifelines
-func (r *SequenceRenderer) drawMessages(diagram *core.Diagram, c canvas.Canvas) error {
-	for _, conn := range diagram.Connections {
-		if conn.Hints == nil {
-			continue
-		}
-		
-		// Get message position from hints (stored by layout engine)
-		yPosStr, hasY := conn.Hints["y-position"]
-		fromXStr, hasFromX := conn.Hints["from-x"]
-		toXStr, hasToX := conn.Hints["to-x"]
-		
-		if !hasY || !hasFromX || !hasToX {
-			continue // Skip if position info missing
-		}
-		
-		// Convert string positions back to integers
-		y, _ := strconv.Atoi(yPosStr)
-		fromX, _ := strconv.Atoi(fromXStr)
-		toX, _ := strconv.Atoi(toXStr)
-		
+func (r *SequenceRenderer) drawMessages(positions *layout.SequencePositions, c canvas.Canvas) error {
+	for _, msg := range positions.Messages {
 		// Draw the message arrow
-		if fromX < toX {
+		if msg.FromX < msg.ToX {
 			// Left to right
-			r.drawArrow(c, fromX, toX, y, true, conn.Label)
-		} else if fromX > toX {
+			r.drawArrow(c, msg.FromX, msg.ToX, msg.Y, true, msg.Label)
+		} else if msg.FromX > msg.ToX {
 			// Right to left
-			r.drawArrow(c, fromX, toX, y, false, conn.Label)
+			r.drawArrow(c, msg.FromX, msg.ToX, msg.Y, false, msg.Label)
 		} else {
 			// Self-message (loop back)
-			r.drawSelfMessage(c, fromX, y, conn.Label)
+			r.drawSelfMessage(c, msg.FromX, msg.Y, msg.Label)
 		}
 	}
 	
@@ -199,7 +182,6 @@ func (r *SequenceRenderer) drawSelfMessage(c canvas.Canvas, x, y int, label stri
 
 // GetBounds returns the required canvas size for the diagram
 func (r *SequenceRenderer) GetBounds(diagram *core.Diagram) (width, height int) {
-	// Apply layout first to get accurate bounds
-	r.layout.Layout(diagram)
+	// Just compute bounds without modifying diagram
 	return r.layout.GetDiagramBounds(diagram)
 }
