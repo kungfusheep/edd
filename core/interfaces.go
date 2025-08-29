@@ -56,3 +56,15 @@ type ConnectionRouter interface {
 	// Returns a map from connection index to path.
 	Route(nodes []Node, connections []Connection) (map[int]Path, error)
 }
+
+// DiagramRenderer handles rendering of specific diagram types.
+type DiagramRenderer interface {
+	// CanRender returns true if this renderer can handle the given diagram type.
+	CanRender(diagramType DiagramType) bool
+	
+	// Render renders the diagram and returns the string output.
+	Render(diagram *Diagram) (string, error)
+	
+	// GetBounds calculates the required canvas size for the diagram.
+	GetBounds(diagram *Diagram) (width, height int)
+}

@@ -28,12 +28,14 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'c': // Connect nodes (single)
 		if len(e.diagram.Nodes) >= 2 {
 			e.continuousConnect = false
+			e.selected = -1 // Clear any previous selection
 			e.startJump(JumpActionConnectFrom)
 		}
 		
 	case 'C': // Connect nodes (continuous)
 		if len(e.diagram.Nodes) >= 2 {
 			e.continuousConnect = true
+			e.selected = -1 // Clear any previous selection
 			e.startJump(JumpActionConnectFrom)
 		}
 		
@@ -205,6 +207,7 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		e.continuousConnect = false // Exit continuous connect mode
 		e.continuousDelete = false  // Exit continuous delete mode
 		e.previousJumpAction = 0    // Clear the previous action since we're canceling
+		e.selected = -1            // Clear selected node
 		e.SetMode(ModeNormal)
 		return false
 	}
@@ -252,7 +255,18 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		}
 	}
 	
-	// No match - cancel jump
+	// No match - handle based on current state
+	if e.continuousConnect {
+		// In continuous connect mode - just ignore invalid keys
+		// User can still press a valid label or ESC to cancel
+		return false
+	}
+	if e.continuousDelete {
+		// In continuous delete mode - just ignore invalid keys
+		return false
+	}
+	
+	// For single-action modes, cancel jump on invalid key
 	e.clearJumpLabels()
 	e.SetMode(ModeNormal)
 	return false
@@ -327,10 +341,10 @@ func (e *TUIEditor) executeCommand(cmd string) {
 		if len(parts) > 1 {
 			switch parts[1] {
 			case "sequence", "seq":
-				e.diagram.Type = "sequence"
+				e.diagram.Type = string(core.DiagramTypeSequence)
 				e.SaveHistory()
 			case "flowchart", "flow", "":
-				e.diagram.Type = ""  // Empty means flowchart
+				e.diagram.Type = string(core.DiagramTypeFlowchart)  // Empty means flowchart
 				e.SaveHistory()
 			default:
 				// Unknown type, ignore
@@ -380,16 +394,16 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		return // Don't clear jump labels yet
 		
 	case JumpActionConnectTo:
-		if e.selected >= 0 && e.selected != nodeID {
+		if e.selected >= 0 {
 			e.AddConnection(e.selected, nodeID, "")
 		}
 		
-		// If in continuous connect mode, start another connection
+		// If in continuous connect mode, chain to next connection
 		if e.continuousConnect {
-			e.selected = -1
-			e.clearJumpLabels()
-			// Start another connection
-			e.startJump(JumpActionConnectFrom)
+			// Use the node we just connected TO as the next FROM
+			e.selected = nodeID
+			// Jump directly to selecting the next TO node (startJump will assign new labels)
+			e.startJump(JumpActionConnectTo)
 		} else {
 			// Normal mode - exit to normal
 			e.selected = -1

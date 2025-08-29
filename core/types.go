@@ -83,12 +83,39 @@ type Connection struct {
 	Hints map[string]string `json:"hints,omitempty"` // Visual hints (style, color, etc.)
 }
 
+// DiagramType represents the type of diagram
+type DiagramType string
+
+// Diagram type constants
+const (
+	DiagramTypeFlowchart DiagramType = ""         // Default/empty is flowchart for backwards compatibility
+	DiagramTypeSequence  DiagramType = "sequence" // UML sequence diagram
+)
+
 // Diagram represents a complete diagram with nodes and connections.
 type Diagram struct {
 	Type        string       `json:"type,omitempty"`      // Diagram type: "sequence", "flowchart", etc.
 	Nodes       []Node       `json:"nodes"`
 	Connections []Connection `json:"connections"`
 	Metadata    Metadata     `json:"metadata,omitempty"`
+}
+
+// GetType returns the diagram type as a DiagramType constant
+func (d *Diagram) GetType() DiagramType {
+	if d.Type == "" {
+		return DiagramTypeFlowchart
+	}
+	return DiagramType(d.Type)
+}
+
+// IsSequence returns true if this is a sequence diagram
+func (d *Diagram) IsSequence() bool {
+	return d.GetType() == DiagramTypeSequence
+}
+
+// IsFlowchart returns true if this is a flowchart diagram
+func (d *Diagram) IsFlowchart() bool {
+	return d.GetType() == DiagramTypeFlowchart || d.Type == ""
 }
 
 // Clone creates a deep copy of the diagram

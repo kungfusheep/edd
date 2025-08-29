@@ -301,7 +301,7 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 	c := canvas.NewMatrixCanvas(width, height)
 	
 	// Render the sequence diagram
-	if err := seqRenderer.Render(diagram, c); err != nil {
+	if err := seqRenderer.RenderToCanvas(diagram, c); err != nil {
 		return nil, "", fmt.Errorf("failed to render sequence diagram: %w", err)
 	}
 	

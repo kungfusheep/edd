@@ -289,11 +289,16 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 
 // AddConnection adds a connection between two nodes
 func (e *TUIEditor) AddConnection(from, to int, label string) {
-	// Check for duplicate connections in the same direction only
-	for _, existing := range e.diagram.Connections {
-		if existing.From == from && existing.To == to {
-			// Connection already exists in this direction
-			return
+	// In sequence diagrams, allow multiple messages between same participants
+	// In flowcharts, check for duplicate connections
+	if e.diagram.Type != string(core.DiagramTypeSequence) {
+		// Check for duplicate connections in the same direction only
+		for _, existing := range e.diagram.Connections {
+			if existing.From == from && existing.To == to {
+				// Connection already exists in this direction
+				// TODO: Consider providing feedback to user
+				return
+			}
 		}
 	}
 	

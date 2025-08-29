@@ -12,6 +12,7 @@ type SequenceRenderer struct {
 	nodeRenderer *canvas.NodeRenderer
 	pathRenderer *canvas.PathRenderer
 	layout       *layout.SequenceLayout
+	capabilities canvas.TerminalCapabilities
 }
 
 // NewSequenceRenderer creates a new sequence diagram renderer
@@ -20,11 +21,41 @@ func NewSequenceRenderer(caps canvas.TerminalCapabilities) *SequenceRenderer {
 		nodeRenderer: canvas.NewNodeRenderer(caps),
 		pathRenderer: canvas.NewPathRenderer(caps),
 		layout:       layout.NewSequenceLayout(),
+		capabilities: caps,
 	}
 }
 
-// Render draws a complete sequence diagram
-func (r *SequenceRenderer) Render(diagram *core.Diagram, c canvas.Canvas) error {
+// CanRender returns true if this renderer can handle the given diagram type.
+func (r *SequenceRenderer) CanRender(diagramType core.DiagramType) bool {
+	return diagramType == core.DiagramTypeSequence
+}
+
+// Render renders the sequence diagram and returns the string output.
+func (r *SequenceRenderer) Render(diagram *core.Diagram) (string, error) {
+	if diagram == nil {
+		return "", fmt.Errorf("diagram is nil")
+	}
+	
+	// Get bounds
+	width, height := r.GetBounds(diagram)
+	if width <= 0 || height <= 0 {
+		return "", fmt.Errorf("invalid diagram bounds: %dx%d", width, height)
+	}
+	
+	// Create canvas
+	needsColor := HasColorHints(diagram)
+	c := CreateCanvas(width, height, needsColor)
+	
+	// Render to canvas
+	if err := r.RenderToCanvas(diagram, c); err != nil {
+		return "", fmt.Errorf("failed to render sequence diagram: %w", err)
+	}
+	
+	return c.String(), nil
+}
+
+// RenderToCanvas draws a complete sequence diagram to the provided canvas
+func (r *SequenceRenderer) RenderToCanvas(diagram *core.Diagram, c canvas.Canvas) error {
 	if diagram == nil {
 		return fmt.Errorf("diagram is nil")
 	}
