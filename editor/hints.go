@@ -37,117 +37,226 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 		node.Hints = make(map[string]string)
 	}
 	
+	isSequence := e.diagram.Type == string(core.DiagramTypeSequence)
+	
 	switch key {
-	// Style options for nodes
-	case 'a': // Rounded (default)
-		node.Hints["style"] = "rounded"
-		e.history.SaveState(e.diagram)
-	case 'b': // Sharp
-		node.Hints["style"] = "sharp"
-		e.history.SaveState(e.diagram)
-	case 'c': // Double
-		node.Hints["style"] = "double"
-		e.history.SaveState(e.diagram)
-	case 'd': // Thick
-		node.Hints["style"] = "thick"
-		e.history.SaveState(e.diagram)
+	// Style options for nodes/boxes
+	case 'a': // Rounded (default) for flowcharts, Box style for sequence
+		if !isSequence {
+			node.Hints["style"] = "rounded"
+		} else {
+			node.Hints["box-style"] = "rounded"
+		}
+		e.SaveHistory()
+	case 'b': // Sharp for flowcharts, Sharp box for sequence
+		if !isSequence {
+			node.Hints["style"] = "sharp"
+		} else {
+			node.Hints["box-style"] = "sharp"
+		}
+		e.SaveHistory()
+	case 'c': // Double for flowcharts, Double box for sequence
+		if !isSequence {
+			node.Hints["style"] = "double"
+		} else {
+			node.Hints["box-style"] = "double"
+		}
+		e.SaveHistory()
+	case 'd': // Thick for flowcharts, Thick box for sequence
+		if !isSequence {
+			node.Hints["style"] = "thick"
+		} else {
+			node.Hints["box-style"] = "thick"
+		}
+		e.SaveHistory()
 		
 	// Color options
 	case 'r': // Red
 		node.Hints["color"] = "red"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'g': // Green
 		node.Hints["color"] = "green"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'y': // Yellow
 		node.Hints["color"] = "yellow"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'u': // Blue
 		node.Hints["color"] = "blue"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'm': // Magenta
 		node.Hints["color"] = "magenta"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'n': // Cyan
 		node.Hints["color"] = "cyan"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'w': // Default (no color)
 		delete(node.Hints, "color")
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 		
-	// Text style options
+	// Text style options (only for flowcharts)
 	case 'o': // Toggle bold
-		if node.Hints["bold"] == "true" {
-			delete(node.Hints, "bold")
-		} else {
-			node.Hints["bold"] = "true"
+		if !isSequence {
+			if node.Hints["bold"] == "true" {
+				delete(node.Hints, "bold")
+			} else {
+				node.Hints["bold"] = "true"
+			}
+			e.SaveHistory()
 		}
-		e.history.SaveState(e.diagram)
 	case 'i': // Toggle italic
-		if node.Hints["italic"] == "true" {
-			delete(node.Hints, "italic")
-		} else {
-			node.Hints["italic"] = "true"
+		if !isSequence {
+			if node.Hints["italic"] == "true" {
+				delete(node.Hints, "italic")
+			} else {
+				node.Hints["italic"] = "true"
+			}
+			e.SaveHistory()
 		}
-		e.history.SaveState(e.diagram)
 	case 't': // Toggle text alignment (center/left)
-		if node.Hints["text-align"] == "center" {
-			delete(node.Hints, "text-align") // Back to default (left)
-		} else {
-			node.Hints["text-align"] = "center"
+		if !isSequence {
+			if node.Hints["text-align"] == "center" {
+				delete(node.Hints, "text-align") // Back to default (left)
+			} else {
+				node.Hints["text-align"] = "center"
+			}
+			e.SaveHistory()
 		}
-		e.history.SaveState(e.diagram)
 		
-	// Shadow options
+	// Shadow options (only for flowcharts)
 	case 'z': // Shadow southeast
-		node.Hints["shadow"] = "southeast"
-		if node.Hints["shadow-density"] == "" {
-			node.Hints["shadow-density"] = "light"
+		if !isSequence {
+			node.Hints["shadow"] = "southeast"
+			if node.Hints["shadow-density"] == "" {
+				node.Hints["shadow-density"] = "light"
+			}
+			e.SaveHistory()
 		}
-		e.history.SaveState(e.diagram)
 	case 'x': // No shadow
-		delete(node.Hints, "shadow")
-		delete(node.Hints, "shadow-density")
-		e.history.SaveState(e.diagram)
-	case 'l': // Toggle shadow density (light/medium)
-		if node.Hints["shadow-density"] == "light" {
-			node.Hints["shadow-density"] = "medium"
-		} else {
-			node.Hints["shadow-density"] = "light"
+		if !isSequence {
+			delete(node.Hints, "shadow")
+			delete(node.Hints, "shadow-density")
+			e.SaveHistory()
 		}
-		e.history.SaveState(e.diagram)
+	case 'l': // Shadow density for flowcharts only
+		if !isSequence {
+			if node.Hints["shadow-density"] == "light" {
+				node.Hints["shadow-density"] = "medium"
+			} else {
+				node.Hints["shadow-density"] = "light"
+			}
+			e.SaveHistory()
+		}
+	
+	// Lifeline style options (uppercase for sequence diagrams)
+	case 'A': // Solid lifeline (default)
+		if isSequence {
+			delete(node.Hints, "lifeline-style") // Remove to use default (solid)
+			e.SaveHistory()
+		}
+	case 'B': // Dashed lifeline
+		if isSequence {
+			node.Hints["lifeline-style"] = "dashed"
+			e.SaveHistory()
+		}
+	case 'C': // Dotted lifeline
+		if isSequence {
+			node.Hints["lifeline-style"] = "dotted"
+			e.SaveHistory()
+		}
+	case 'D': // Double lifeline
+		if isSequence {
+			node.Hints["lifeline-style"] = "double"
+			e.SaveHistory()
+		}
+	
+	// Lifeline color options (uppercase for sequence diagrams)
+	case 'R': // Red lifeline
+		if isSequence {
+			node.Hints["lifeline-color"] = "red"
+			e.SaveHistory()
+		}
+	case 'G': // Green lifeline
+		if isSequence {
+			node.Hints["lifeline-color"] = "green"
+			e.SaveHistory()
+		}
+	case 'Y': // Yellow lifeline
+		if isSequence {
+			node.Hints["lifeline-color"] = "yellow"
+			e.SaveHistory()
+		}
+	case 'U': // Blue lifeline
+		if isSequence {
+			node.Hints["lifeline-color"] = "blue"
+			e.SaveHistory()
+		}
+	case 'M': // Magenta lifeline
+		if isSequence {
+			node.Hints["lifeline-color"] = "magenta"
+			e.SaveHistory()
+		}
+	case 'N': // Cyan lifeline
+		if isSequence {
+			node.Hints["lifeline-color"] = "cyan"
+			e.SaveHistory()
+		}
+	case 'W': // Default lifeline color (no color)
+		if isSequence {
+			delete(node.Hints, "lifeline-color")
+			e.SaveHistory()
+		}
 		
-	// Layout position hints
+	// Layout position hints (only for flowcharts)
 	case '1': // Top-left
-		node.Hints["position"] = "top-left"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "top-left"
+			e.SaveHistory()
+		}
 	case '2': // Top-center
-		node.Hints["position"] = "top-center"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "top-center"
+			e.SaveHistory()
+		}
 	case '3': // Top-right
-		node.Hints["position"] = "top-right"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "top-right"
+			e.SaveHistory()
+		}
 	case '4': // Middle-left
-		node.Hints["position"] = "middle-left"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "middle-left"
+			e.SaveHistory()
+		}
 	case '5': // Center
-		node.Hints["position"] = "center"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "center"
+			e.SaveHistory()
+		}
 	case '6': // Middle-right
-		node.Hints["position"] = "middle-right"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "middle-right"
+			e.SaveHistory()
+		}
 	case '7': // Bottom-left
-		node.Hints["position"] = "bottom-left"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "bottom-left"
+			e.SaveHistory()
+		}
 	case '8': // Bottom-center
-		node.Hints["position"] = "bottom-center"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "bottom-center"
+			e.SaveHistory()
+		}
 	case '9': // Bottom-right
-		node.Hints["position"] = "bottom-right"
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			node.Hints["position"] = "bottom-right"
+			e.SaveHistory()
+		}
 	case '0': // Clear position hint
-		delete(node.Hints, "position")
-		e.history.SaveState(e.diagram)
+		if !isSequence {
+			delete(node.Hints, "position")
+			e.SaveHistory()
+		}
 		
 	case 27: // ESC - exit to normal mode or back to jump mode
 		e.editingHintNode = -1
@@ -181,43 +290,47 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		conn.Hints = make(map[string]string)
 	}
 	
+	isSequence := e.diagram.Type == string(core.DiagramTypeSequence)
+	
 	switch key {
 	// Style options for connections
 	case 'a': // Solid (default)
 		delete(conn.Hints, "style") // Remove to use default
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'b': // Dashed
 		conn.Hints["style"] = "dashed"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'c': // Dotted
 		conn.Hints["style"] = "dotted"
-		e.history.SaveState(e.diagram)
-	case 'd': // Double
-		conn.Hints["style"] = "double"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
+	case 'd': // Double (only for flowcharts)
+		if !isSequence {
+			conn.Hints["style"] = "double"
+			e.SaveHistory()
+		}
 		
 	// Color options
 	case 'r': // Red
 		conn.Hints["color"] = "red"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'g': // Green
 		conn.Hints["color"] = "green"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'y': // Yellow
 		conn.Hints["color"] = "yellow"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'u': // Blue
 		conn.Hints["color"] = "blue"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'm': // Magenta
 		conn.Hints["color"] = "magenta"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'n': // Cyan
 		conn.Hints["color"] = "cyan"
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'w': // White/default
 		delete(conn.Hints, "color") // Remove to use default
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 		
 	// Text style options
 	case 'o': // Toggle bold
@@ -226,31 +339,33 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		} else {
 			conn.Hints["bold"] = "true"
 		}
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 	case 'i': // Toggle italic
 		if conn.Hints["italic"] == "true" {
 			delete(conn.Hints, "italic")
 		} else {
 			conn.Hints["italic"] = "true"
 		}
-		e.history.SaveState(e.diagram)
+		e.SaveHistory()
 		
-	// Flow direction hints
+	// Flow direction hints (only for flowcharts)
 	case 'f': // Cycle through flow directions
-		currentFlow := conn.Hints["flow"]
-		switch currentFlow {
-		case "right":
-			conn.Hints["flow"] = "down"
-		case "down":
-			conn.Hints["flow"] = "left"
-		case "left":
-			conn.Hints["flow"] = "up"
-		case "up":
-			delete(conn.Hints, "flow") // Remove to go back to auto
-		default:
-			conn.Hints["flow"] = "right" // Start with right
+		if !isSequence {
+			currentFlow := conn.Hints["flow"]
+			switch currentFlow {
+			case "right":
+				conn.Hints["flow"] = "down"
+			case "down":
+				conn.Hints["flow"] = "left"
+			case "left":
+				conn.Hints["flow"] = "up"
+			case "up":
+				delete(conn.Hints, "flow") // Remove to go back to auto
+			default:
+				conn.Hints["flow"] = "right" // Start with right
+			}
+			e.SaveHistory()
 		}
-		e.history.SaveState(e.diagram)
 		
 	case 27: // ESC - exit to normal mode or back to jump mode
 		e.editingHintConn = -1
@@ -304,16 +419,6 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		color = c
 	}
 	
-	shadow := "none"
-	if s, ok := node.Hints["shadow"]; ok {
-		shadow = s
-	}
-	
-	shadowDensity := "light"
-	if d, ok := node.Hints["shadow-density"]; ok {
-		shadowDensity = d
-	}
-	
 	bold := "off"
 	if b, ok := node.Hints["bold"]; ok && b == "true" {
 		bold = "on"
@@ -329,11 +434,6 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		textAlign = "center"
 	}
 	
-	position := "auto"
-	if p, ok := node.Hints["position"]; ok {
-		position = p
-	}
-	
 	// Get node text
 	nodeText := "Node"
 	if len(node.Text) > 0 {
@@ -343,32 +443,38 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		}
 	}
 	
+	// Different menu for sequence diagrams
+	if e.diagram.Type == string(core.DiagramTypeSequence) {
+		boxStyle := "rounded"
+		if s, ok := node.Hints["box-style"]; ok {
+			boxStyle = s
+		}
+		
+		lifelineStyle := "solid"
+		if s, ok := node.Hints["lifeline-style"]; ok {
+			lifelineStyle = s
+		}
+		
+		lifelineColor := "default"
+		if c, ok := node.Hints["lifeline-color"]; ok {
+			lifelineColor = c
+		}
+		
+		return "\n" +
+			"Participant: " + nodeText + " | box=" + boxStyle + "/" + color + " | lifeline=" + lifelineStyle + "/" + lifelineColor + "\n" +
+			"Box: [a]Round [b]Sharp [c]Double [d]Thick | [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
+			"Line: [A]Solid [B]Dash [C]Dot [D]Double | [R]Red [G]Green [Y]Yellow [U]Blue [M]Magenta [N]Cyan [W]Clear\n" +
+			"[ESC]Back [Enter]Done"
+	}
+	
+	// Full menu for flowcharts
 	return "\n" +
-		"Node: " + nodeText + "\n" +
-		"Current: style=" + style + ", color=" + color + ", bold=" + bold + ", italic=" + italic + ", align=" + textAlign + "\n" +
-		"         shadow=" + shadow + " (" + shadowDensity + "), position=" + position + "\n\n" +
-		"Style Options:\n" +
-		"  [a] Rounded ╭──╮\n" +
-		"  [b] Sharp   ┌──┐\n" +
-		"  [c] Double  ╔══╗\n" +
-		"  [d] Thick   ┏━━┓\n\n" +
-		"Color Options:\n" +
-		"  [r] Red    [g] Green   [y] Yellow\n" +
-		"  [u] Blue   [m] Magenta [n] Cyan\n" +
-		"  [w] Default\n\n" +
-		"Text Options:\n" +
-		"  [o] Toggle bold text\n" +
-		"  [i] Toggle italic text\n" +
-		"  [t] Toggle center alignment\n\n" +
-		"Shadow Options:\n" +
-		"  [z] Add shadow ░░  [x] Remove shadow\n" +
-		"  [l] Toggle density (light/medium)\n\n" +
-		"Layout Position Hints:\n" +
-		"  [1] Top-left     [2] Top-center    [3] Top-right\n" +
-		"  [4] Middle-left  [5] Center        [6] Middle-right\n" +
-		"  [7] Bottom-left  [8] Bottom-center [9] Bottom-right\n" +
-		"  [0] Auto (clear position hint)\n\n" +
-		"[ESC] Back to selection  [Enter] Exit to normal mode"
+		"Node: " + nodeText + " | style=" + style + ", color=" + color + "\n" +
+		"Style: [a]Rounded [b]Sharp [c]Double [d]Thick | " +
+		"Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
+		"Text: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [t]Center(" + textAlign + ") | " +
+		"Shadow: [z]Add [x]Remove [l]Density\n" +
+		"Position: [1-9]Grid [0]Auto | [ESC]Back [Enter]Done"
 }
 
 // getConnectionHintMenuDisplay returns the hint menu display for a connection
@@ -422,24 +528,18 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 		}
 	}
 	
+	// Different menu for sequence diagrams
+	if e.diagram.Type == string(core.DiagramTypeSequence) {
+		return "\n" +
+			"Message: " + fromText + " → " + toText + " | style=" + style + ", color=" + color + "\n" +
+			"Style: [a]Solid [b]Dashed [c]Dotted | Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
+			"Text: [o]Bold(" + bold + ") [i]Italic(" + italic + ") | [ESC]Back [Enter]Done"
+	}
+	
+	// Full menu for flowcharts
 	return "\n" +
-		"Connection: " + fromText + " → " + toText + "\n" +
-		"Current: style=" + style + ", color=" + color + ", bold=" + bold + ", italic=" + italic + "\n" +
-		"         flow=" + flow + "\n\n" +
-		"Style Options:\n" +
-		"  [a] Solid ────\n" +
-		"  [b] Dashed ╌╌╌╌\n" +
-		"  [c] Dotted ····\n" +
-		"  [d] Double ════\n\n" +
-		"Color Options:\n" +
-		"  [r] Red    [g] Green   [y] Yellow\n" +
-		"  [u] Blue   [m] Magenta [n] Cyan\n" +
-		"  [w] Default\n\n" +
-		"Text Options:\n" +
-		"  [o] Toggle bold lines\n" +
-		"  [i] Toggle italic lines\n\n" +
-		"Flow Direction:\n" +
-		"  [f] Cycle flow direction (→ ↓ ← ↑ auto)\n" +
-		"      Current: " + flow + "\n\n" +
-		"[ESC] Back to selection  [Enter] Exit to normal mode"
+		"Connection: " + fromText + " → " + toText + " | style=" + style + ", color=" + color + "\n" +
+		"Style: [a]Solid [b]Dashed [c]Dotted [d]Double | " +
+		"Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
+		"Options: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [f]Flow(" + flow + ") | [ESC]Back [Enter]Done"
 }

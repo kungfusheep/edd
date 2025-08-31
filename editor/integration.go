@@ -13,6 +13,7 @@ import (
 
 // RealRenderer wraps our actual modular renderer for the TUI
 type RealRenderer struct {
+	mainRenderer *rendering.Renderer  // The actual refactored renderer
 	layout     core.LayoutEngine
 	pathfinder core.PathFinder
 	router     *connections.Router
@@ -51,6 +52,10 @@ func (r *RealRenderer) GetCursorPos() int {
 
 // NewRealRenderer creates a renderer using our actual modules
 func NewRealRenderer() *RealRenderer {
+	// Use the actual refactored renderer that supports colors and proper separation
+	mainRenderer := rendering.NewRenderer()
+	
+	// Keep the old structure for compatibility but delegate to the real renderer
 	// Use simple layout
 	layoutEngine := layout.NewSimpleLayout()
 	
@@ -73,6 +78,7 @@ func NewRealRenderer() *RealRenderer {
 	}
 	
 	return &RealRenderer{
+		mainRenderer:  mainRenderer,  // Store the real renderer
 		layout:        layoutEngine,
 		pathfinder:    cachedPathfinder,
 		router:        router,
@@ -93,6 +99,11 @@ type NodePositions struct {
 
 // Render implements the core.Renderer interface for TUI
 func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
+	// Use the main renderer which properly handles colors and diagram types
+	if r.mainRenderer != nil {
+		return r.mainRenderer.Render(diagram)
+	}
+	// Fallback to old implementation if needed
 	positions, output, err := r.RenderWithPositions(diagram)
 	_ = positions // Will be used by TUI for jump labels
 	return output, err
@@ -297,8 +308,18 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 		return nil, "", fmt.Errorf("invalid bounds: %dx%d", width, height)
 	}
 	
-	// Create canvas
-	c := canvas.NewMatrixCanvas(width, height)
+	// Check if we need color support
+	needsColor := rendering.HasColorHints(diagram)
+	
+	// Create appropriate canvas
+	var c canvas.Canvas
+	var coloredCanvas *canvas.ColoredMatrixCanvas
+	if needsColor && r.capabilities.SupportsColor {
+		coloredCanvas = canvas.NewColoredMatrixCanvas(width, height)
+		c = coloredCanvas
+	} else {
+		c = canvas.NewMatrixCanvas(width, height)
+	}
 	
 	// Render the sequence diagram
 	if err := seqRenderer.RenderToCanvas(diagram, c); err != nil {
@@ -332,7 +353,17 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 		}
 	}
 	
-	return positions, c.String(), nil
+	// Get the output string
+	var output string
+	if coloredCanvas != nil {
+		// Use colored output if we have a colored canvas
+		output = coloredCanvas.ColoredString()
+	} else {
+		// Regular output
+		output = c.String()
+	}
+	
+	return positions, output, nil
 }
 
 // Helper functions from renderer.go

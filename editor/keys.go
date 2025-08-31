@@ -398,12 +398,18 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 			e.AddConnection(e.selected, nodeID, "")
 		}
 		
-		// If in continuous connect mode, chain to next connection
+		// If in continuous connect mode, behavior depends on diagram type
 		if e.continuousConnect {
-			// Use the node we just connected TO as the next FROM
-			e.selected = nodeID
-			// Jump directly to selecting the next TO node (startJump will assign new labels)
-			e.startJump(JumpActionConnectTo)
+			if e.diagram.Type == string(core.DiagramTypeSequence) {
+				// Sequence diagram: chain connections (TO becomes next FROM)
+				e.selected = nodeID
+				// Jump directly to selecting the next TO node
+				e.startJump(JumpActionConnectTo)
+			} else {
+				// Flowchart: start fresh connection (select new FROM)
+				e.selected = -1
+				e.startJump(JumpActionConnectFrom)
+			}
 		} else {
 			// Normal mode - exit to normal
 			e.selected = -1

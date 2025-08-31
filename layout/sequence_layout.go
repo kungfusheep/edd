@@ -37,6 +37,7 @@ type MessagePosition struct {
 	ToX   int
 	Y     int
 	Label string
+	ConnectionID int // Reference to the original connection for hints
 }
 
 // NewSequenceLayout creates a new sequence diagram layout engine
@@ -106,6 +107,7 @@ func (s *SequenceLayout) ComputePositions(diagram *core.Diagram) *SequencePositi
 				ToX:   toPos.LifelineX,
 				Y:     currentY,
 				Label: conn.Label,
+				ConnectionID: conn.ID,
 			})
 			currentY += s.MessageSpacing
 		}

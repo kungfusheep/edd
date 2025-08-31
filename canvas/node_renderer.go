@@ -28,7 +28,10 @@ func (r *NodeRenderer) RenderNodeWithHints(canvas Canvas, node core.Node, hints 
 	// Select the box style based on hints
 	style := r.defaultStyle
 	if hints != nil {
-		if styleName, ok := hints["style"]; ok {
+		// Check for box-style first (sequence diagrams), then fall back to style (flowcharts)
+		if styleName, ok := hints["box-style"]; ok {
+			style = GetNodeStyle(styleName, r.caps)
+		} else if styleName, ok := hints["style"]; ok {
 			style = GetNodeStyle(styleName, r.caps)
 		}
 	}

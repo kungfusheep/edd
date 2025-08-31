@@ -51,6 +51,10 @@ func (r *SequenceRenderer) Render(diagram *core.Diagram) (string, error) {
 		return "", fmt.Errorf("failed to render sequence diagram: %w", err)
 	}
 	
+	// Return colored output if using colored canvas
+	if coloredCanvas, ok := c.(*canvas.ColoredMatrixCanvas); ok {
+		return coloredCanvas.ColoredString(), nil
+	}
 	return c.String(), nil
 }
 
@@ -93,7 +97,7 @@ func (r *SequenceRenderer) RenderToCanvas(diagram *core.Diagram, c canvas.Canvas
 	}
 	
 	// Draw messages
-	if err := r.drawMessages(positions, c); err != nil {
+	if err := r.drawMessages(diagram, positions, c); err != nil {
 		return fmt.Errorf("failed to draw messages: %w", err)
 	}
 	
@@ -105,15 +109,82 @@ func (r *SequenceRenderer) drawLifelines(diagram *core.Diagram, positions *layou
 	// Get diagram bounds to know how far down to draw
 	_, totalHeight := r.layout.GetDiagramBounds(diagram)
 	
-	for _, pos := range positions.Participants {
+	for nodeID, pos := range positions.Participants {
 		lifelineX := pos.LifelineX
 		startY := pos.Y + pos.Height
 		
-		// Draw dashed vertical line
+		// Find the node to get its hints
+		var node *core.Node
+		for i := range diagram.Nodes {
+			if diagram.Nodes[i].ID == nodeID {
+				node = &diagram.Nodes[i]
+				break
+			}
+		}
+		
+		// Determine lifeline style and color
+		lifelineChar := '│' // Default solid
+		lifelineColor := ""
+		
+		if node != nil && node.Hints != nil {
+			// Check for lifeline-specific color, fall back to general color
+			if lc, ok := node.Hints["lifeline-color"]; ok && lc != "" {
+				lifelineColor = lc
+			} else if c, ok := node.Hints["color"]; ok && c != "" {
+				lifelineColor = c
+			}
+			
+			// Check for lifeline style
+			if ls, ok := node.Hints["lifeline-style"]; ok {
+				switch ls {
+				case "dashed":
+					// Use dashed pattern
+					for y := startY; y < totalHeight; y++ {
+						if (y-startY)%2 == 0 {
+							if lifelineColor != "" {
+								r.setWithColor(c, core.Point{X: lifelineX, Y: y}, '┆', lifelineColor)
+							} else {
+								c.Set(core.Point{X: lifelineX, Y: y}, '┆')
+							}
+						}
+					}
+					continue // Skip the default drawing
+				case "dotted":
+					// Use dotted pattern
+					for y := startY; y < totalHeight; y++ {
+						if (y-startY)%2 == 0 {
+							if lifelineColor != "" {
+								r.setWithColor(c, core.Point{X: lifelineX, Y: y}, '·', lifelineColor)
+							} else {
+								c.Set(core.Point{X: lifelineX, Y: y}, '·')
+							}
+						}
+					}
+					continue // Skip the default drawing
+				case "double":
+					// Use double line (with space between)
+					// For double lines, we use the left line for arrow connections
+					// Store this info for later arrow drawing
+					for y := startY; y < totalHeight; y++ {
+						if lifelineColor != "" {
+							r.setWithColor(c, core.Point{X: lifelineX - 1, Y: y}, '│', lifelineColor)
+							r.setWithColor(c, core.Point{X: lifelineX + 1, Y: y}, '│', lifelineColor)
+						} else {
+							c.Set(core.Point{X: lifelineX - 1, Y: y}, '│')
+							c.Set(core.Point{X: lifelineX + 1, Y: y}, '│')
+						}
+					}
+					continue // Skip the default drawing
+				}
+			}
+		}
+		
+		// Draw solid lifeline (default)
 		for y := startY; y < totalHeight; y++ {
-			// Use dashed pattern: draw every other character
-			if (y-startY)%2 == 0 {
-				c.Set(core.Point{X: lifelineX, Y: y}, '│')
+			if lifelineColor != "" {
+				r.setWithColor(c, core.Point{X: lifelineX, Y: y}, lifelineChar, lifelineColor)
+			} else {
+				c.Set(core.Point{X: lifelineX, Y: y}, lifelineChar)
 			}
 		}
 	}
@@ -122,18 +193,27 @@ func (r *SequenceRenderer) drawLifelines(diagram *core.Diagram, positions *layou
 }
 
 // drawMessages draws horizontal arrows between lifelines
-func (r *SequenceRenderer) drawMessages(positions *layout.SequencePositions, c canvas.Canvas) error {
+func (r *SequenceRenderer) drawMessages(diagram *core.Diagram, positions *layout.SequencePositions, c canvas.Canvas) error {
 	for _, msg := range positions.Messages {
+		// Find the connection to get its hints
+		var connHints map[string]string
+		for _, conn := range diagram.Connections {
+			if conn.ID == msg.ConnectionID {
+				connHints = conn.Hints
+				break
+			}
+		}
+		
 		// Draw the message arrow
 		if msg.FromX < msg.ToX {
 			// Left to right
-			r.drawArrow(c, msg.FromX, msg.ToX, msg.Y, true, msg.Label)
+			r.drawArrow(c, msg.FromX, msg.ToX, msg.Y, true, msg.Label, connHints)
 		} else if msg.FromX > msg.ToX {
 			// Right to left
-			r.drawArrow(c, msg.FromX, msg.ToX, msg.Y, false, msg.Label)
+			r.drawArrow(c, msg.FromX, msg.ToX, msg.Y, false, msg.Label, connHints)
 		} else {
 			// Self-message (loop back)
-			r.drawSelfMessage(c, msg.FromX, msg.Y, msg.Label)
+			r.drawSelfMessage(c, msg.FromX, msg.Y, msg.Label, connHints)
 		}
 	}
 	
@@ -141,17 +221,31 @@ func (r *SequenceRenderer) drawMessages(positions *layout.SequencePositions, c c
 }
 
 // drawArrow draws a horizontal arrow between two x positions
-func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToRight bool, label string) {
-	// Determine arrow characters based on direction
+func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToRight bool, label string, hints map[string]string) {
+	// Determine arrow characters based on direction and style
 	var startChar, endChar, lineChar rune
-	if leftToRight {
-		startChar = '─'
-		endChar = '▶'
+	style := "solid"
+	if hints != nil && hints["style"] != "" {
+		style = hints["style"]
+	}
+	
+	// Set line character based on style
+	switch style {
+	case "dashed":
+		lineChar = '╌'  // or '- ' alternating
+	case "dotted":
+		lineChar = '·'
+	default:
 		lineChar = '─'
+	}
+	
+	// Set arrow heads
+	if leftToRight {
+		startChar = lineChar
+		endChar = '▶'
 	} else {
 		startChar = '◀'
-		endChar = '─'
-		lineChar = '─'
+		endChar = lineChar
 	}
 	
 	// Ensure we go in the right direction
@@ -159,14 +253,63 @@ func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToR
 		fromX, toX = toX, fromX
 	}
 	
+	// Get color from hints if available
+	color := ""
+	if hints != nil && hints["color"] != "" {
+		color = hints["color"]
+	}
+	
 	// Draw the line
 	for x := fromX; x <= toX; x++ {
-		if x == fromX && !leftToRight {
-			c.Set(core.Point{X: x, Y: y}, startChar)
-		} else if x == toX && leftToRight {
-			c.Set(core.Point{X: x, Y: y}, endChar)
+		var charToDraw rune
+		
+		// Special handling for junction points with lifelines
+		if x == fromX {
+			if leftToRight {
+				// Starting from left lifeline, going right
+				charToDraw = '├' // Branch right from lifeline
+			} else {
+				// Arrow head pointing left
+				charToDraw = startChar
+			}
+		} else if x == toX {
+			if leftToRight {
+				// Arrow head pointing right
+				charToDraw = endChar
+			} else {
+				// Ending at right lifeline, coming from left
+				charToDraw = '┤' // Branch left into lifeline
+			}
+		} else if x == fromX + 1 && leftToRight {
+			// First character after branch, ensure it's a line
+			charToDraw = '─'
+		} else if x == toX - 1 && !leftToRight {
+			// Last character before branch, ensure it's a line
+			charToDraw = '─'
 		} else {
-			c.Set(core.Point{X: x, Y: y}, lineChar)
+			// Middle of the line - handle styles
+			switch style {
+			case "dashed":
+				if (x-fromX)%3 == 0 || (x-fromX)%3 == 1 {
+					charToDraw = '─'
+				} else {
+					continue // Skip this position for gap
+				}
+			case "dotted":
+				if (x-fromX)%2 == 0 {
+					charToDraw = '·'
+				} else {
+					continue // Skip this position for gap
+				}
+			default:
+				charToDraw = lineChar
+			}
+		}
+		
+		if color != "" {
+			r.setWithColor(c, core.Point{X: x, Y: y}, charToDraw, color)
+		} else {
+			c.Set(core.Point{X: x, Y: y}, charToDraw)
 		}
 	}
 	
@@ -180,28 +323,62 @@ func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToR
 }
 
 // drawSelfMessage draws a message that loops back to the same lifeline
-func (r *SequenceRenderer) drawSelfMessage(c canvas.Canvas, x, y int, label string) {
+func (r *SequenceRenderer) drawSelfMessage(c canvas.Canvas, x, y int, label string, hints map[string]string) {
 	// Draw a small loop to the right
 	loopWidth := 6
 	
-	// Top of loop
-	for i := 0; i < loopWidth; i++ {
-		c.Set(core.Point{X: x + i, Y: y}, '─')
+	// Get style and color from hints if available
+	style := "solid"
+	color := ""
+	if hints != nil {
+		if hints["style"] != "" {
+			style = hints["style"]
+		}
+		if hints["color"] != "" {
+			color = hints["color"]
+		}
+	}
+	
+	// Determine line character based on style
+	var lineChar rune
+	switch style {
+	case "dashed":
+		lineChar = '╌'
+	case "dotted":
+		lineChar = '·'
+	default:
+		lineChar = '─'
+	}
+	
+	// Helper to set with or without color
+	setChar := func(p core.Point, ch rune) {
+		if color != "" {
+			r.setWithColor(c, p, ch, color)
+		} else {
+			c.Set(p, ch)
+		}
+	}
+	
+	// Start with branch from lifeline
+	setChar(core.Point{X: x, Y: y}, '├')
+	
+	// Top of loop (starting from position 1, not 0)
+	for i := 1; i < loopWidth; i++ {
+		setChar(core.Point{X: x + i, Y: y}, lineChar)
 	}
 	
 	// Right side
-	c.Set(core.Point{X: x + loopWidth, Y: y}, '┐')
-	c.Set(core.Point{X: x + loopWidth, Y: y + 1}, '│')
-	c.Set(core.Point{X: x + loopWidth, Y: y + 2}, '┘')
+	setChar(core.Point{X: x + loopWidth, Y: y}, '┐')
+	setChar(core.Point{X: x + loopWidth, Y: y + 1}, '│')
+	setChar(core.Point{X: x + loopWidth, Y: y + 2}, '┘')
 	
 	// Bottom of loop (with arrow)
-	for i := loopWidth; i > 0; i-- {
-		if i == 1 {
-			c.Set(core.Point{X: x + i, Y: y + 2}, '◀')
-		} else {
-			c.Set(core.Point{X: x + i, Y: y + 2}, '─')
-		}
+	for i := loopWidth; i > 1; i-- {
+		setChar(core.Point{X: x + i, Y: y + 2}, lineChar)
 	}
+	// Arrow returning to lifeline with proper junction
+	setChar(core.Point{X: x + 1, Y: y + 2}, '◀')
+	setChar(core.Point{X: x, Y: y + 2}, '┤')
 	
 	// Label
 	if label != "" {
@@ -209,6 +386,24 @@ func (r *SequenceRenderer) drawSelfMessage(c canvas.Canvas, x, y int, label stri
 			c.Set(core.Point{X: x + 1 + i, Y: y - 1}, ch)
 		}
 	}
+}
+
+// setWithColor sets a character with color if the canvas supports it
+func (r *SequenceRenderer) setWithColor(c canvas.Canvas, p core.Point, char rune, color string) {
+	// Try to set with color if the canvas supports it
+	if coloredCanvas, ok := c.(*canvas.ColoredMatrixCanvas); ok {
+		coloredCanvas.SetWithColor(p, char, color)
+		return
+	}
+	// Also check if it's a type that supports SetWithColor method (like offsetCanvas)
+	if colorSetter, ok := c.(interface {
+		SetWithColor(core.Point, rune, string) error
+	}); ok {
+		colorSetter.SetWithColor(p, char, color)
+		return
+	}
+	// Fall back to regular set
+	c.Set(p, char)
 }
 
 // GetBounds returns the required canvas size for the diagram
