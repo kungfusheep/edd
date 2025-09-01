@@ -220,10 +220,25 @@ func (r *SequenceRenderer) drawMessages(diagram *core.Diagram, positions *layout
 	return nil
 }
 
+// mergeJunctionChar determines the correct junction character when lines meet
+func (r *SequenceRenderer) mergeJunctionChar(existing rune, incoming rune, isVertical bool) rune {
+	// If there's a vertical line and we're adding a horizontal line
+	if (existing == '│' || existing == '┆' || existing == '·') && !isVertical {
+		if incoming == '─' || incoming == '╌' {
+			return '├' // Branch right
+		}
+		if incoming == '◀' {
+			return '┤' // Arrow coming in from right
+		}
+	}
+	// Default to incoming if no merge needed
+	return incoming
+}
+
 // drawArrow draws a horizontal arrow between two x positions
 func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToRight bool, label string, hints map[string]string) {
 	// Determine arrow characters based on direction and style
-	var startChar, endChar, lineChar rune
+	var lineChar rune
 	style := "solid"
 	if hints != nil && hints["style"] != "" {
 		style = hints["style"]
@@ -239,15 +254,6 @@ func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToR
 		lineChar = '─'
 	}
 	
-	// Set arrow heads
-	if leftToRight {
-		startChar = lineChar
-		endChar = '▶'
-	} else {
-		startChar = '◀'
-		endChar = lineChar
-	}
-	
 	// Ensure we go in the right direction
 	if fromX > toX {
 		fromX, toX = toX, fromX
@@ -259,35 +265,26 @@ func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToR
 		color = hints["color"]
 	}
 	
-	// Draw the line
+	// Draw the line - explicitly use branch characters at endpoints
 	for x := fromX; x <= toX; x++ {
 		var charToDraw rune
 		
-		// Special handling for junction points with lifelines
 		if x == fromX {
+			// Starting point
 			if leftToRight {
-				// Starting from left lifeline, going right
-				charToDraw = '├' // Branch right from lifeline
+				charToDraw = '├'  // Branch right from lifeline
 			} else {
-				// Arrow head pointing left
-				charToDraw = startChar
+				charToDraw = '◀'  // Arrow pointing left
 			}
 		} else if x == toX {
+			// Ending point
 			if leftToRight {
-				// Arrow head pointing right
-				charToDraw = endChar
+				charToDraw = '▶'  // Arrow pointing right
 			} else {
-				// Ending at right lifeline, coming from left
-				charToDraw = '┤' // Branch left into lifeline
+				charToDraw = '┤'  // Branch into lifeline from left
 			}
-		} else if x == fromX + 1 && leftToRight {
-			// First character after branch, ensure it's a line
-			charToDraw = '─'
-		} else if x == toX - 1 && !leftToRight {
-			// Last character before branch, ensure it's a line
-			charToDraw = '─'
 		} else {
-			// Middle of the line - handle styles
+			// Middle of the line
 			switch style {
 			case "dashed":
 				if (x-fromX)%3 == 0 || (x-fromX)%3 == 1 {
@@ -359,26 +356,25 @@ func (r *SequenceRenderer) drawSelfMessage(c canvas.Canvas, x, y int, label stri
 		}
 	}
 	
-	// Start with branch from lifeline
+	// Top of loop - start with branch character at lifeline, then continue right
 	setChar(core.Point{X: x, Y: y}, '├')
-	
-	// Top of loop (starting from position 1, not 0)
-	for i := 1; i < loopWidth; i++ {
+	for i := 1; i <= loopWidth; i++ {
 		setChar(core.Point{X: x + i, Y: y}, lineChar)
 	}
 	
-	// Right side
-	setChar(core.Point{X: x + loopWidth, Y: y}, '┐')
-	setChar(core.Point{X: x + loopWidth, Y: y + 1}, '│')
-	setChar(core.Point{X: x + loopWidth, Y: y + 2}, '┘')
+	// Right side corner and vertical
+	setChar(core.Point{X: x + loopWidth + 1, Y: y}, '┐')
+	setChar(core.Point{X: x + loopWidth + 1, Y: y + 1}, '│')
+	setChar(core.Point{X: x + loopWidth + 1, Y: y + 2}, '┘')
 	
-	// Bottom of loop (with arrow)
-	for i := loopWidth; i > 1; i-- {
+	// Bottom of loop (with arrow) - from right corner back to lifeline
+	// Draw horizontal line from corner back to position 2
+	for i := loopWidth; i >= 2; i-- {
 		setChar(core.Point{X: x + i, Y: y + 2}, lineChar)
 	}
-	// Arrow returning to lifeline with proper junction
+	// Place arrow at position 1 (just to the right of lifeline)
 	setChar(core.Point{X: x + 1, Y: y + 2}, '◀')
-	setChar(core.Point{X: x, Y: y + 2}, '┤')
+	// The lifeline at position x will be preserved
 	
 	// Label
 	if label != "" {

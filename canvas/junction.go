@@ -77,6 +77,9 @@ func (m *CharacterMerger) initializeMergeRules() {
 	m.mergeMap[mergePair{'─', '│'}] = '┼'  // horizontal + vertical = cross
 	m.mergeMap[mergePair{'│', '─'}] = '┼'
 	
+	// For sequence diagrams: prefer branches when arrows meet lifelines
+	// These will be handled by explicit branch placement if needed
+	
 	// Corner + line = T-junction
 	// Top-left corner
 	m.mergeMap[mergePair{'┌', '─'}] = '┬'  // becomes top T
