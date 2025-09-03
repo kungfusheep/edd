@@ -254,46 +254,61 @@ func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToR
 		lineChar = '─'
 	}
 	
-	// Ensure we go in the right direction
-	if fromX > toX {
-		fromX, toX = toX, fromX
-	}
-	
 	// Get color from hints if available
 	color := ""
 	if hints != nil && hints["color"] != "" {
 		color = hints["color"]
 	}
 	
-	// Draw the line - explicitly use branch characters at endpoints
-	for x := fromX; x <= toX; x++ {
+	// Determine iteration bounds (always left to right)
+	startX, endX := fromX, toX
+	if startX > endX {
+		startX, endX = endX, startX
+	}
+	
+	// Draw the line
+	for x := startX; x <= endX; x++ {
 		var charToDraw rune
+		var useArrowColor bool = true
 		
-		if x == fromX {
-			// Starting point
-			if leftToRight {
-				charToDraw = '├'  // Branch right from lifeline
+		// Determine what character to draw at this position
+		if leftToRight {
+			if x == fromX {
+				// Starting from a lifeline, use branch right
+				charToDraw = '├'
+				useArrowColor = false // Keep lifeline color at junction
+			} else if x == endX {
+				// Arrow pointing right at the end
+				charToDraw = '▶'
 			} else {
-				charToDraw = '◀'  // Arrow pointing left
-			}
-		} else if x == toX {
-			// Ending point
-			if leftToRight {
-				charToDraw = '▶'  // Arrow pointing right
-			} else {
-				charToDraw = '┤'  // Branch into lifeline from left
+				// Middle section
+				charToDraw = lineChar
 			}
 		} else {
-			// Middle of the line
+			if x == startX {
+				// Arrow pointing left at the start
+				charToDraw = '◀'
+			} else if x == fromX {
+				// Starting from a lifeline (on the right), use branch left
+				charToDraw = '┤'
+				useArrowColor = false // Keep lifeline color at junction
+			} else {
+				// Middle section
+				charToDraw = lineChar
+			}
+		}
+		
+		// Handle dashed/dotted styles for middle sections
+		if charToDraw == lineChar {
 			switch style {
 			case "dashed":
-				if (x-fromX)%3 == 0 || (x-fromX)%3 == 1 {
+				if (x-startX)%3 == 0 || (x-startX)%3 == 1 {
 					charToDraw = '─'
 				} else {
 					continue // Skip this position for gap
 				}
 			case "dotted":
-				if (x-fromX)%2 == 0 {
+				if (x-startX)%2 == 0 {
 					charToDraw = '·'
 				} else {
 					continue // Skip this position for gap
@@ -303,18 +318,33 @@ func (r *SequenceRenderer) drawArrow(c canvas.Canvas, fromX, toX, y int, leftToR
 			}
 		}
 		
-		if color != "" {
+		// Set the character
+		if !useArrowColor {
+			// Junction characters - preserve lifeline color
+			c.Set(core.Point{X: x, Y: y}, charToDraw)
+		} else if color != "" {
+			// Arrow has explicit color
 			r.setWithColor(c, core.Point{X: x, Y: y}, charToDraw, color)
 		} else {
-			c.Set(core.Point{X: x, Y: y}, charToDraw)
+			// Arrow has no color - use default/white
+			if coloredCanvas, ok := c.(*canvas.ColoredMatrixCanvas); ok {
+				coloredCanvas.SetWithColor(core.Point{X: x, Y: y}, charToDraw, "")
+			} else {
+				c.Set(core.Point{X: x, Y: y}, charToDraw)
+			}
 		}
 	}
 	
-	// Draw label above the arrow if present
+	// Draw label above the arrow if present (always use default color for text)
 	if label != "" {
 		labelX := (fromX + toX) / 2 - len(label)/2
 		for i, ch := range label {
-			c.Set(core.Point{X: labelX + i, Y: y - 1}, ch)
+			// Force default color by using empty string (no color)
+			if coloredCanvas, ok := c.(*canvas.ColoredMatrixCanvas); ok {
+				coloredCanvas.SetWithColor(core.Point{X: labelX + i, Y: y - 1}, ch, "")
+			} else {
+				c.Set(core.Point{X: labelX + i, Y: y - 1}, ch)
+			}
 		}
 	}
 }

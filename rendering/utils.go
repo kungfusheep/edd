@@ -90,6 +90,12 @@ func HasColorHints(diagram *core.Diagram) bool {
 			if _, hasColor := node.Hints["color"]; hasColor {
 				return true
 			}
+			if _, hasLifelineColor := node.Hints["lifeline-color"]; hasLifelineColor {
+				return true
+			}
+			if _, hasLifelineStyle := node.Hints["lifeline-style"]; hasLifelineStyle {
+				return true
+			}
 			if _, hasBold := node.Hints["bold"]; hasBold {
 				return true
 			}

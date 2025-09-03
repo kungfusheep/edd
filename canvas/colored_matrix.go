@@ -33,6 +33,14 @@ func NewColoredMatrixCanvas(width, height int) *ColoredMatrixCanvas {
 	}
 }
 
+// GetColorAt returns the color code at a given position
+func (c *ColoredMatrixCanvas) GetColorAt(p core.Point) string {
+	if p.Y >= 0 && p.Y < len(c.colors) && p.X >= 0 && p.X < len(c.colors[0]) {
+		return c.colors[p.Y][p.X]
+	}
+	return ""
+}
+
 // SetWithColor sets a character with a specific color
 func (c *ColoredMatrixCanvas) SetWithColor(p core.Point, char rune, color string) error {
 	// Set the character
@@ -40,7 +48,8 @@ func (c *ColoredMatrixCanvas) SetWithColor(p core.Point, char rune, color string
 		return err
 	}
 	
-	// Store the color code
+	// Store the color code - always use the new color for arrows/messages
+	// This ensures arrow colors take precedence over lifeline colors at junctions
 	if p.Y >= 0 && p.Y < len(c.colors) && p.X >= 0 && p.X < len(c.colors[0]) {
 		c.colors[p.Y][p.X] = GetColorCode(color)
 	}

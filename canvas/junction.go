@@ -55,6 +55,11 @@ func (m *CharacterMerger) Merge(existing, new rune) rune {
 		return merged
 	}
 	
+	// Text should overwrite line-drawing characters
+	if isText(new) && isLineDrawing(existing) {
+		return new
+	}
+	
 	// Default: keep existing character
 	return existing
 }
@@ -69,6 +74,31 @@ func isArrow(r rune) bool {
 	return r == '▶' || r == '◀' || r == '▲' || r == '▼' ||
 	       r == '>' || r == '<' || r == '^' || r == 'v' ||
 	       r == '→' || r == '←' || r == '↑' || r == '↓'
+}
+
+// isText checks if a character is regular text (letters, numbers, etc.)
+func isText(r rune) bool {
+	// Consider alphanumeric, spaces, and common punctuation as text
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || 
+	       (r >= '0' && r <= '9') || r == ' ' || r == '.' || 
+	       r == ',' || r == '!' || r == '?' || r == ':' || 
+	       r == ';' || r == '(' || r == ')' || r == '[' || 
+	       r == ']' || r == '{' || r == '}' || r == '\'' || 
+	       r == '"' || r == '-' || r == '_' || r == '/' || 
+	       r == '\\' || r == '@' || r == '#' || r == '$' || 
+	       r == '%' || r == '&' || r == '*' || r == '+' || 
+	       r == '=' || r == '~' || r == '`'
+}
+
+// isLineDrawing checks if a character is a line-drawing character
+func isLineDrawing(r rune) bool {
+	// Box drawing characters are in the range U+2500 to U+257F
+	return (r >= '─' && r <= '╿') || r == '│' || r == '─' ||
+	       r == '┌' || r == '┐' || r == '└' || r == '┘' ||
+	       r == '├' || r == '┤' || r == '┬' || r == '┴' ||
+	       r == '┼' || r == '╭' || r == '╮' || r == '╯' ||
+	       r == '╰' || r == '┆' || r == '┊' || r == '╌' ||
+	       r == '╎' || r == '·'
 }
 
 // initializeMergeRules sets up the character merge mappings
