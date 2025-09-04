@@ -76,6 +76,9 @@ func loadDiagramFile(filename string) (*core.Diagram, error) {
 		return nil, err
 	}
 
+	// Ensure all connections have unique IDs
+	core.EnsureUniqueConnectionIDs(&diagram)
+
 	return &diagram, nil
 }
 

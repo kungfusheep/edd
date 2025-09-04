@@ -150,22 +150,8 @@ func loadDiagram(filename string) (*core.Diagram, error) {
 		return nil, fmt.Errorf("diagram has no nodes")
 	}
 	
-	// Check if any connection has ID 0 (which is valid) or if IDs are missing
-	hasExplicitIDs := false
-	for i := range diagram.Connections {
-		// If any connection has a non-zero ID, assume IDs are explicit
-		if diagram.Connections[i].ID != 0 {
-			hasExplicitIDs = true
-			break
-		}
-	}
-	
-	// Only auto-assign IDs if none are explicitly set
-	if !hasExplicitIDs {
-		for i := range diagram.Connections {
-			diagram.Connections[i].ID = i
-		}
-	}
+	// Ensure all connections have unique IDs
+	core.EnsureUniqueConnectionIDs(&diagram)
 	
 	// Default arrows to true for all connections
 	for i := range diagram.Connections {

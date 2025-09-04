@@ -2,7 +2,10 @@ package editor
 
 import (
 	"edd/core"
+	"fmt"
+	"os"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -223,8 +226,18 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 	
 	// Look for matching connection jump label (in delete, edit, or hint mode)
 	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
+		// Log to file
+		if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "\n[%s] Looking for key '%c' in connection labels: %v\n", time.Now().Format("15:04:05"), key, e.connectionLabels)
+			f.Close()
+		}
 		for connIndex, label := range e.connectionLabels {
 			if label == key {
+				// Log to file
+				if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "Found match! Connection index %d has label '%c'\n", connIndex, label)
+					f.Close()
+				}
 				if e.jumpAction == JumpActionDelete {
 					// Delete the connection
 					e.DeleteConnection(connIndex)
@@ -247,6 +260,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 					// Enter hint menu for this connection
 					e.previousJumpAction = e.jumpAction  // Save the action for ESC handling
 					e.editingHintConn = connIndex
+					// Log to file
+					if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+						fmt.Fprintf(f, "Selected connection index %d for hint editing (pressed '%c')\n", connIndex, key)
+						f.Close()
+					}
 					e.clearJumpLabels()
 					e.SetMode(ModeHintMenu)
 				}
