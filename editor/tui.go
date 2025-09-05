@@ -478,6 +478,29 @@ func (e *TUIEditor) GetHistoryStats() (current, total int) {
 // HandleKey is the public entry point for key handling - used by tests
 func (e *TUIEditor) HandleKey(key rune) bool {
 	// In production, the TUI package handles keys directly
-	// This is only used by tests, delegate to test helper
-	return e.handleNormalKey(key)
+	// This is only used by tests, delegate to appropriate handler
+	
+	// Check mode to determine which handler to use
+	if len(e.jumpLabels) > 0 {
+		// In jump mode
+		return e.handleJumpKey(key)
+	}
+	
+	switch e.mode {
+	case ModeNormal:
+		return e.handleNormalKey(key)
+	case ModeInsert, ModeEdit:
+		return e.handleTextKey(key)
+	case ModeCommand:
+		return e.handleCommandKey(key)
+	case ModeJSON:
+		return e.handleJSONKey(key)
+	case ModeHelp:
+		return e.handleHelpKey(key)
+	case ModeHintMenu:
+		e.HandleHintMenuInput(key)
+		return false
+	}
+	
+	return false
 }

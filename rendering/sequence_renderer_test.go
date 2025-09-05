@@ -56,14 +56,11 @@ func TestSequenceRendererBasic(t *testing.T) {
 	}
 	t.Logf("Canvas size: %dx%d", width, height)
 	
-	// Create canvas and render
-	c := canvas.NewMatrixCanvas(width, height)
-	err := renderer.Render(diagram, c)
+	// Render directly to string
+	output, err := renderer.Render(diagram)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}
-	
-	output := c.String()
 	
 	// Debug output
 	t.Logf("Canvas output:\n%s", output)
@@ -112,14 +109,10 @@ func TestSequenceRendererSelfMessage(t *testing.T) {
 		},
 	}
 	
-	width, height := renderer.GetBounds(diagram)
-	c := canvas.NewMatrixCanvas(width, height)
-	err := renderer.Render(diagram, c)
+	output, err := renderer.Render(diagram)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}
-	
-	output := c.String()
 	
 	// Check for self-message loop
 	if !strings.Contains(output, "┐") {
@@ -148,14 +141,10 @@ func TestSequenceRendererMultipleParticipants(t *testing.T) {
 		},
 	}
 	
-	width, height := renderer.GetBounds(diagram)
-	c := canvas.NewMatrixCanvas(width, height)
-	err := renderer.Render(diagram, c)
+	output, err := renderer.Render(diagram)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}
-	
-	output := c.String()
 	
 	// Check all participants are present
 	if !strings.Contains(output, "Client") {
