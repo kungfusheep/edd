@@ -123,8 +123,8 @@ func (e *TUIEditor) StartHintEdit() {
 
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
-	// In production, the TUI layer handles text input directly
-	// This is kept for compatibility but is not actually used
+	// Delegate to the actual text handler
+	e.handleTextKey(key)
 }
 
 // ToggleDiagramType switches between sequence and box diagram types

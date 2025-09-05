@@ -102,9 +102,12 @@ func (r *FlowchartRenderer) Render(diagram *core.Diagram) (string, error) {
 	offsetCanvas := NewOffsetCanvas(c, bounds.Min)
 	
 	// Step 5.1: Debug mode - visualize obstacles if enabled
+	// TODO: renderDebugObstacles is currently disabled as it references non-existent methods
+	/*
 	if r.debugMode {
 		return r.renderDebugObstacles(layoutNodes, diagram.Connections, paths, bounds), nil
 	}
+	*/
 	
 	// Step 6: Render the diagram components
 	if err := r.renderToCanvas(diagram, layoutNodes, paths, offsetCanvas); err != nil {
@@ -224,9 +227,11 @@ func (r *FlowchartRenderer) SetRouterType(routerType connections.RouterType) {
 }
 
 // renderDebugObstacles creates a debug visualization showing obstacles and paths.
+// TODO: This function is currently unused and references non-existent methods
+/*
 func (r *FlowchartRenderer) renderDebugObstacles(layoutNodes []core.Node, connections []core.Connection, paths map[int]core.Path, bounds core.Bounds) string {
 	// Import the debug visualizer
-	debugViz := pathfinding.NewDebugVisualizer(bounds.Width(), bounds.Height())
+	debugViz := obstacles.NewDebugVisualizer(bounds.Width(), bounds.Height())
 	
 	// Add all nodes to the visualization
 	for i, node := range layoutNodes {
@@ -306,6 +311,7 @@ func (r *FlowchartRenderer) renderDebugObstacles(layoutNodes []core.Node, connec
 	
 	return result
 }
+*/
 
 // createObstaclesForConnection creates the same obstacle function used by the router.
 func (r *FlowchartRenderer) createObstaclesForConnection(nodes []core.Node, sourceID, targetID int) func(core.Point) bool {
