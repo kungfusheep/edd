@@ -2,8 +2,6 @@ package editor
 
 import (
 	"edd/core"
-	"fmt"
-	"os"
 )
 
 // HandleHintMenuInput processes input in hint menu mode
@@ -288,12 +286,6 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 	}
 	
 	conn := &e.diagram.Connections[e.editingHintConn]
-	// Log to file
-	if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "Handling hint input '%c' for connection index %d (ID=%d, Label=%s, ConnPtr=%p, HintsPtr=%p)\n", 
-			key, e.editingHintConn, conn.ID, conn.Label, conn, conn.Hints)
-		f.Close()
-	}
 	
 	// Initialize hints map if needed
 	if conn.Hints == nil {
@@ -322,11 +314,6 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 	// Color options
 	case 'r': // Red
 		conn.Hints["color"] = "red"
-		// Log to file
-		if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "Set connection %d color to red (hints map: %p)\n", e.editingHintConn, conn.Hints)
-			f.Close()
-		}
 		e.SaveHistory()
 	case 'g': // Green
 		conn.Hints["color"] = "green"

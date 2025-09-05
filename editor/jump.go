@@ -1,10 +1,5 @@
 package editor
 
-import (
-	"fmt"
-	"os"
-)
-
 // Jump label characters in order of preference (home row first)
 const jumpChars = "asdfghjklqwertyuiopzxcvbnm"
 
@@ -38,11 +33,6 @@ func (e *TUIEditor) assignJumpLabels() {
 		for i := 0; i < len(e.diagram.Connections); i++ {
 			if labelIndex < len(jumpChars) {
 				e.connectionLabels[i] = rune(jumpChars[labelIndex])
-				// Log to file
-				if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-					fmt.Fprintf(f, "Jump: Assigned label '%c' to connection index %d\n", jumpChars[labelIndex], i)
-					f.Close()
-				}
 				labelIndex++
 			} else {
 				break

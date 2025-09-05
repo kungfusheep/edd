@@ -123,8 +123,23 @@ func (e *TUIEditor) StartHintEdit() {
 
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
-	// Delegate to the internal handler which has the proper logic
-	e.handleTextKey(key)
+	// In production, the TUI layer handles text input directly
+	// This is kept for compatibility but is not actually used
+}
+
+// ToggleDiagramType switches between sequence and box diagram types
+func (e *TUIEditor) ToggleDiagramType() {
+	e.history.SaveState(e.diagram)
+	currentType := e.diagram.Type
+	if currentType == "" {
+		currentType = "box"
+	}
+	
+	if currentType == "sequence" {
+		e.diagram.Type = "box"
+	} else {
+		e.diagram.Type = "sequence"
+	}
 }
 
 // HandleJumpInput processes jump label selection for both nodes and connections

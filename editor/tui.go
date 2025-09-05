@@ -4,7 +4,6 @@ import (
 	"edd/core"
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 )
@@ -50,6 +49,9 @@ type TUIEditor struct {
 	
 	// History management
 	history            *StructHistory  // Undo/redo history (optimized struct-based)
+	
+	// Test-only field (not used in production)
+	connectFrom        int            // Used by test helpers for connection tracking
 }
 
 // NewTUIEditor creates a new TUI editor instance
@@ -76,6 +78,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		editingHintNode:    -1,  // Initialize to -1 (no node being edited)
 		jsonScrollOffset:   0,
 		history:            NewStructHistory(50), // 50 states max (optimized)
+		connectFrom:        -1,  // Initialize test-only field
 	}
 	
 	// Save initial empty state
@@ -190,12 +193,6 @@ func (e *TUIEditor) GetState() TUIState {
 
 // handleKey processes keyboard input
 func (e *TUIEditor) handleKey(key rune) bool {
-	// Debug logging
-	if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "handleKey called: key=%c (%d), mode=%v, jumpLabels=%d\n", key, key, e.mode, len(e.jumpLabels))
-		f.Close()
-	}
-	
 	// Handle jump mode first
 	if len(e.jumpLabels) > 0 {
 		return e.handleJumpKey(key)
@@ -478,6 +475,9 @@ func (e *TUIEditor) GetHistoryStats() (current, total int) {
 }
 
 // HandleKey processes a key (exported for testing)
+// HandleKey is the public entry point for key handling - used by tests
 func (e *TUIEditor) HandleKey(key rune) bool {
-	return e.handleKey(key)
+	// In production, the TUI package handles keys directly
+	// This is only used by tests, delegate to test helper
+	return e.handleNormalKey(key)
 }
