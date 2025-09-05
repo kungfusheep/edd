@@ -8,6 +8,7 @@ import (
 	"edd/canvas"
 	"edd/rendering"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -33,6 +34,12 @@ func (r *RealRenderer) SetEditState(nodeID int, text string, cursorPos int) {
 	r.editingNodeID = nodeID
 	r.editText = text
 	r.cursorPos = cursorPos
+	
+	// Debug log
+	if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "SetEditState: nodeID=%d, text='%s', cursorPos=%d\n", nodeID, text, cursorPos)
+		f.Close()
+	}
 }
 
 // GetEditingNodeID returns the node being edited
@@ -99,6 +106,14 @@ type NodePositions struct {
 
 // Render implements the core.Renderer interface for TUI
 func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
+	// If we're editing a node, we need to use RenderWithPositions to handle edit state
+	// The mainRenderer doesn't support editing text display
+	if r.editingNodeID >= 0 {
+		positions, output, err := r.RenderWithPositions(diagram)
+		_ = positions // Will be used by TUI for jump labels
+		return output, err
+	}
+	
 	// Use the main renderer which properly handles colors and diagram types
 	if r.mainRenderer != nil {
 		return r.mainRenderer.Render(diagram)
@@ -299,17 +314,39 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 
 // renderSequenceWithPositions renders a sequence diagram and returns positions
 func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*NodePositions, string, error) {
+	// If we're editing, create a copy of the diagram with the edited text
+	renderDiagram := diagram
+	if r.editingNodeID >= 0 {
+		// Make a shallow copy of the diagram
+		tempDiagram := *diagram
+		// Make a copy of the nodes slice
+		tempNodes := make([]core.Node, len(diagram.Nodes))
+		copy(tempNodes, diagram.Nodes)
+		tempDiagram.Nodes = tempNodes
+		
+		// Update the text of the node being edited
+		for i := range tempDiagram.Nodes {
+			if tempDiagram.Nodes[i].ID == r.editingNodeID {
+				// Replace the node's text with the edit buffer text
+				lines := strings.Split(r.editText, "\n")
+				tempDiagram.Nodes[i].Text = lines
+				break
+			}
+		}
+		renderDiagram = &tempDiagram
+	}
+	
 	// Create sequence renderer
 	seqRenderer := rendering.NewSequenceRenderer(r.capabilities)
 	
 	// Get bounds
-	width, height := seqRenderer.GetBounds(diagram)
+	width, height := seqRenderer.GetBounds(renderDiagram)
 	if width <= 0 || height <= 0 {
 		return nil, "", fmt.Errorf("invalid bounds: %dx%d", width, height)
 	}
 	
 	// Check if we need color support
-	needsColor := rendering.HasColorHints(diagram)
+	needsColor := rendering.HasColorHints(renderDiagram)
 	
 	// Create appropriate canvas
 	var c canvas.Canvas
@@ -321,8 +358,8 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 		c = canvas.NewMatrixCanvas(width, height)
 	}
 	
-	// Render the sequence diagram
-	if err := seqRenderer.RenderToCanvas(diagram, c); err != nil {
+	// Render the sequence diagram (with edited text if applicable)
+	if err := seqRenderer.RenderToCanvas(renderDiagram, c); err != nil {
 		return nil, "", fmt.Errorf("failed to render sequence diagram: %w", err)
 	}
 	
@@ -455,37 +492,28 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, nodeRenderer *canvas.No
 	style := canvas.NodeStyles["sharp"] // Use sharp style for editing
 	drawSimpleBox(c, node, style)
 	
-	// Draw text with cursor if editing
-	if isEditing {
-		// Draw the edit text with cursor, handling multi-line
-		// Split text by newlines
-		lines := strings.Split(editText, "\n")
+	// Draw the edit text with cursor, handling multi-line
+	// Split text by newlines
+	// Debug log
+	if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "renderNodeWithEdit: nodeID=%d, editText='%s', cursorPos=%d\n", node.ID, editText, cursorPos)
+		f.Close()
+	}
+	lines := strings.Split(editText, "\n")
+	
+	for lineIdx, line := range lines {
+		y := node.Y + 1 + lineIdx
+		x := node.X + 2
 		
-		for lineIdx, line := range lines {
-			y := node.Y + 1 + lineIdx
-			x := node.X + 2
-			
-			// Don't draw lines outside the box
-			if y >= node.Y+node.Height-1 {
-				break
-			}
-			
-			// Draw each character of this line
-			for i, ch := range line {
-				if x+i < node.X+node.Width-2 {
-					c.Set(core.Point{X: x + i, Y: y}, ch)
-				}
-			}
+		// Don't draw lines outside the box
+		if y >= node.Y+node.Height-1 {
+			break
 		}
-	} else {
-		// Draw normal text
-		for i, line := range node.Text {
-			y := node.Y + 1 + i
-			x := node.X + 2
-			for j, ch := range line {
-				if x+j < node.X+node.Width-2 {
-					c.Set(core.Point{X: x + j, Y: y}, ch)
-				}
+		
+		// Draw each character of this line
+		for i, ch := range line {
+			if x+i < node.X+node.Width-2 {
+				c.Set(core.Point{X: x + i, Y: y}, ch)
 			}
 		}
 	}
