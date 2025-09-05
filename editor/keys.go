@@ -11,6 +11,12 @@ import (
 
 // handleNormalKey processes keys in normal mode
 func (e *TUIEditor) handleNormalKey(key rune) bool {
+	// Debug logging
+	if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "Normal mode key pressed: %c (%d), current diagram type: %s\n", key, key, e.diagram.Type)
+		f.Close()
+	}
+	
 	switch key {
 	case 'q', 3: // q or Ctrl+C to quit
 		return true
@@ -71,6 +77,32 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'j': // Toggle JSON view
 		e.SetMode(ModeJSON)
 		e.jsonScrollOffset = 0  // Reset scroll when entering JSON mode
+		
+	case 't': // Toggle diagram type
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "t key matched! Current type: %s\n", e.diagram.Type)
+			f.Close()
+		}
+		
+		e.history.SaveState(e.diagram)  // Save current state for undo
+		// Handle empty type as "box" (default)
+		currentType := e.diagram.Type
+		if currentType == "" {
+			currentType = "box"
+		}
+		
+		if currentType == "sequence" {
+			e.diagram.Type = "box"
+		} else {
+			e.diagram.Type = "sequence"
+		}
+		
+		// Debug log after change
+		if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "After toggle, new type: %s\n", e.diagram.Type)
+			f.Close()
+		}
 		
 	case 'u': // Undo
 		e.Undo()

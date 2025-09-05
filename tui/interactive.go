@@ -1058,6 +1058,8 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		tui.StartHintEdit()
 	case 'j': // JSON view
 		tui.SetMode(editor.ModeJSON)
+	case 't': // Toggle diagram type
+		tui.HandleKey('t')  // Delegate to the editor's handler
 	case 'u': // Undo
 		tui.Undo()
 	case 18: // Ctrl+R for redo

@@ -4,6 +4,7 @@ import (
 	"edd/core"
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 )
@@ -54,7 +55,7 @@ type TUIEditor struct {
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 	editor := &TUIEditor{
-		diagram:            &core.Diagram{},
+		diagram:            &core.Diagram{Type: "box"},  // Default to box diagram
 		renderer:           renderer,
 		mode:               ModeNormal,
 		selected:           -1,
@@ -189,6 +190,12 @@ func (e *TUIEditor) GetState() TUIState {
 
 // handleKey processes keyboard input
 func (e *TUIEditor) handleKey(key rune) bool {
+	// Debug logging
+	if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "handleKey called: key=%c (%d), mode=%v, jumpLabels=%d\n", key, key, e.mode, len(e.jumpLabels))
+		f.Close()
+	}
+	
 	// Handle jump mode first
 	if len(e.jumpLabels) > 0 {
 		return e.handleJumpKey(key)

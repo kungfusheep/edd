@@ -43,6 +43,7 @@ func GetHelpText() string {
 			Name: "Navigation & View",
 			Commands: []HelpCommand{
 				{"j", "Toggle JSON view"},
+				{"t", "Toggle diagram type (sequence/box)"},
 				{"E", "Edit in external editor"},
 				{"?/h", "Show this help"},
 			},
