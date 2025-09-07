@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -10,13 +10,13 @@ import (
 
 func TestJSONRoundTrip(t *testing.T) {
 	// Create a test diagram
-	original := &core.Diagram{
-		Nodes: []core.Node{
+	original := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A", "Line 2"}},
 			{ID: 2, Text: []string{"Node B"}},
 			{ID: 3, Text: []string{"Node C"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "connects"},
 			{From: 2, To: 3, Label: "flows to"},
 		},
@@ -29,7 +29,7 @@ func TestJSONRoundTrip(t *testing.T) {
 	}
 
 	// Unmarshal back
-	var loaded core.Diagram
+	var loaded diagram.Diagram
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
@@ -83,17 +83,17 @@ func TestTempFileCreation(t *testing.T) {
 func TestDiagramValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		diagram core.Diagram
+		diagram diagram.Diagram
 		wantErr bool
 	}{
 		{
 			name: "valid diagram",
-			diagram: core.Diagram{
-				Nodes: []core.Node{
+			diagram: diagram.Diagram{
+				Nodes: []diagram.Node{
 					{ID: 1, Text: []string{"A"}},
 					{ID: 2, Text: []string{"B"}},
 				},
-				Connections: []core.Connection{
+				Connections: []diagram.Connection{
 					{From: 1, To: 2},
 				},
 			},
@@ -101,8 +101,8 @@ func TestDiagramValidation(t *testing.T) {
 		},
 		{
 			name: "duplicate node IDs",
-			diagram: core.Diagram{
-				Nodes: []core.Node{
+			diagram: diagram.Diagram{
+				Nodes: []diagram.Node{
 					{ID: 1, Text: []string{"A"}},
 					{ID: 1, Text: []string{"B"}}, // Duplicate ID
 				},
@@ -111,11 +111,11 @@ func TestDiagramValidation(t *testing.T) {
 		},
 		{
 			name: "connection references non-existent node",
-			diagram: core.Diagram{
-				Nodes: []core.Node{
+			diagram: diagram.Diagram{
+				Nodes: []diagram.Node{
 					{ID: 1, Text: []string{"A"}},
 				},
-				Connections: []core.Connection{
+				Connections: []diagram.Connection{
 					{From: 1, To: 99}, // Node 99 doesn't exist
 				},
 			},
@@ -123,9 +123,9 @@ func TestDiagramValidation(t *testing.T) {
 		},
 		{
 			name: "empty diagram is valid",
-			diagram: core.Diagram{
-				Nodes:       []core.Node{},
-				Connections: []core.Connection{},
+			diagram: diagram.Diagram{
+				Nodes:       []diagram.Node{},
+				Connections: []diagram.Connection{},
 			},
 			wantErr: false,
 		},
@@ -144,7 +144,7 @@ func TestDiagramValidation(t *testing.T) {
 }
 
 // validateTestDiagram is a test version of the validation logic
-func validateTestDiagram(d *core.Diagram) error {
+func validateTestDiagram(d *diagram.Diagram) error {
 	// Check for duplicate node IDs
 	nodeIDs := make(map[int]bool)
 	for _, node := range d.Nodes {

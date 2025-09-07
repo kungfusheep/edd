@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"strings"
 	"testing"
 )
@@ -11,8 +11,8 @@ func TestMultilineNodeRendering(t *testing.T) {
 	renderer := NewRealRenderer()
 	
 	// Create a diagram with multi-line nodes
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{
 				ID:   1,
 				Text: []string{"Line 1", "Line 2", "Line 3"},
@@ -110,7 +110,7 @@ func TestMultilineEditingAndRendering(t *testing.T) {
 	tui.commitText()
 	
 	// Check the node has 3 lines
-	var node *core.Node
+	var node *diagram.Node
 	for i := range tui.diagram.Nodes {
 		if tui.diagram.Nodes[i].ID == nodeID {
 			node = &tui.diagram.Nodes[i]

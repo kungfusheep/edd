@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 	"fmt"
 )
@@ -29,13 +29,13 @@ func NewDirectPathFinder(strategy RoutingStrategy) *DirectPathFinder {
 }
 
 // FindPath returns a direct path from start to end.
-// The obstacles function is ignored as this finder doesn't avoid obstacles.
-func (d *DirectPathFinder) FindPath(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+// The obstacles function is ignored as this finder doesn't avoid render.
+func (d *DirectPathFinder) FindPath(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	if start == end {
-		return core.Path{Points: []core.Point{start}, Cost: 0}, nil
+		return diagram.Path{Points: []diagram.Point{start}, Cost: 0}, nil
 	}
 	
-	var points []core.Point
+	var points []diagram.Point
 	
 	switch d.strategy {
 	case HorizontalFirst:
@@ -45,7 +45,7 @@ func (d *DirectPathFinder) FindPath(start, end core.Point, obstacles func(core.P
 	case MiddleSplit:
 		points = d.middleSplitPath(start, end)
 	default:
-		return core.Path{}, fmt.Errorf("unknown routing strategy: %v", d.strategy)
+		return diagram.Path{}, fmt.Errorf("unknown routing strategy: %v", d.strategy)
 	}
 	
 	// Calculate cost based on Manhattan distance
@@ -56,11 +56,11 @@ func (d *DirectPathFinder) FindPath(start, end core.Point, obstacles func(core.P
 		cost += DefaultPathCost.TurnCost
 	}
 	
-	return core.Path{Points: points, Cost: cost}, nil
+	return diagram.Path{Points: points, Cost: cost}, nil
 }
 
 // horizontalFirstPath creates a path going horizontal then vertical.
-func (d *DirectPathFinder) horizontalFirstPath(start, end core.Point) []core.Point {
+func (d *DirectPathFinder) horizontalFirstPath(start, end diagram.Point) []diagram.Point {
 	if start.Y == end.Y {
 		// Same row - direct horizontal
 		return d.straightLine(start, end)
@@ -71,12 +71,12 @@ func (d *DirectPathFinder) horizontalFirstPath(start, end core.Point) []core.Poi
 	}
 	
 	// L-shaped path: horizontal then vertical
-	corner := core.Point{X: end.X, Y: start.Y}
-	return []core.Point{start, corner, end}
+	corner := diagram.Point{X: end.X, Y: start.Y}
+	return []diagram.Point{start, corner, end}
 }
 
 // verticalFirstPath creates a path going vertical then horizontal.
-func (d *DirectPathFinder) verticalFirstPath(start, end core.Point) []core.Point {
+func (d *DirectPathFinder) verticalFirstPath(start, end diagram.Point) []diagram.Point {
 	if start.Y == end.Y {
 		// Same row - direct horizontal
 		return d.straightLine(start, end)
@@ -87,12 +87,12 @@ func (d *DirectPathFinder) verticalFirstPath(start, end core.Point) []core.Point
 	}
 	
 	// L-shaped path: vertical then horizontal
-	corner := core.Point{X: start.X, Y: end.Y}
-	return []core.Point{start, corner, end}
+	corner := diagram.Point{X: start.X, Y: end.Y}
+	return []diagram.Point{start, corner, end}
 }
 
 // middleSplitPath creates a path that goes to the midpoint between start and end.
-func (d *DirectPathFinder) middleSplitPath(start, end core.Point) []core.Point {
+func (d *DirectPathFinder) middleSplitPath(start, end diagram.Point) []diagram.Point {
 	if start.Y == end.Y || start.X == end.X {
 		// Already aligned - use straight line
 		return d.straightLine(start, end)
@@ -108,20 +108,20 @@ func (d *DirectPathFinder) middleSplitPath(start, end core.Point) []core.Point {
 	
 	if dx > dy {
 		// Wider than tall - split vertically
-		corner1 := core.Point{X: midX, Y: start.Y}
-		corner2 := core.Point{X: midX, Y: end.Y}
-		return []core.Point{start, corner1, corner2, end}
+		corner1 := diagram.Point{X: midX, Y: start.Y}
+		corner2 := diagram.Point{X: midX, Y: end.Y}
+		return []diagram.Point{start, corner1, corner2, end}
 	} else {
 		// Taller than wide - split horizontally
-		corner1 := core.Point{X: start.X, Y: midY}
-		corner2 := core.Point{X: end.X, Y: midY}
-		return []core.Point{start, corner1, corner2, end}
+		corner1 := diagram.Point{X: start.X, Y: midY}
+		corner2 := diagram.Point{X: end.X, Y: midY}
+		return []diagram.Point{start, corner1, corner2, end}
 	}
 }
 
 // straightLine creates a straight line path between two points.
-func (d *DirectPathFinder) straightLine(start, end core.Point) []core.Point {
-	points := []core.Point{start}
+func (d *DirectPathFinder) straightLine(start, end diagram.Point) []diagram.Point {
+	points := []diagram.Point{start}
 	
 	// Determine direction
 	dx := 0

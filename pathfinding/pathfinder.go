@@ -2,7 +2,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 	"fmt"
 	"math"
@@ -10,7 +10,7 @@ import (
 
 // PathFinder finds paths between points.
 // Re-exported from core package for convenience.
-type PathFinder = core.PathFinder
+type PathFinder = diagram.PathFinder
 
 // PathCost defines the cost model for pathfinding algorithms.
 type PathCost struct {
@@ -40,12 +40,12 @@ var EdgeHuggingPathCost = PathCost{
 }
 
 // ManhattanDistance calculates the Manhattan distance between two points.
-func ManhattanDistance(p1, p2 core.Point) int {
+func ManhattanDistance(p1, p2 diagram.Point) int {
 	return geometry.Abs(p1.X-p2.X) + geometry.Abs(p1.Y-p2.Y)
 }
 
 // EuclideanDistance calculates the Euclidean distance between two points.
-func EuclideanDistance(p1, p2 core.Point) float64 {
+func EuclideanDistance(p1, p2 diagram.Point) float64 {
 	dx := float64(p1.X - p2.X)
 	dy := float64(p1.Y - p2.Y)
 	return math.Sqrt(dx*dx + dy*dy)
@@ -55,34 +55,34 @@ func EuclideanDistance(p1, p2 core.Point) float64 {
 type Direction int
 
 const (
-	North Direction = iota
-	East
-	South
-	West
-	None
+	DirNorth Direction = iota
+	DirEast
+	DirSouth
+	DirWest
+	DirNone
 )
 
 // GetDirection returns the direction from p1 to p2.
-func GetDirection(p1, p2 core.Point) Direction {
+func GetDirection(p1, p2 diagram.Point) Direction {
 	if p1.X == p2.X {
 		if p1.Y < p2.Y {
-			return South
+			return DirSouth
 		} else if p1.Y > p2.Y {
-			return North
+			return DirNorth
 		}
 	} else if p1.Y == p2.Y {
 		if p1.X < p2.X {
-			return East
+			return DirEast
 		} else if p1.X > p2.X {
-			return West
+			return DirWest
 		}
 	}
-	return None
+	return DirNone
 }
 
 // GetNeighbors returns the 4-connected neighbors of a point.
-func GetNeighbors(p core.Point) []core.Point {
-	return []core.Point{
+func GetNeighbors(p diagram.Point) []diagram.Point {
+	return []diagram.Point{
 		{X: p.X, Y: p.Y - 1}, // North
 		{X: p.X + 1, Y: p.Y}, // East
 		{X: p.X, Y: p.Y + 1}, // South
@@ -93,11 +93,11 @@ func GetNeighbors(p core.Point) []core.Point {
 // GetNeighborsSymmetric returns neighbors ordered to promote symmetric paths.
 // When the goal is diagonal from current position, it returns neighbors in an order
 // that explores both axes equally, preventing bias toward one direction.
-func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
+func GetNeighborsSymmetric(p, goal diagram.Point) []diagram.Point {
 	dx := goal.X - p.X
 	dy := goal.Y - p.Y
 	
-	neighbors := []core.Point{
+	neighbors := []diagram.Point{
 		{X: p.X, Y: p.Y - 1}, // North
 		{X: p.X + 1, Y: p.Y}, // East
 		{X: p.X, Y: p.Y + 1}, // South
@@ -108,61 +108,61 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 	// to ensure symmetric exploration
 	if dx != 0 && dy != 0 {
 		// Determine primary directions
-		var primary, secondary []core.Point
+		var primary, secondary []diagram.Point
 		
 		// Prioritize based on which axis has more distance to cover
 		if geometry.Abs(dx) > geometry.Abs(dy) {
 			// Horizontal is primary
 			if dx > 0 {
-				primary = append(primary, core.Point{X: p.X + 1, Y: p.Y}) // East
+				primary = append(primary, diagram.Point{X: p.X + 1, Y: p.Y}) // East
 			} else {
-				primary = append(primary, core.Point{X: p.X - 1, Y: p.Y}) // West
+				primary = append(primary, diagram.Point{X: p.X - 1, Y: p.Y}) // West
 			}
 			if dy > 0 {
-				secondary = append(secondary, core.Point{X: p.X, Y: p.Y + 1}) // South
+				secondary = append(secondary, diagram.Point{X: p.X, Y: p.Y + 1}) // South
 			} else {
-				secondary = append(secondary, core.Point{X: p.X, Y: p.Y - 1}) // North
+				secondary = append(secondary, diagram.Point{X: p.X, Y: p.Y - 1}) // North
 			}
 		} else if geometry.Abs(dy) > geometry.Abs(dx) {
 			// Vertical is primary
 			if dy > 0 {
-				primary = append(primary, core.Point{X: p.X, Y: p.Y + 1}) // South
+				primary = append(primary, diagram.Point{X: p.X, Y: p.Y + 1}) // South
 			} else {
-				primary = append(primary, core.Point{X: p.X, Y: p.Y - 1}) // North
+				primary = append(primary, diagram.Point{X: p.X, Y: p.Y - 1}) // North
 			}
 			if dx > 0 {
-				secondary = append(secondary, core.Point{X: p.X + 1, Y: p.Y}) // East
+				secondary = append(secondary, diagram.Point{X: p.X + 1, Y: p.Y}) // East
 			} else {
-				secondary = append(secondary, core.Point{X: p.X - 1, Y: p.Y}) // West
+				secondary = append(secondary, diagram.Point{X: p.X - 1, Y: p.Y}) // West
 			}
 		} else {
 			// Equal distance on both axes - this is where we need symmetry
 			// For symmetric behavior, we should explore both directions equally
 			// Order based on a consistent rule to ensure determinism
-			var horizontal, vertical core.Point
+			var horizontal, vertical diagram.Point
 			
 			if dx > 0 {
-				horizontal = core.Point{X: p.X + 1, Y: p.Y} // East
+				horizontal = diagram.Point{X: p.X + 1, Y: p.Y} // East
 			} else {
-				horizontal = core.Point{X: p.X - 1, Y: p.Y} // West
+				horizontal = diagram.Point{X: p.X - 1, Y: p.Y} // West
 			}
 			
 			if dy > 0 {
-				vertical = core.Point{X: p.X, Y: p.Y + 1} // South
+				vertical = diagram.Point{X: p.X, Y: p.Y + 1} // South
 			} else {
-				vertical = core.Point{X: p.X, Y: p.Y - 1} // North
+				vertical = diagram.Point{X: p.X, Y: p.Y - 1} // North
 			}
 			
 			// Return both options first, then the opposite directions
 			// This ensures both paths are explored with equal priority
-			return []core.Point{horizontal, vertical,
+			return []diagram.Point{horizontal, vertical,
 				{X: p.X - dx/geometry.Abs(dx), Y: p.Y}, // Opposite horizontal
 				{X: p.X, Y: p.Y - dy/geometry.Abs(dy)},  // Opposite vertical
 			}
 		}
 		
 		// Add opposite directions
-		remaining := []core.Point{}
+		remaining := []diagram.Point{}
 		for _, n := range neighbors {
 			if !containsPoint(primary, n) && !containsPoint(secondary, n) {
 				remaining = append(remaining, n)
@@ -179,7 +179,7 @@ func GetNeighborsSymmetric(p, goal core.Point) []core.Point {
 }
 
 // containsPoint checks if a slice contains a specific point
-func containsPoint(points []core.Point, p core.Point) bool {
+func containsPoint(points []diagram.Point, p diagram.Point) bool {
 	for _, point := range points {
 		if point == p {
 			return true
@@ -189,7 +189,7 @@ func containsPoint(points []core.Point, p core.Point) bool {
 }
 
 // IsAligned checks if three points are aligned horizontally or vertically.
-func IsAligned(p1, p2, p3 core.Point) bool {
+func IsAligned(p1, p2, p3 diagram.Point) bool {
 	// Check horizontal alignment
 	if p1.Y == p2.Y && p2.Y == p3.Y {
 		return true
@@ -202,12 +202,12 @@ func IsAligned(p1, p2, p3 core.Point) bool {
 }
 
 // SimplifyPath removes unnecessary waypoints from a path.
-func SimplifyPath(path core.Path) core.Path {
+func SimplifyPath(path diagram.Path) diagram.Path {
 	if len(path.Points) <= 2 {
 		return path
 	}
 	
-	simplified := []core.Point{path.Points[0]}
+	simplified := []diagram.Point{path.Points[0]}
 	
 	for i := 1; i < len(path.Points)-1; i++ {
 		if !IsAligned(path.Points[i-1], path.Points[i], path.Points[i+1]) {
@@ -218,11 +218,11 @@ func SimplifyPath(path core.Path) core.Path {
 	// Always include the last point
 	simplified = append(simplified, path.Points[len(path.Points)-1])
 	
-	return core.Path{Points: simplified, Cost: path.Cost, Metadata: path.Metadata}
+	return diagram.Path{Points: simplified, Cost: path.Cost, Metadata: path.Metadata}
 }
 
 // OptimizePath performs aggressive path optimization to minimize turns
-func OptimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
+func OptimizePath(path diagram.Path, obstacles func(diagram.Point) bool) diagram.Path {
 	if len(path.Points) <= 2 {
 		return path
 	}
@@ -231,7 +231,7 @@ func OptimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
 	path = SimplifyPath(path)
 	
 	// Try to connect non-adjacent points directly
-	optimized := []core.Point{path.Points[0]}
+	optimized := []diagram.Point{path.Points[0]}
 	i := 0
 	
 	for i < len(path.Points)-1 {
@@ -249,11 +249,11 @@ func OptimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
 		i = furthest
 	}
 	
-	return core.Path{Points: optimized, Cost: path.Cost, Metadata: path.Metadata}
+	return diagram.Path{Points: optimized, Cost: path.Cost, Metadata: path.Metadata}
 }
 
 // canConnectDirectly checks if two points can be connected with a straight line
-func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool {
+func canConnectDirectly(p1, p2 diagram.Point, obstacles func(diagram.Point) bool) bool {
 	// Use Bresenham's line algorithm to check all points on the line
 	dx := geometry.Abs(p2.X - p1.X)
 	dy := geometry.Abs(p2.Y - p1.Y)
@@ -275,7 +275,7 @@ func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool
 		// Vertical line
 		for y != p2.Y {
 			y += yInc
-			if obstacles != nil && obstacles(core.Point{X: x, Y: y}) {
+			if obstacles != nil && obstacles(diagram.Point{X: x, Y: y}) {
 				return false
 			}
 		}
@@ -284,7 +284,7 @@ func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool
 		// Horizontal line
 		for x != p2.X {
 			x += xInc
-			if obstacles != nil && obstacles(core.Point{X: x, Y: y}) {
+			if obstacles != nil && obstacles(diagram.Point{X: x, Y: y}) {
 				return false
 			}
 		}
@@ -296,7 +296,7 @@ func canConnectDirectly(p1, p2 core.Point, obstacles func(core.Point) bool) bool
 }
 
 // PathToString converts a path to a string representation for debugging.
-func PathToString(path core.Path) string {
+func PathToString(path diagram.Path) string {
 	if path.IsEmpty() {
 		return "empty path"
 	}

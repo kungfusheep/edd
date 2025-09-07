@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"sort"
 )
 
@@ -53,8 +53,8 @@ func NewSequenceLayout() *SequenceLayout {
 }
 
 // ComputePositions calculates positions for all elements without modifying the diagram
-func (s *SequenceLayout) ComputePositions(diagram *core.Diagram) *SequencePositions {
-	if diagram == nil || len(diagram.Nodes) == 0 {
+func (s *SequenceLayout) ComputePositions(d *diagram.Diagram) *SequencePositions {
+	if d == nil || len(d.Nodes) == 0 {
 		return &SequencePositions{
 			Participants: make(map[int]ParticipantPosition),
 			Messages:     []MessagePosition{},
@@ -63,11 +63,11 @@ func (s *SequenceLayout) ComputePositions(diagram *core.Diagram) *SequencePositi
 	
 	positions := &SequencePositions{
 		Participants: make(map[int]ParticipantPosition),
-		Messages:     make([]MessagePosition, 0, len(diagram.Connections)),
+		Messages:     make([]MessagePosition, 0, len(d.Connections)),
 	}
 	
 	// Identify participants
-	participantNodes := s.identifyParticipants(diagram)
+	participantNodes := s.identifyParticipants(d)
 	
 	// Compute participant positions
 	x := s.LeftMargin
@@ -97,7 +97,7 @@ func (s *SequenceLayout) ComputePositions(diagram *core.Diagram) *SequencePositi
 	// Compute message positions
 	currentY := s.TopMargin + s.ParticipantHeight + s.MessageSpacing
 	
-	for _, conn := range diagram.Connections {
+	for _, conn := range d.Connections {
 		fromPos, fromOk := positions.Participants[conn.From]
 		toPos, toOk := positions.Participants[conn.To]
 		
@@ -117,10 +117,10 @@ func (s *SequenceLayout) ComputePositions(diagram *core.Diagram) *SequencePositi
 }
 
 // identifyParticipants finds nodes that should be treated as participants
-func (s *SequenceLayout) identifyParticipants(diagram *core.Diagram) []core.Node {
-	var participants []core.Node
+func (s *SequenceLayout) identifyParticipants(d *diagram.Diagram) []diagram.Node {
+	var participants []diagram.Node
 	
-	for _, node := range diagram.Nodes {
+	for _, node := range d.Nodes {
 		// Check if node has participant or actor hint
 		isParticipant := true
 		if node.Hints != nil {
@@ -146,14 +146,14 @@ func (s *SequenceLayout) identifyParticipants(diagram *core.Diagram) []core.Node
 
 // GetDiagramBounds calculates the total bounds needed for the sequence diagram
 // WITHOUT modifying the original diagram
-func (s *SequenceLayout) GetDiagramBounds(diagram *core.Diagram) (width, height int) {
-	if diagram == nil || len(diagram.Nodes) == 0 {
+func (s *SequenceLayout) GetDiagramBounds(d *diagram.Diagram) (width, height int) {
+	if d == nil || len(d.Nodes) == 0 {
 		return 0, 0
 	}
 	
 	// Calculate width based on number of participants
 	numParticipants := 0
-	for _, node := range diagram.Nodes {
+	for _, node := range d.Nodes {
 		isParticipant := true
 		if node.Hints != nil {
 			if nodeType := node.Hints["node-type"]; nodeType != "" && nodeType != "participant" && nodeType != "actor" {
@@ -175,7 +175,7 @@ func (s *SequenceLayout) GetDiagramBounds(diagram *core.Diagram) (width, height 
 	
 	// Calculate height based on number of messages
 	height = s.TopMargin + s.ParticipantHeight
-	height += len(diagram.Connections) * s.MessageSpacing
+	height += len(d.Connections) * s.MessageSpacing
 	height += 10 // Bottom margin
 	
 	return width, height

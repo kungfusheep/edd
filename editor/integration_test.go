@@ -1,20 +1,20 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"strings"
 	"testing"
 )
 
 func TestConnectionDeletionWithRendering(t *testing.T) {
 	// Create a test diagram with connections
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A"}, X: 0, Y: 0, Width: 10, Height: 3},
 			{ID: 2, Text: []string{"Node B"}, X: 20, Y: 0, Width: 10, Height: 3},
 			{ID: 3, Text: []string{"Node C"}, X: 10, Y: 10, Width: 10, Height: 3},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "A->B"},
 			{From: 2, To: 3, Label: "B->C"},
 			{From: 1, To: 3, Label: "A->C"},
@@ -84,12 +84,12 @@ func TestConnectionDeletionWithRendering(t *testing.T) {
 
 func TestConnectionLabelPositioning(t *testing.T) {
 	// Test that connection labels are positioned at path midpoints
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}, X: 0, Y: 0, Width: 5, Height: 3},
 			{ID: 2, Text: []string{"B"}, X: 10, Y: 0, Width: 5, Height: 3},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: ""},
 		},
 	}
@@ -113,7 +113,7 @@ func TestConnectionLabelPositioning(t *testing.T) {
 	}
 
 	// Get the path
-	var path core.Path
+	var path diagram.Path
 	for _, p := range paths {
 		path = p
 		break
@@ -133,12 +133,12 @@ func TestConnectionLabelPositioning(t *testing.T) {
 
 func TestConnectionLabelAssignment(t *testing.T) {
 	// Test that connection labels are assigned in delete and edit modes, but not connect mode
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}},
 			{ID: 2, Text: []string{"B"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2},
 		},
 	}

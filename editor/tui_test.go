@@ -1,19 +1,19 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 )
 
 func TestConnectionDeletion(t *testing.T) {
 	// Create a test diagram
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A"}},
 			{ID: 2, Text: []string{"Node B"}},
 			{ID: 3, Text: []string{"Node C"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "A->B"},
 			{From: 2, To: 3, Label: "B->C"},
 			{From: 1, To: 3, Label: "A->C"},
@@ -85,12 +85,12 @@ func TestConnectionDeletion(t *testing.T) {
 
 func TestConnectionDeletionFullFlow(t *testing.T) {
 	// Test the full key sequence: d -> connection_label
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}},
 			{ID: 2, Text: []string{"B"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "test"},
 		},
 	}
@@ -144,12 +144,12 @@ func TestConnectionDeletionFullFlow(t *testing.T) {
 
 func TestNodeDeletionStillWorks(t *testing.T) {
 	// Ensure node deletion still works after our changes
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A"}},
 			{ID: 2, Text: []string{"Node B"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "test"},
 		},
 	}

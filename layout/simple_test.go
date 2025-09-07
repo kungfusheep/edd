@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"testing"
 	"time"
@@ -13,8 +13,8 @@ func TestSimpleLayout_BasicCorrectness(t *testing.T) {
 	validator := NewTestValidator(t)
 	
 	t.Run("Empty graph", func(t *testing.T) {
-		nodes := []core.Node{}
-		connections := []core.Connection{}
+		nodes := []diagram.Node{}
+		connections := []diagram.Connection{}
 		
 		result, err := layout.Layout(nodes, connections)
 		if err != nil {
@@ -26,10 +26,10 @@ func TestSimpleLayout_BasicCorrectness(t *testing.T) {
 	})
 	
 	t.Run("Single node", func(t *testing.T) {
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{"Single Node"}},
 		}
-		connections := []core.Connection{}
+		connections := []diagram.Connection{}
 		
 		result, err := layout.Layout(nodes, connections)
 		if err != nil {
@@ -109,7 +109,7 @@ func TestSimpleLayout_TextSizeHandling(t *testing.T) {
 	
 	t.Run("Text size variations", func(t *testing.T) {
 		nodes := GenerateTextSizeVariations()
-		connections := []core.Connection{} // No connections
+		connections := []diagram.Connection{} // No connections
 		
 		result, err := layout.Layout(nodes, connections)
 		if err != nil {
@@ -133,10 +133,10 @@ func TestSimpleLayout_TextSizeHandling(t *testing.T) {
 			longText += "X"
 		}
 		
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{longText}},
 		}
-		connections := []core.Connection{}
+		connections := []diagram.Connection{}
 		
 		result, err := layout.Layout(nodes, connections)
 		if err != nil {
@@ -155,10 +155,10 @@ func TestSimpleLayout_TextSizeHandling(t *testing.T) {
 			lines[i] = "Line"
 		}
 		
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: lines},
 		}
-		connections := []core.Connection{}
+		connections := []diagram.Connection{}
 		
 		result, err := layout.Layout(nodes, connections)
 		if err != nil {
@@ -247,11 +247,11 @@ func TestSimpleLayout_EdgeCases(t *testing.T) {
 	validator := NewTestValidator(t)
 	
 	t.Run("Self loops", func(t *testing.T) {
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{"A"}},
 			{ID: 1, Text: []string{"B"}},
 		}
-		connections := []core.Connection{
+		connections := []diagram.Connection{
 			{From: 0, To: 0}, // Self loop
 			{From: 0, To: 1},
 			{From: 1, To: 1}, // Another self loop
@@ -266,11 +266,11 @@ func TestSimpleLayout_EdgeCases(t *testing.T) {
 	})
 	
 	t.Run("Duplicate connections", func(t *testing.T) {
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{"A"}},
 			{ID: 1, Text: []string{"B"}},
 		}
-		connections := []core.Connection{
+		connections := []diagram.Connection{
 			{From: 0, To: 1},
 			{From: 0, To: 1}, // Duplicate
 			{From: 0, To: 1}, // Another duplicate
@@ -287,12 +287,12 @@ func TestSimpleLayout_EdgeCases(t *testing.T) {
 	})
 	
 	t.Run("Bidirectional connections", func(t *testing.T) {
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{"A"}},
 			{ID: 1, Text: []string{"B"}},
 			{ID: 2, Text: []string{"C"}},
 		}
-		connections := []core.Connection{
+		connections := []diagram.Connection{
 			{From: 0, To: 1},
 			{From: 1, To: 0}, // Reverse connection
 			{From: 1, To: 2},
@@ -308,11 +308,11 @@ func TestSimpleLayout_EdgeCases(t *testing.T) {
 	})
 	
 	t.Run("Invalid node references", func(t *testing.T) {
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{"A"}},
 			{ID: 1, Text: []string{"B"}},
 		}
-		connections := []core.Connection{
+		connections := []diagram.Connection{
 			{From: 0, To: 1},
 			{From: 0, To: 99}, // Non-existent node
 			{From: 99, To: 1}, // Non-existent source
@@ -326,13 +326,13 @@ func TestSimpleLayout_EdgeCases(t *testing.T) {
 	})
 	
 	t.Run("Orphaned nodes", func(t *testing.T) {
-		nodes := []core.Node{
+		nodes := []diagram.Node{
 			{ID: 0, Text: []string{"Connected A"}},
 			{ID: 1, Text: []string{"Connected B"}},
 			{ID: 2, Text: []string{"Orphan 1"}},
 			{ID: 3, Text: []string{"Orphan 2"}},
 		}
-		connections := []core.Connection{
+		connections := []diagram.Connection{
 			{From: 0, To: 1},
 		}
 		
@@ -356,38 +356,38 @@ func TestSimpleLayout_Determinism(t *testing.T) {
 	
 	testCases := []struct {
 		name string
-		nodes []core.Node
-		connections []core.Connection
+		nodes []diagram.Node
+		connections []diagram.Connection
 	}{
 		{
 			name: "Simple chain",
-			nodes: func() []core.Node {
+			nodes: func() []diagram.Node {
 				n, _ := GenerateLinearChain(10)
 				return n
 			}(),
-			connections: func() []core.Connection {
+			connections: func() []diagram.Connection {
 				_, c := GenerateLinearChain(10)
 				return c
 			}(),
 		},
 		{
 			name: "Complex tree",
-			nodes: func() []core.Node {
+			nodes: func() []diagram.Node {
 				n, _ := GenerateTree(4, 3)
 				return n
 			}(),
-			connections: func() []core.Connection {
+			connections: func() []diagram.Connection {
 				_, c := GenerateTree(4, 3)
 				return c
 			}(),
 		},
 		{
 			name: "Random DAG",
-			nodes: func() []core.Node {
+			nodes: func() []diagram.Node {
 				n, _ := GenerateRandomDAG(20, 0.3)
 				return n
 			}(),
-			connections: func() []core.Connection {
+			connections: func() []diagram.Connection {
 				_, c := GenerateRandomDAG(20, 0.3)
 				return c
 			}(),
@@ -408,17 +408,17 @@ func TestSimpleLayout_Performance(t *testing.T) {
 	
 	testCases := []struct {
 		name string
-		nodes []core.Node
-		connections []core.Connection
+		nodes []diagram.Node
+		connections []diagram.Connection
 		maxDuration time.Duration
 	}{
 		{
 			name: "Small graph (10 nodes)",
-			nodes: func() []core.Node {
+			nodes: func() []diagram.Node {
 				n, _ := GenerateRandomDAG(10, 0.3)
 				return n
 			}(),
-			connections: func() []core.Connection {
+			connections: func() []diagram.Connection {
 				_, c := GenerateRandomDAG(10, 0.3)
 				return c
 			}(),
@@ -426,11 +426,11 @@ func TestSimpleLayout_Performance(t *testing.T) {
 		},
 		{
 			name: "Medium graph (100 nodes)",
-			nodes: func() []core.Node {
+			nodes: func() []diagram.Node {
 				n, _ := GenerateRandomDAG(100, 0.1)
 				return n
 			}(),
-			connections: func() []core.Connection {
+			connections: func() []diagram.Connection {
 				_, c := GenerateRandomDAG(100, 0.1)
 				return c
 			}(),
@@ -438,11 +438,11 @@ func TestSimpleLayout_Performance(t *testing.T) {
 		},
 		{
 			name: "Large graph (1000 nodes)",
-			nodes: func() []core.Node {
+			nodes: func() []diagram.Node {
 				n, _ := GenerateLinearChain(1000)
 				return n
 			}(),
-			connections: func() []core.Connection {
+			connections: func() []diagram.Connection {
 				_, c := GenerateLinearChain(1000)
 				return c
 			}(),
@@ -541,7 +541,7 @@ func TestSimpleLayout_DisconnectedComponentSpacing(t *testing.T) {
 	validator := NewTestValidator(t)
 	
 	// Create 3 disconnected chains
-	nodes := []core.Node{
+	nodes := []diagram.Node{
 		// Component 1
 		{ID: 0, Text: []string{"A1"}},
 		{ID: 1, Text: []string{"A2"}},
@@ -552,7 +552,7 @@ func TestSimpleLayout_DisconnectedComponentSpacing(t *testing.T) {
 		{ID: 4, Text: []string{"C1"}},
 		{ID: 5, Text: []string{"C2"}},
 	}
-	connections := []core.Connection{
+	connections := []diagram.Connection{
 		{From: 0, To: 1},
 		{From: 2, To: 3},
 		{From: 4, To: 5},
@@ -601,7 +601,7 @@ func TestSimpleLayout_VerticalDistribution(t *testing.T) {
 	}
 	
 	// Find the second layer (spokes)
-	spokeNodes := make([]core.Node, 0)
+	spokeNodes := make([]diagram.Node, 0)
 	for _, node := range result {
 		if node.ID != 0 {
 			spokeNodes = append(spokeNodes, node)
@@ -657,23 +657,23 @@ func TestSimpleLayout_CompleteBipartiteGraph(t *testing.T) {
 	validator := NewTestValidator(t)
 	
 	// Create K(5,5) - every node in set A connects to every node in set B
-	nodes := make([]core.Node, 10)
-	connections := make([]core.Connection, 0)
+	nodes := make([]diagram.Node, 10)
+	connections := make([]diagram.Connection, 0)
 	
 	// Set A: nodes 0-4
 	for i := 0; i < 5; i++ {
-		nodes[i] = core.Node{ID: i, Text: []string{fmt.Sprintf("A%d", i)}}
+		nodes[i] = diagram.Node{ID: i, Text: []string{fmt.Sprintf("A%d", i)}}
 	}
 	
 	// Set B: nodes 5-9
 	for i := 5; i < 10; i++ {
-		nodes[i] = core.Node{ID: i, Text: []string{fmt.Sprintf("B%d", i-5)}}
+		nodes[i] = diagram.Node{ID: i, Text: []string{fmt.Sprintf("B%d", i-5)}}
 	}
 	
 	// Connect every A to every B
 	for i := 0; i < 5; i++ {
 		for j := 5; j < 10; j++ {
-			connections = append(connections, core.Connection{From: i, To: j})
+			connections = append(connections, diagram.Connection{From: i, To: j})
 		}
 	}
 	
@@ -702,7 +702,7 @@ func TestSimpleLayout_DeepDiamondPattern(t *testing.T) {
 	validator := NewTestValidator(t)
 	
 	// Create 3 connected diamonds
-	nodes := []core.Node{
+	nodes := []diagram.Node{
 		// Diamond 1
 		{ID: 0, Text: []string{"Start"}},
 		{ID: 1, Text: []string{"D1-Left"}},
@@ -718,7 +718,7 @@ func TestSimpleLayout_DeepDiamondPattern(t *testing.T) {
 		{ID: 9, Text: []string{"End"}},
 	}
 	
-	connections := []core.Connection{
+	connections := []diagram.Connection{
 		// Diamond 1
 		{From: 0, To: 1}, {From: 0, To: 2},
 		{From: 1, To: 3}, {From: 2, To: 3},

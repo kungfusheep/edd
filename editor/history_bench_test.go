@@ -1,20 +1,20 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"encoding/json"
 	"testing"
 )
 
 // Create a test diagram with reasonable complexity
-func createTestDiagram(nodes, connections int) *core.Diagram {
-	d := &core.Diagram{
-		Nodes:       make([]core.Node, nodes),
-		Connections: make([]core.Connection, 0, connections),
+func createTestDiagram(nodes, connections int) *diagram.Diagram {
+	d := &diagram.Diagram{
+		Nodes:       make([]diagram.Node, nodes),
+		Connections: make([]diagram.Connection, 0, connections),
 	}
 	
 	for i := 0; i < nodes; i++ {
-		d.Nodes[i] = core.Node{
+		d.Nodes[i] = diagram.Node{
 			ID:   i + 1,
 			Text: []string{"Node " + string(rune('A'+i)), "Description line", "Another line"},
 		}
@@ -22,7 +22,7 @@ func createTestDiagram(nodes, connections int) *core.Diagram {
 	
 	// Create connections between consecutive nodes
 	for i := 0; i < connections && i < nodes-1; i++ {
-		d.Connections = append(d.Connections, core.Connection{
+		d.Connections = append(d.Connections, diagram.Connection{
 			From:  i + 1,
 			To:    i + 2,
 			Label: "connection",
@@ -43,23 +43,23 @@ func BenchmarkHistoryJSON(b *testing.B) {
 		_ = string(data)
 		
 		// Simulate restore
-		var restored core.Diagram
+		var restored diagram.Diagram
 		json.Unmarshal([]byte(data), &restored)
 	}
 }
 
 // Simple deep copy implementation for benchmark
-func cloneDiagram(d *core.Diagram) *core.Diagram {
-	clone := &core.Diagram{
-		Nodes:       make([]core.Node, len(d.Nodes)),
-		Connections: make([]core.Connection, len(d.Connections)),
+func cloneDiagram(d *diagram.Diagram) *diagram.Diagram {
+	clone := &diagram.Diagram{
+		Nodes:       make([]diagram.Node, len(d.Nodes)),
+		Connections: make([]diagram.Connection, len(d.Connections)),
 	}
 	
 	// Deep copy nodes
 	for i, node := range d.Nodes {
 		textCopy := make([]string, len(node.Text))
 		copy(textCopy, node.Text)
-		clone.Nodes[i] = core.Node{
+		clone.Nodes[i] = diagram.Node{
 			ID:     node.ID,
 			Text:   textCopy,
 			X:      node.X,
@@ -100,7 +100,7 @@ func BenchmarkHistoryJSONAllocs(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		data, _ := json.Marshal(diagram)
-		var restored core.Diagram
+		var restored diagram.Diagram
 		json.Unmarshal(data, &restored)
 	}
 }
@@ -134,7 +134,7 @@ func BenchmarkHistoryScaling(b *testing.B) {
 		b.Run("JSON/"+size.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				data, _ := json.Marshal(diagram)
-				var restored core.Diagram
+				var restored diagram.Diagram
 				json.Unmarshal(data, &restored)
 			}
 		})

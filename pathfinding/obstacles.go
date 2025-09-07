@@ -1,12 +1,12 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 )
 
 // ObstacleChecker is a function that returns true if a point is blocked.
-type ObstacleChecker func(core.Point) bool
+type ObstacleChecker func(diagram.Point) bool
 
 // RectangleObstacle represents a rectangular obstacle (like a node).
 type RectangleObstacle struct {
@@ -16,7 +16,7 @@ type RectangleObstacle struct {
 }
 
 // Contains checks if a point is inside the rectangle (including padding).
-func (r RectangleObstacle) Contains(p core.Point) bool {
+func (r RectangleObstacle) Contains(p diagram.Point) bool {
 	return p.X >= r.X-r.Padding &&
 		p.X < r.X+r.Width+r.Padding &&
 		p.Y >= r.Y-r.Padding &&
@@ -24,7 +24,7 @@ func (r RectangleObstacle) Contains(p core.Point) bool {
 }
 
 // CreateNodeObstacleChecker creates an obstacle checker for a set of nodes.
-func CreateNodeObstacleChecker(nodes []core.Node, padding int) ObstacleChecker {
+func CreateNodeObstacleChecker(nodes []diagram.Node, padding int) ObstacleChecker {
 	rectangles := make([]RectangleObstacle, len(nodes))
 	for i, node := range nodes {
 		rectangles[i] = RectangleObstacle{
@@ -36,7 +36,7 @@ func CreateNodeObstacleChecker(nodes []core.Node, padding int) ObstacleChecker {
 		}
 	}
 	
-	return func(p core.Point) bool {
+	return func(p diagram.Point) bool {
 		for _, rect := range rectangles {
 			if rect.Contains(p) {
 				return true
@@ -47,8 +47,8 @@ func CreateNodeObstacleChecker(nodes []core.Node, padding int) ObstacleChecker {
 }
 
 // CreateBoundsObstacleChecker creates an obstacle checker that blocks points outside bounds.
-func CreateBoundsObstacleChecker(bounds core.Bounds) ObstacleChecker {
-	return func(p core.Point) bool {
+func CreateBoundsObstacleChecker(bounds diagram.Bounds) ObstacleChecker {
+	return func(p diagram.Point) bool {
 		return p.X < bounds.Min.X || p.X >= bounds.Max.X ||
 			p.Y < bounds.Min.Y || p.Y >= bounds.Max.Y
 	}
@@ -56,7 +56,7 @@ func CreateBoundsObstacleChecker(bounds core.Bounds) ObstacleChecker {
 
 // CombineObstacleCheckers combines multiple obstacle checkers with OR logic.
 func CombineObstacleCheckers(checkers ...ObstacleChecker) ObstacleChecker {
-	return func(p core.Point) bool {
+	return func(p diagram.Point) bool {
 		for _, checker := range checkers {
 			if checker(p) {
 				return true
@@ -68,12 +68,12 @@ func CombineObstacleCheckers(checkers ...ObstacleChecker) ObstacleChecker {
 
 // PathObstacle represents an existing path that new paths should avoid crossing.
 type PathObstacle struct {
-	Points    []core.Point
+	Points    []diagram.Point
 	Thickness int // How many pixels wide the path is
 }
 
 // Contains checks if a point intersects with the path.
-func (p PathObstacle) Contains(point core.Point) bool {
+func (p PathObstacle) Contains(point diagram.Point) bool {
 	// Check if point is on any segment of the path
 	for i := 0; i < len(p.Points)-1; i++ {
 		if p.isPointOnSegment(point, p.Points[i], p.Points[i+1]) {
@@ -84,7 +84,7 @@ func (p PathObstacle) Contains(point core.Point) bool {
 }
 
 // isPointOnSegment checks if a point is on a line segment (with thickness).
-func (p PathObstacle) isPointOnSegment(point, start, end core.Point) bool {
+func (p PathObstacle) isPointOnSegment(point, start, end diagram.Point) bool {
 	// For simplicity, check if point is within thickness distance of the line
 	// This is a simplified check - for production, use proper line distance calculation
 	
@@ -118,7 +118,7 @@ func (p PathObstacle) isPointOnSegment(point, start, end core.Point) bool {
 }
 
 // CreatePathObstacleChecker creates an obstacle checker for existing paths.
-func CreatePathObstacleChecker(paths []core.Path, thickness int) ObstacleChecker {
+func CreatePathObstacleChecker(paths []diagram.Path, thickness int) ObstacleChecker {
 	pathObstacles := make([]PathObstacle, len(paths))
 	for i, path := range paths {
 		pathObstacles[i] = PathObstacle{
@@ -127,7 +127,7 @@ func CreatePathObstacleChecker(paths []core.Path, thickness int) ObstacleChecker
 		}
 	}
 	
-	return func(p core.Point) bool {
+	return func(p diagram.Point) bool {
 		for _, obstacle := range pathObstacles {
 			if obstacle.Contains(p) {
 				return true
@@ -139,7 +139,7 @@ func CreatePathObstacleChecker(paths []core.Path, thickness int) ObstacleChecker
 
 // Region represents a rectangular area that can be marked as obstacle or preferred.
 type Region struct {
-	Bounds     core.Bounds
+	Bounds     diagram.Bounds
 	IsObstacle bool     // If true, region blocks paths
 	Cost       int      // Additional cost for passing through (if not obstacle)
 }
@@ -153,7 +153,7 @@ func CreateRegionObstacleChecker(regions []Region) ObstacleChecker {
 		}
 	}
 	
-	return func(p core.Point) bool {
+	return func(p diagram.Point) bool {
 		for _, region := range obstacleRegions {
 			if p.X >= region.Bounds.Min.X && p.X < region.Bounds.Max.X &&
 				p.Y >= region.Bounds.Min.Y && p.Y < region.Bounds.Max.Y {
@@ -165,7 +165,7 @@ func CreateRegionObstacleChecker(regions []Region) ObstacleChecker {
 }
 
 // GetRegionCost returns the additional cost for a point based on regions.
-func GetRegionCost(p core.Point, regions []Region) int {
+func GetRegionCost(p diagram.Point, regions []Region) int {
 	cost := 0
 	for _, region := range regions {
 		if !region.IsObstacle &&

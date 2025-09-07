@@ -1,12 +1,10 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/layout"
 	"edd/pathfinding"
-	"edd/connections"
-	"edd/canvas"
-	"edd/rendering"
+	"edd/render"
 	"fmt"
 	"os"
 	"strings"
@@ -14,14 +12,14 @@ import (
 
 // RealRenderer wraps our actual modular renderer for the TUI
 type RealRenderer struct {
-	mainRenderer *rendering.Renderer  // The actual refactored renderer
-	layout     core.LayoutEngine
-	pathfinder core.PathFinder
-	router     *connections.Router
-	capabilities canvas.TerminalCapabilities
-	pathRenderer *canvas.PathRenderer
-	nodeRenderer *canvas.NodeRenderer
-	labelRenderer *canvas.LabelRenderer
+	mainRenderer *render.Renderer  // The actual refactored renderer
+	layout     diagram.LayoutEngine
+	pathfinder diagram.PathFinder
+	router     *pathfinding.Router
+	capabilities render.TerminalCapabilities
+	pathRenderer *render.PathRenderer
+	nodeRenderer *render.NodeRenderer
+	labelRenderer *render.LabelRenderer
 	
 	// Edit state for rendering cursor in nodes
 	editingNodeID int
@@ -60,7 +58,7 @@ func (r *RealRenderer) GetCursorPos() int {
 // NewRealRenderer creates a renderer using our actual modules
 func NewRealRenderer() *RealRenderer {
 	// Use the actual refactored renderer that supports colors and proper separation
-	mainRenderer := rendering.NewRenderer()
+	mainRenderer := render.NewRenderer()
 	
 	// Keep the old structure for compatibility but delegate to the real renderer
 	// Use simple layout
@@ -76,11 +74,11 @@ func NewRealRenderer() *RealRenderer {
 	cachedPathfinder := pathfinding.NewCachedPathFinder(pathfinder, 100)
 	
 	// Create router
-	router := connections.NewRouter(cachedPathfinder)
+	router := pathfinding.NewRouter(cachedPathfinder)
 	
 	// Terminal capabilities
-	caps := canvas.TerminalCapabilities{
-		UnicodeLevel: canvas.UnicodeFull,
+	caps := render.TerminalCapabilities{
+		UnicodeLevel: render.UnicodeFull,
 		SupportsColor: true,
 	}
 	
@@ -90,56 +88,56 @@ func NewRealRenderer() *RealRenderer {
 		pathfinder:    cachedPathfinder,
 		router:        router,
 		capabilities:  caps,
-		pathRenderer:  canvas.NewPathRenderer(caps),
-		nodeRenderer:  canvas.NewNodeRenderer(caps),
-		labelRenderer: canvas.NewLabelRenderer(),
+		pathRenderer:  render.NewPathRenderer(caps),
+		nodeRenderer:  render.NewNodeRenderer(caps),
+		labelRenderer: render.NewLabelRenderer(),
 		editingNodeID: -1,
 	}
 }
 
 // NodePositions stores the last rendered node positions and connection paths
 type NodePositions struct {
-	Positions        map[int]core.Point // Node ID -> position
-	ConnectionPaths  map[int]core.Path  // Connection index -> path
-	Offset           core.Point         // Canvas offset used during rendering
+	Positions        map[int]diagram.Point // Node ID -> position
+	ConnectionPaths  map[int]diagram.Path  // Connection index -> path
+	Offset           diagram.Point         // Canvas offset used during rendering
 }
 
-// Render implements the core.Renderer interface for TUI
-func (r *RealRenderer) Render(diagram *core.Diagram) (string, error) {
+// Render implements the diagram.Renderer interface for TUI
+func (r *RealRenderer) Render(d *diagram.Diagram) (string, error) {
 	// If we're editing a node, we need to use RenderWithPositions to handle edit state
 	// The mainRenderer doesn't support editing text display
 	if r.editingNodeID >= 0 {
-		positions, output, err := r.RenderWithPositions(diagram)
+		positions, output, err := r.RenderWithPositions(d)
 		_ = positions // Will be used by TUI for jump labels
 		return output, err
 	}
 	
 	// Use the main renderer which properly handles colors and diagram types
 	if r.mainRenderer != nil {
-		return r.mainRenderer.Render(diagram)
+		return r.mainRenderer.Render(d)
 	}
 	// Fallback to old implementation if needed
-	positions, output, err := r.RenderWithPositions(diagram)
+	positions, output, err := r.RenderWithPositions(d)
 	_ = positions // Will be used by TUI for jump labels
 	return output, err
 }
 
 // RenderWithPositions renders and returns node positions for jump labels
-func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePositions, string, error) {
-	if diagram == nil || len(diagram.Nodes) == 0 {
-		return &NodePositions{Positions: make(map[int]core.Point)}, "", nil
+func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, string, error) {
+	if d == nil || len(d.Nodes) == 0 {
+		return &NodePositions{Positions: make(map[int]diagram.Point)}, "", nil
 	}
 	
 	// Check if this is a sequence diagram
-	if diagram.Type == "sequence" {
-		return r.renderSequenceWithPositions(diagram)
+	if d.Type == "sequence" {
+		return r.renderSequenceWithPositions(d)
 	}
 	
 	// Calculate node dimensions
-	nodes := calculateNodeDimensions(diagram.Nodes)
+	nodes := calculateNodeDimensions(d.Nodes)
 	
 	// Layout
-	layoutNodes, err := r.layout.Layout(nodes, diagram.Connections)
+	layoutNodes, err := r.layout.Layout(nodes, d.Connections)
 	
 	// After layout, adjust dimensions for editing node if needed
 	if r.editingNodeID >= 0 {
@@ -174,7 +172,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	// Route connections
-	paths, err := r.router.RouteConnections(diagram.Connections, layoutNodes)
+	paths, err := r.router.RouteConnections(d.Connections, layoutNodes)
 	if err != nil {
 		return nil, "", fmt.Errorf("routing failed: %w", err)
 	}
@@ -197,7 +195,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 		}
 	}
 	if !hasColors {
-		for _, conn := range diagram.Connections {
+		for _, conn := range d.Connections {
 			if conn.Hints != nil {
 				if _, hasColor := conn.Hints["color"]; hasColor {
 					hasColors = true
@@ -212,13 +210,13 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	// Create appropriate canvas type
-	var c canvas.Canvas
-	var coloredCanvas *canvas.ColoredMatrixCanvas
+	var c render.Canvas
+	var coloredCanvas *render.ColoredMatrixCanvas
 	if hasColors {
-		coloredCanvas = canvas.NewColoredMatrixCanvas(bounds.Width(), bounds.Height())
+		coloredCanvas = render.NewColoredMatrixCanvas(bounds.Width(), bounds.Height())
 		c = coloredCanvas
 	} else {
-		c = canvas.NewMatrixCanvas(bounds.Width(), bounds.Height())
+		c = render.NewMatrixCanvas(bounds.Width(), bounds.Height())
 	}
 	
 	// Create offset canvas for negative coordinates
@@ -226,13 +224,13 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	
 	// Track node positions and connection paths (adjusted for canvas offset)
 	positions := &NodePositions{
-		Positions:       make(map[int]core.Point),
-		ConnectionPaths: make(map[int]core.Path),
+		Positions:       make(map[int]diagram.Point),
+		ConnectionPaths: make(map[int]diagram.Path),
 		Offset:          bounds.Min,
 	}
 	for _, node := range layoutNodes {
 		// Store the canvas-relative position (after offset adjustment)
-		positions.Positions[node.ID] = core.Point{
+		positions.Positions[node.ID] = diagram.Point{
 			X: node.X - bounds.Min.X,
 			Y: node.Y - bounds.Min.Y,
 		}
@@ -240,11 +238,11 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	
 	// Store connection paths (adjusted for offset)
 	for i, path := range paths {
-		adjustedPath := core.Path{
-			Points: make([]core.Point, len(path.Points)),
+		adjustedPath := diagram.Path{
+			Points: make([]diagram.Point, len(path.Points)),
 		}
 		for j, point := range path.Points {
-			adjustedPath.Points[j] = core.Point{
+			adjustedPath.Points[j] = diagram.Point{
 				X: point.X - bounds.Min.X,
 				Y: point.Y - bounds.Min.Y,
 			}
@@ -271,17 +269,17 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	// Apply arrows to connections
-	arrowConfig := connections.NewArrowConfig()
-	connectionsWithArrows := connections.ApplyArrowConfig(diagram.Connections, paths, arrowConfig)
+	arrowConfig := pathfinding.NewArrowConfig()
+	connectionsWithArrows := pathfinding.ApplyArrowConfig(d.Connections, paths, arrowConfig)
 	
 	// Render connections with hints
 	for i, cwa := range connectionsWithArrows {
-		hasArrow := cwa.ArrowType == connections.ArrowEnd || cwa.ArrowType == connections.ArrowBoth
+		hasArrow := cwa.ArrowType == pathfinding.ArrowEnd || cwa.ArrowType == pathfinding.ArrowBoth
 		
 		// Check if this connection has hints
-		if i < len(diagram.Connections) && diagram.Connections[i].Hints != nil && len(diagram.Connections[i].Hints) > 0 {
+		if i < len(d.Connections) && d.Connections[i].Hints != nil && len(d.Connections[i].Hints) > 0 {
 			// Use RenderPathWithHints to apply visual hints
-			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, diagram.Connections[i].Hints)
+			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, d.Connections[i].Hints)
 		} else {
 			// Render normally
 			r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
@@ -289,9 +287,9 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 	}
 	
 	// Render labels
-	for i, conn := range diagram.Connections {
+	for i, conn := range d.Connections {
 		if conn.Label != "" && i < len(connectionsWithArrows) {
-			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, canvas.LabelMiddle)
+			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, render.LabelMiddle)
 		}
 	}
 	
@@ -302,7 +300,7 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 		output = coloredCanvas.ColoredString()
 	} else {
 		// Regular output
-		if mc, ok := c.(*canvas.MatrixCanvas); ok {
+		if mc, ok := c.(*render.MatrixCanvas); ok {
 			output = mc.String()
 		} else {
 			output = c.String()
@@ -313,15 +311,15 @@ func (r *RealRenderer) RenderWithPositions(diagram *core.Diagram) (*NodePosition
 }
 
 // renderSequenceWithPositions renders a sequence diagram and returns positions
-func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*NodePositions, string, error) {
+func (r *RealRenderer) renderSequenceWithPositions(d *diagram.Diagram) (*NodePositions, string, error) {
 	// If we're editing, create a copy of the diagram with the edited text
-	renderDiagram := diagram
+	renderDiagram := d
 	if r.editingNodeID >= 0 {
 		// Make a shallow copy of the diagram
-		tempDiagram := *diagram
+		tempDiagram := *d
 		// Make a copy of the nodes slice
-		tempNodes := make([]core.Node, len(diagram.Nodes))
-		copy(tempNodes, diagram.Nodes)
+		tempNodes := make([]diagram.Node, len(d.Nodes))
+		copy(tempNodes, d.Nodes)
 		tempDiagram.Nodes = tempNodes
 		
 		// Update the text of the node being edited
@@ -337,7 +335,7 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 	}
 	
 	// Create sequence renderer
-	seqRenderer := rendering.NewSequenceRenderer(r.capabilities)
+	seqRenderer := render.NewSequenceRenderer(r.capabilities)
 	
 	// Get bounds
 	width, height := seqRenderer.GetBounds(renderDiagram)
@@ -346,16 +344,16 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 	}
 	
 	// Check if we need color support
-	needsColor := rendering.HasColorHints(renderDiagram)
+	needsColor := render.HasColorHints(renderDiagram)
 	
 	// Create appropriate canvas
-	var c canvas.Canvas
-	var coloredCanvas *canvas.ColoredMatrixCanvas
+	var c render.Canvas
+	var coloredCanvas *render.ColoredMatrixCanvas
 	if needsColor && r.capabilities.SupportsColor {
-		coloredCanvas = canvas.NewColoredMatrixCanvas(width, height)
+		coloredCanvas = render.NewColoredMatrixCanvas(width, height)
 		c = coloredCanvas
 	} else {
-		c = canvas.NewMatrixCanvas(width, height)
+		c = render.NewMatrixCanvas(width, height)
 	}
 	
 	// Render the sequence diagram (with edited text if applicable)
@@ -365,24 +363,24 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 	
 	// Compute positions for jump labels
 	seqLayout := layout.NewSequenceLayout()
-	positionData := seqLayout.ComputePositions(diagram)
+	positionData := seqLayout.ComputePositions(d)
 	
 	// Collect positions for editor
 	positions := &NodePositions{
-		Positions:       make(map[int]core.Point),
-		ConnectionPaths: make(map[int]core.Path),
+		Positions:       make(map[int]diagram.Point),
+		ConnectionPaths: make(map[int]diagram.Path),
 	}
 	
 	// Add participant positions
 	for nodeID, pos := range positionData.Participants {
-		positions.Positions[nodeID] = core.Point{X: pos.X, Y: pos.Y}
+		positions.Positions[nodeID] = diagram.Point{X: pos.X, Y: pos.Y}
 	}
 	
 	// Add message paths
 	for i, msg := range positionData.Messages {
-		if i < len(diagram.Connections) {
-			positions.ConnectionPaths[i] = core.Path{
-				Points: []core.Point{
+		if i < len(d.Connections) {
+			positions.ConnectionPaths[i] = diagram.Path{
+				Points: []diagram.Point{
 					{X: msg.FromX, Y: msg.Y},
 					{X: msg.ToX, Y: msg.Y},
 				},
@@ -404,8 +402,8 @@ func (r *RealRenderer) renderSequenceWithPositions(diagram *core.Diagram) (*Node
 }
 
 // Helper functions from renderer.go
-func calculateNodeDimensions(nodes []core.Node) []core.Node {
-	result := make([]core.Node, len(nodes))
+func calculateNodeDimensions(nodes []diagram.Node) []diagram.Node {
+	result := make([]diagram.Node, len(nodes))
 	copy(result, nodes)
 	
 	for i := range result {
@@ -426,9 +424,9 @@ func calculateNodeDimensions(nodes []core.Node) []core.Node {
 	return result
 }
 
-func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
+func calculateBounds(nodes []diagram.Node, paths map[int]diagram.Path) diagram.Bounds {
 	if len(nodes) == 0 {
-		return core.Bounds{Min: core.Point{X: 0, Y: 0}, Max: core.Point{X: 80, Y: 24}}
+		return diagram.Bounds{Min: diagram.Point{X: 0, Y: 0}, Max: diagram.Point{X: 80, Y: 24}}
 	}
 	
 	minX, minY := nodes[0].X, nodes[0].Y
@@ -451,36 +449,36 @@ func calculateBounds(nodes []core.Node, paths map[int]core.Path) core.Bounds {
 	}
 	
 	padding := 2
-	return core.Bounds{
-		Min: core.Point{X: minX - padding, Y: minY - padding},
-		Max: core.Point{X: maxX + padding, Y: maxY + padding},
+	return diagram.Bounds{
+		Min: diagram.Point{X: minX - padding, Y: minY - padding},
+		Max: diagram.Point{X: maxX + padding, Y: maxY + padding},
 	}
 }
 
 // drawSimpleBox draws a basic box without any special styling
-func drawSimpleBox(c canvas.Canvas, node core.Node, style canvas.NodeStyle) {
+func drawSimpleBox(c render.Canvas, node diagram.Node, style render.NodeStyle) {
 	// Top border
-	c.Set(core.Point{X: node.X, Y: node.Y}, style.TopLeft)
+	c.Set(diagram.Point{X: node.X, Y: node.Y}, style.TopLeft)
 	for x := node.X + 1; x < node.X + node.Width - 1; x++ {
-		c.Set(core.Point{X: x, Y: node.Y}, style.Horizontal)
+		c.Set(diagram.Point{X: x, Y: node.Y}, style.Horizontal)
 	}
-	c.Set(core.Point{X: node.X + node.Width - 1, Y: node.Y}, style.TopRight)
+	c.Set(diagram.Point{X: node.X + node.Width - 1, Y: node.Y}, style.TopRight)
 	
 	// Side borders
 	for y := node.Y + 1; y < node.Y + node.Height - 1; y++ {
-		c.Set(core.Point{X: node.X, Y: y}, style.Vertical)
-		c.Set(core.Point{X: node.X + node.Width - 1, Y: y}, style.Vertical)
+		c.Set(diagram.Point{X: node.X, Y: y}, style.Vertical)
+		c.Set(diagram.Point{X: node.X + node.Width - 1, Y: y}, style.Vertical)
 	}
 	
 	// Bottom border
-	c.Set(core.Point{X: node.X, Y: node.Y + node.Height - 1}, style.BottomLeft)
+	c.Set(diagram.Point{X: node.X, Y: node.Y + node.Height - 1}, style.BottomLeft)
 	for x := node.X + 1; x < node.X + node.Width - 1; x++ {
-		c.Set(core.Point{X: x, Y: node.Y + node.Height - 1}, style.Horizontal)
+		c.Set(diagram.Point{X: x, Y: node.Y + node.Height - 1}, style.Horizontal)
 	}
-	c.Set(core.Point{X: node.X + node.Width - 1, Y: node.Y + node.Height - 1}, style.BottomRight)
+	c.Set(diagram.Point{X: node.X + node.Width - 1, Y: node.Y + node.Height - 1}, style.BottomRight)
 }
 
-func renderNodeWithEdit(c canvas.Canvas, node core.Node, nodeRenderer *canvas.NodeRenderer, isEditing bool, editText string, cursorPos int) {
+func renderNodeWithEdit(c render.Canvas, node diagram.Node, nodeRenderer *render.NodeRenderer, isEditing bool, editText string, cursorPos int) {
 	// If not editing, use NodeRenderer to draw with styles
 	if !isEditing {
 		nodeRenderer.RenderNode(c, node)
@@ -489,7 +487,7 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, nodeRenderer *canvas.No
 	
 	// When editing, draw a simple box without special styles
 	// (to avoid visual noise during editing)
-	style := canvas.NodeStyles["sharp"] // Use sharp style for editing
+	style := render.NodeStyles["sharp"] // Use sharp style for editing
 	drawSimpleBox(c, node, style)
 	
 	// Draw the edit text with cursor, handling multi-line
@@ -513,7 +511,7 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, nodeRenderer *canvas.No
 		// Draw each character of this line
 		for i, ch := range line {
 			if x+i < node.X+node.Width-2 {
-				c.Set(core.Point{X: x + i, Y: y}, ch)
+				c.Set(diagram.Point{X: x + i, Y: y}, ch)
 			}
 		}
 	}
@@ -521,19 +519,19 @@ func renderNodeWithEdit(c canvas.Canvas, node core.Node, nodeRenderer *canvas.No
 
 // offsetCanvas implementation (from renderer.go)
 type offsetCanvas struct {
-	canvas canvas.Canvas
-	offset core.Point
+	canvas render.Canvas
+	offset diagram.Point
 }
 
-func newOffsetCanvas(c canvas.Canvas, offset core.Point) *offsetCanvas {
+func newOffsetCanvas(c render.Canvas, offset diagram.Point) *offsetCanvas {
 	return &offsetCanvas{
 		canvas: c,
 		offset: offset,
 	}
 }
 
-func (oc *offsetCanvas) Set(p core.Point, char rune) error {
-	translated := core.Point{
+func (oc *offsetCanvas) Set(p diagram.Point, char rune) error {
+	translated := diagram.Point{
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
@@ -541,13 +539,13 @@ func (oc *offsetCanvas) Set(p core.Point, char rune) error {
 }
 
 // SetWithColor sets a character with color if the underlying canvas supports it
-func (oc *offsetCanvas) SetWithColor(p core.Point, char rune, color string) error {
-	translated := core.Point{
+func (oc *offsetCanvas) SetWithColor(p diagram.Point, char rune, color string) error {
+	translated := diagram.Point{
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
 	// Try to set with color if the underlying canvas supports it
-	if coloredCanvas, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+	if coloredCanvas, ok := oc.canvas.(*render.ColoredMatrixCanvas); ok {
 		return coloredCanvas.SetWithColor(translated, char, color)
 	}
 	// Fall back to regular set
@@ -555,21 +553,21 @@ func (oc *offsetCanvas) SetWithColor(p core.Point, char rune, color string) erro
 }
 
 // SetWithColorAndStyle sets a character with color and style if the underlying canvas supports it
-func (oc *offsetCanvas) SetWithColorAndStyle(p core.Point, char rune, color string, style string) error {
-	translated := core.Point{
+func (oc *offsetCanvas) SetWithColorAndStyle(p diagram.Point, char rune, color string, style string) error {
+	translated := diagram.Point{
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
 	// Try to set with color and style if the underlying canvas supports it
-	if coloredCanvas, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+	if coloredCanvas, ok := oc.canvas.(*render.ColoredMatrixCanvas); ok {
 		return coloredCanvas.SetWithColorAndStyle(translated, char, color, style)
 	}
 	// Fall back to regular set with color
 	return oc.SetWithColor(p, char, color)
 }
 
-func (oc *offsetCanvas) Get(p core.Point) rune {
-	translated := core.Point{
+func (oc *offsetCanvas) Get(p diagram.Point) rune {
+	translated := diagram.Point{
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
@@ -589,15 +587,15 @@ func (oc *offsetCanvas) String() string {
 }
 
 func (oc *offsetCanvas) Matrix() [][]rune {
-	if mc, ok := oc.canvas.(*canvas.MatrixCanvas); ok {
+	if mc, ok := oc.canvas.(*render.MatrixCanvas); ok {
 		return mc.Matrix()
 	}
-	if cc, ok := oc.canvas.(*canvas.ColoredMatrixCanvas); ok {
+	if cc, ok := oc.canvas.(*render.ColoredMatrixCanvas); ok {
 		return cc.Matrix()
 	}
 	return nil
 }
 
-func (oc *offsetCanvas) Offset() core.Point {
+func (oc *offsetCanvas) Offset() diagram.Point {
 	return oc.offset
 }

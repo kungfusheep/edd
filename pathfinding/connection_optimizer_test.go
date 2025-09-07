@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 )
 
@@ -11,58 +11,58 @@ func TestConnectionOptimizer_BasicConnections(t *testing.T) {
 	
 	tests := []struct {
 		name     string
-		fromNode *core.Node
-		toNode   *core.Node
-		wantFrom core.Point
-		wantTo   core.Point
+		fromNode *diagram.Node
+		toNode   *diagram.Node
+		wantFrom diagram.Point
+		wantTo   diagram.Point
 		desc     string
 	}{
 		{
 			name: "Horizontal connection (left to right)",
-			fromNode: &core.Node{
+			fromNode: &diagram.Node{
 				ID: 1, X: 10, Y: 10, Width: 10, Height: 5,
 			},
-			toNode: &core.Node{
+			toNode: &diagram.Node{
 				ID: 2, X: 30, Y: 10, Width: 10, Height: 5,
 			},
-			wantFrom: core.Point{X: 20, Y: 12}, // Right side of first node
-			wantTo:   core.Point{X: 29, Y: 12}, // Left side of second node
+			wantFrom: diagram.Point{X: 20, Y: 12}, // Right side of first node
+			wantTo:   diagram.Point{X: 29, Y: 12}, // Left side of second node
 			desc:     "Should connect from right side to left side",
 		},
 		{
 			name: "Vertical connection (top to bottom)",
-			fromNode: &core.Node{
+			fromNode: &diagram.Node{
 				ID: 1, X: 10, Y: 10, Width: 10, Height: 5,
 			},
-			toNode: &core.Node{
+			toNode: &diagram.Node{
 				ID: 2, X: 10, Y: 25, Width: 10, Height: 5,
 			},
-			wantFrom: core.Point{X: 15, Y: 15}, // Bottom of first node
-			wantTo:   core.Point{X: 15, Y: 24}, // Top of second node
+			wantFrom: diagram.Point{X: 15, Y: 15}, // Bottom of first node
+			wantTo:   diagram.Point{X: 15, Y: 24}, // Top of second node
 			desc:     "Should connect from bottom to top",
 		},
 		{
 			name: "Diagonal connection (prefer horizontal)",
-			fromNode: &core.Node{
+			fromNode: &diagram.Node{
 				ID: 1, X: 10, Y: 10, Width: 10, Height: 5,
 			},
-			toNode: &core.Node{
+			toNode: &diagram.Node{
 				ID: 2, X: 30, Y: 20, Width: 10, Height: 5,
 			},
-			wantFrom: core.Point{X: 20, Y: 12}, // Right side (horizontal dominates)
-			wantTo:   core.Point{X: 29, Y: 22}, // Left side
+			wantFrom: diagram.Point{X: 20, Y: 12}, // Right side (horizontal dominates)
+			wantTo:   diagram.Point{X: 29, Y: 22}, // Left side
 			desc:     "Should prefer horizontal when dx > dy",
 		},
 		{
 			name: "Diagonal connection (prefer vertical)",
-			fromNode: &core.Node{
+			fromNode: &diagram.Node{
 				ID: 1, X: 10, Y: 10, Width: 10, Height: 5,
 			},
-			toNode: &core.Node{
+			toNode: &diagram.Node{
 				ID: 2, X: 15, Y: 30, Width: 10, Height: 5,
 			},
-			wantFrom: core.Point{X: 15, Y: 15}, // Bottom (vertical dominates)
-			wantTo:   core.Point{X: 20, Y: 29}, // Top
+			wantFrom: diagram.Point{X: 15, Y: 15}, // Bottom (vertical dominates)
+			wantTo:   diagram.Point{X: 20, Y: 29}, // Top
 			desc:     "Should prefer vertical when dy > dx",
 		},
 	}
@@ -85,7 +85,7 @@ func TestConnectionOptimizer_SelfConnection(t *testing.T) {
 	pathFinder := NewSmartPathFinder(DefaultPathCost)
 	optimizer := NewConnectionOptimizer(pathFinder)
 	
-	node := &core.Node{
+	node := &diagram.Node{
 		ID: 1, X: 10, Y: 10, Width: 10, Height: 6,
 	}
 	
@@ -109,18 +109,18 @@ func TestConnectionOptimizer_SelfConnection(t *testing.T) {
 }
 
 func TestGetConnectionSide(t *testing.T) {
-	node := &core.Node{
+	node := &diagram.Node{
 		ID: 1, X: 10, Y: 10, Width: 10, Height: 10,
 	}
 	
 	tests := []struct {
-		point    core.Point
+		point    diagram.Point
 		wantSide Side
 	}{
-		{core.Point{X: 15, Y: 9}, SideTop},
-		{core.Point{X: 20, Y: 15}, SideRight},
-		{core.Point{X: 15, Y: 20}, SideBottom},
-		{core.Point{X: 9, Y: 15}, SideLeft},
+		{diagram.Point{X: 15, Y: 9}, SideTop},
+		{diagram.Point{X: 20, Y: 15}, SideRight},
+		{diagram.Point{X: 15, Y: 20}, SideBottom},
+		{diagram.Point{X: 9, Y: 15}, SideLeft},
 	}
 	
 	for _, tt := range tests {
@@ -132,7 +132,7 @@ func TestGetConnectionSide(t *testing.T) {
 }
 
 func TestGenerateCandidatePoints(t *testing.T) {
-	node := &core.Node{
+	node := &diagram.Node{
 		ID: 1, X: 10, Y: 10, Width: 5, Height: 5,
 	}
 	
@@ -172,19 +172,19 @@ func TestConnectionOptimizer_WithObstacles(t *testing.T) {
 	optimizer := NewConnectionOptimizer(pathFinder)
 	
 	// Two nodes with an obstacle between them
-	fromNode := &core.Node{
+	fromNode := &diagram.Node{
 		ID: 1, X: 10, Y: 10, Width: 10, Height: 10,
 	}
-	toNode := &core.Node{
+	toNode := &diagram.Node{
 		ID: 2, X: 40, Y: 10, Width: 10, Height: 10,
 	}
 	
 	// Obstacle in the middle
-	obstacle := &core.Node{
+	obstacle := &diagram.Node{
 		ID: 3, X: 25, Y: 10, Width: 10, Height: 10,
 	}
 	
-	obstacles := CreateNodeObstacleChecker([]core.Node{*obstacle}, 1)
+	obstacles := CreateNodeObstacleChecker([]diagram.Node{*obstacle}, 1)
 	
 	from, to := optimizer.OptimizeConnectionPoints(fromNode, toNode, obstacles)
 	

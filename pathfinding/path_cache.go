@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -17,7 +17,7 @@ type PathCacheKey struct {
 // PathCache stores previously computed paths for reuse
 type PathCache struct {
 	mu        sync.RWMutex
-	cache     map[PathCacheKey]core.Path
+	cache     map[PathCacheKey]diagram.Path
 	maxSize   int
 	hits      int64 // Use atomic operations
 	misses    int64 // Use atomic operations
@@ -27,13 +27,13 @@ type PathCache struct {
 // NewPathCache creates a new path cache with the specified maximum size
 func NewPathCache(maxSize int) *PathCache {
 	return &PathCache{
-		cache:   make(map[PathCacheKey]core.Path),
+		cache:   make(map[PathCacheKey]diagram.Path),
 		maxSize: maxSize,
 	}
 }
 
 // Get retrieves a path from the cache if it exists
-func (pc *PathCache) Get(start, end core.Point, obstacleHash uint64) (core.Path, bool) {
+func (pc *PathCache) Get(start, end diagram.Point, obstacleHash uint64) (diagram.Path, bool) {
 	key := PathCacheKey{
 		FromX: start.X, FromY: start.Y,
 		ToX: end.X, ToY: end.Y,
@@ -54,7 +54,7 @@ func (pc *PathCache) Get(start, end core.Point, obstacleHash uint64) (core.Path,
 }
 
 // Put stores a path in the cache
-func (pc *PathCache) Put(start, end core.Point, obstacleHash uint64, path core.Path) {
+func (pc *PathCache) Put(start, end diagram.Point, obstacleHash uint64, path diagram.Path) {
 	key := PathCacheKey{
 		FromX: start.X, FromY: start.Y,
 		ToX: end.X, ToY: end.Y,
@@ -83,7 +83,7 @@ func (pc *PathCache) Clear() {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 	
-	pc.cache = make(map[PathCacheKey]core.Path)
+	pc.cache = make(map[PathCacheKey]diagram.Path)
 	atomic.StoreInt64(&pc.hits, 0)
 	atomic.StoreInt64(&pc.misses, 0)
 	atomic.StoreInt64(&pc.evictions, 0)
@@ -129,7 +129,7 @@ func NewCachedPathFinder(finder PathFinder, cacheSize int) *CachedPathFinder {
 }
 
 // FindPath finds a path, using the cache when possible
-func (cpf *CachedPathFinder) FindPath(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+func (cpf *CachedPathFinder) FindPath(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	// Compute a simple hash of the obstacle function
 	// In production, this would need a more sophisticated approach
 	obstacleHash := cpf.hashObstacles(start, end, obstacles)
@@ -153,7 +153,7 @@ func (cpf *CachedPathFinder) FindPath(start, end core.Point, obstacles func(core
 
 // hashObstacles creates a simple hash of obstacles along the potential path
 // This is a simplified version - in production, you'd want a more robust approach
-func (cpf *CachedPathFinder) hashObstacles(start, end core.Point, obstacles func(core.Point) bool) uint64 {
+func (cpf *CachedPathFinder) hashObstacles(start, end diagram.Point, obstacles func(diagram.Point) bool) uint64 {
 	if obstacles == nil {
 		return 0
 	}
@@ -168,7 +168,7 @@ func (cpf *CachedPathFinder) hashObstacles(start, end core.Point, obstacles func
 	step := max(1, (maxX-minX+maxY-minY)/20) // Sample ~20 points
 	for x := minX; x <= maxX; x += step {
 		for y := minY; y <= maxY; y += step {
-			if obstacles(core.Point{X: x, Y: y}) {
+			if obstacles(diagram.Point{X: x, Y: y}) {
 				// Simple hash combining
 				hash = hash*31 + uint64(x)*7 + uint64(y)*13
 			}
@@ -189,7 +189,7 @@ func (cpf *CachedPathFinder) CacheStats() string {
 }
 
 // FindPathToArea finds a path to a target area, delegating to the underlying pathfinder
-func (cpf *CachedPathFinder) FindPathToArea(start core.Point, targetNode core.Node, obstacles func(core.Point) bool) (core.Path, error) {
+func (cpf *CachedPathFinder) FindPathToArea(start diagram.Point, targetNode diagram.Node, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	// For now, we don't cache area-based paths - delegate directly
 	// In the future, we could cache these too with a different key structure
 	if smartFinder, ok := cpf.finder.(*SmartPathFinder); ok {
@@ -200,7 +200,7 @@ func (cpf *CachedPathFinder) FindPathToArea(start core.Point, targetNode core.No
 	}
 	
 	// Fallback to point-based routing to target center if area routing not supported
-	targetCenter := core.Point{
+	targetCenter := diagram.Point{
 		X: targetNode.X + targetNode.Width/2,
 		Y: targetNode.Y + targetNode.Height/2,
 	}

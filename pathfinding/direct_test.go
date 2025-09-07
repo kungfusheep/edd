@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 )
 
@@ -17,38 +17,38 @@ func TestDirectPathFinder_StraightLines(t *testing.T) {
 	
 	tests := []struct {
 		name     string
-		start    core.Point
-		end      core.Point
+		start    diagram.Point
+		end      diagram.Point
 		expected int // expected number of points
 	}{
 		{
 			name:     "Horizontal line right",
-			start:    core.Point{X: 0, Y: 5},
-			end:      core.Point{X: 10, Y: 5},
+			start:    diagram.Point{X: 0, Y: 5},
+			end:      diagram.Point{X: 10, Y: 5},
 			expected: 11,
 		},
 		{
 			name:     "Horizontal line left",
-			start:    core.Point{X: 10, Y: 5},
-			end:      core.Point{X: 0, Y: 5},
+			start:    diagram.Point{X: 10, Y: 5},
+			end:      diagram.Point{X: 0, Y: 5},
 			expected: 11,
 		},
 		{
 			name:     "Vertical line down",
-			start:    core.Point{X: 5, Y: 0},
-			end:      core.Point{X: 5, Y: 10},
+			start:    diagram.Point{X: 5, Y: 0},
+			end:      diagram.Point{X: 5, Y: 10},
 			expected: 11,
 		},
 		{
 			name:     "Vertical line up",
-			start:    core.Point{X: 5, Y: 10},
-			end:      core.Point{X: 5, Y: 0},
+			start:    diagram.Point{X: 5, Y: 10},
+			end:      diagram.Point{X: 5, Y: 0},
 			expected: 11,
 		},
 		{
 			name:     "Same point",
-			start:    core.Point{X: 5, Y: 5},
-			end:      core.Point{X: 5, Y: 5},
+			start:    diagram.Point{X: 5, Y: 5},
+			end:      diagram.Point{X: 5, Y: 5},
 			expected: 1,
 		},
 	}
@@ -86,38 +86,38 @@ func TestDirectPathFinder_StraightLines(t *testing.T) {
 func TestDirectPathFinder_LShapedPaths(t *testing.T) {
 	tests := []struct {
 		name        string
-		start       core.Point
-		end         core.Point
+		start       diagram.Point
+		end         diagram.Point
 		strategy    RoutingStrategy
-		expectedMid core.Point // expected middle point for L-shaped path
+		expectedMid diagram.Point // expected middle point for L-shaped path
 	}{
 		{
 			name:        "HorizontalFirst - down-right",
-			start:       core.Point{X: 0, Y: 0},
-			end:         core.Point{X: 5, Y: 5},
+			start:       diagram.Point{X: 0, Y: 0},
+			end:         diagram.Point{X: 5, Y: 5},
 			strategy:    HorizontalFirst,
-			expectedMid: core.Point{X: 5, Y: 0}, // horizontal then vertical
+			expectedMid: diagram.Point{X: 5, Y: 0}, // horizontal then vertical
 		},
 		{
 			name:        "VerticalFirst - down-right",
-			start:       core.Point{X: 0, Y: 0},
-			end:         core.Point{X: 5, Y: 5},
+			start:       diagram.Point{X: 0, Y: 0},
+			end:         diagram.Point{X: 5, Y: 5},
 			strategy:    VerticalFirst,
-			expectedMid: core.Point{X: 0, Y: 5}, // vertical then horizontal
+			expectedMid: diagram.Point{X: 0, Y: 5}, // vertical then horizontal
 		},
 		{
 			name:        "HorizontalFirst - up-left",
-			start:       core.Point{X: 10, Y: 10},
-			end:         core.Point{X: 5, Y: 5},
+			start:       diagram.Point{X: 10, Y: 10},
+			end:         diagram.Point{X: 5, Y: 5},
 			strategy:    HorizontalFirst,
-			expectedMid: core.Point{X: 5, Y: 10}, // horizontal then vertical
+			expectedMid: diagram.Point{X: 5, Y: 10}, // horizontal then vertical
 		},
 		{
 			name:        "VerticalFirst - up-left",
-			start:       core.Point{X: 10, Y: 10},
-			end:         core.Point{X: 5, Y: 5},
+			start:       diagram.Point{X: 10, Y: 10},
+			end:         diagram.Point{X: 5, Y: 5},
 			strategy:    VerticalFirst,
-			expectedMid: core.Point{X: 10, Y: 5}, // vertical then horizontal
+			expectedMid: diagram.Point{X: 10, Y: 5}, // vertical then horizontal
 		},
 	}
 	
@@ -154,26 +154,26 @@ func TestDirectPathFinder_MiddleSplit(t *testing.T) {
 	
 	tests := []struct {
 		name   string
-		start  core.Point
-		end    core.Point
+		start  diagram.Point
+		end    diagram.Point
 		points int // expected number of points
 	}{
 		{
 			name:   "Wide rectangle",
-			start:  core.Point{X: 0, Y: 0},
-			end:    core.Point{X: 20, Y: 5},
+			start:  diagram.Point{X: 0, Y: 0},
+			end:    diagram.Point{X: 20, Y: 5},
 			points: 4, // start -> mid-x,start-y -> mid-x,end-y -> end
 		},
 		{
 			name:   "Tall rectangle",
-			start:  core.Point{X: 0, Y: 0},
-			end:    core.Point{X: 5, Y: 20},
+			start:  diagram.Point{X: 0, Y: 0},
+			end:    diagram.Point{X: 5, Y: 20},
 			points: 4, // start -> start-x,mid-y -> end-x,mid-y -> end
 		},
 		{
 			name:   "Square diagonal",
-			start:  core.Point{X: 0, Y: 0},
-			end:    core.Point{X: 10, Y: 10},
+			start:  diagram.Point{X: 0, Y: 0},
+			end:    diagram.Point{X: 10, Y: 10},
 			points: 4, // split horizontally since it's square
 		},
 	}
@@ -196,13 +196,13 @@ func TestDirectPathFinder_MiddleSplit(t *testing.T) {
 func TestSimplifyPath(t *testing.T) {
 	tests := []struct {
 		name     string
-		path     core.Path
+		path     diagram.Path
 		expected int // expected number of points after simplification
 	}{
 		{
 			name: "Straight horizontal line",
-			path: core.Path{
-				Points: []core.Point{
+			path: diagram.Path{
+				Points: []diagram.Point{
 					{X: 0, Y: 0}, {X: 1, Y: 0}, {X: 2, Y: 0}, {X: 3, Y: 0},
 				},
 			},
@@ -210,8 +210,8 @@ func TestSimplifyPath(t *testing.T) {
 		},
 		{
 			name: "L-shaped path",
-			path: core.Path{
-				Points: []core.Point{
+			path: diagram.Path{
+				Points: []diagram.Point{
 					{X: 0, Y: 0}, {X: 1, Y: 0}, {X: 2, Y: 0}, 
 					{X: 2, Y: 1}, {X: 2, Y: 2},
 				},
@@ -220,8 +220,8 @@ func TestSimplifyPath(t *testing.T) {
 		},
 		{
 			name: "Complex path with multiple turns",
-			path: core.Path{
-				Points: []core.Point{
+			path: diagram.Path{
+				Points: []diagram.Point{
 					{X: 0, Y: 0}, {X: 1, Y: 0}, {X: 2, Y: 0}, // horizontal
 					{X: 2, Y: 1}, {X: 2, Y: 2},              // vertical
 					{X: 3, Y: 2}, {X: 4, Y: 2},              // horizontal
@@ -231,8 +231,8 @@ func TestSimplifyPath(t *testing.T) {
 		},
 		{
 			name: "Already simplified",
-			path: core.Path{
-				Points: []core.Point{
+			path: diagram.Path{
+				Points: []diagram.Point{
 					{X: 0, Y: 0}, {X: 5, Y: 0}, {X: 5, Y: 5},
 				},
 			},
@@ -266,15 +266,15 @@ func TestSimplifyPath(t *testing.T) {
 
 func TestManhattanDistance(t *testing.T) {
 	tests := []struct {
-		p1       core.Point
-		p2       core.Point
+		p1       diagram.Point
+		p2       diagram.Point
 		expected int
 	}{
-		{core.Point{0, 0}, core.Point{0, 0}, 0},
-		{core.Point{0, 0}, core.Point{3, 4}, 7},
-		{core.Point{3, 4}, core.Point{0, 0}, 7},
-		{core.Point{-5, -5}, core.Point{5, 5}, 20},
-		{core.Point{10, 0}, core.Point{0, 10}, 20},
+		{diagram.Point{0, 0}, diagram.Point{0, 0}, 0},
+		{diagram.Point{0, 0}, diagram.Point{3, 4}, 7},
+		{diagram.Point{3, 4}, diagram.Point{0, 0}, 7},
+		{diagram.Point{-5, -5}, diagram.Point{5, 5}, 20},
+		{diagram.Point{10, 0}, diagram.Point{0, 10}, 20},
 	}
 	
 	for _, tt := range tests {
@@ -290,16 +290,16 @@ func TestManhattanDistance(t *testing.T) {
 
 func TestGetDirection(t *testing.T) {
 	tests := []struct {
-		p1       core.Point
-		p2       core.Point
+		p1       diagram.Point
+		p2       diagram.Point
 		expected Direction
 	}{
-		{core.Point{5, 5}, core.Point{5, 3}, North},
-		{core.Point{5, 5}, core.Point{7, 5}, East},
-		{core.Point{5, 5}, core.Point{5, 7}, South},
-		{core.Point{5, 5}, core.Point{3, 5}, West},
-		{core.Point{5, 5}, core.Point{5, 5}, None},
-		{core.Point{5, 5}, core.Point{7, 7}, None}, // diagonal
+		{diagram.Point{5, 5}, diagram.Point{5, 3}, North},
+		{diagram.Point{5, 5}, diagram.Point{7, 5}, East},
+		{diagram.Point{5, 5}, diagram.Point{5, 7}, South},
+		{diagram.Point{5, 5}, diagram.Point{3, 5}, West},
+		{diagram.Point{5, 5}, diagram.Point{5, 5}, None},
+		{diagram.Point{5, 5}, diagram.Point{7, 7}, None}, // diagonal
 	}
 	
 	for _, tt := range tests {

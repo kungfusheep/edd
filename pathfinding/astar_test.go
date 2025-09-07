@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"strings"
 	"testing"
 )
@@ -11,36 +11,36 @@ func TestAStarPathFinder_SimplePaths(t *testing.T) {
 	
 	tests := []struct {
 		name      string
-		start     core.Point
-		end       core.Point
+		start     diagram.Point
+		end       diagram.Point
 		obstacles string // ASCII representation of obstacles
 		minLength int    // minimum expected path length
 	}{
 		{
 			name:      "Direct horizontal path",
-			start:     core.Point{0, 0},
-			end:       core.Point{5, 0},
+			start:     diagram.Point{0, 0},
+			end:       diagram.Point{5, 0},
 			obstacles: "",
 			minLength: 6,
 		},
 		{
 			name:      "Direct vertical path",
-			start:     core.Point{0, 0},
-			end:       core.Point{0, 5},
+			start:     diagram.Point{0, 0},
+			end:       diagram.Point{0, 5},
 			obstacles: "",
 			minLength: 6,
 		},
 		{
 			name:      "L-shaped path",
-			start:     core.Point{0, 0},
-			end:       core.Point{5, 5},
+			start:     diagram.Point{0, 0},
+			end:       diagram.Point{5, 5},
 			obstacles: "",
 			minLength: 11,
 		},
 		{
 			name:  "Path around obstacle",
-			start: core.Point{0, 2},
-			end:   core.Point{4, 2},
+			start: diagram.Point{0, 2},
+			end:   diagram.Point{4, 2},
 			obstacles: `
 .....
 .....
@@ -51,8 +51,8 @@ func TestAStarPathFinder_SimplePaths(t *testing.T) {
 		},
 		{
 			name:  "Path through maze",
-			start: core.Point{0, 0},
-			end:   core.Point{4, 4},
+			start: diagram.Point{0, 0},
+			end:   diagram.Point{4, 4},
 			obstacles: `
 .XXX.
 ...X.
@@ -110,28 +110,28 @@ func TestAStarPathFinder_NoPath(t *testing.T) {
 	
 	tests := []struct {
 		name      string
-		start     core.Point
-		end       core.Point
+		start     diagram.Point
+		end       diagram.Point
 		obstacles string
 	}{
 		{
 			name:  "End blocked",
-			start: core.Point{0, 0},
-			end:   core.Point{2, 0},
+			start: diagram.Point{0, 0},
+			end:   diagram.Point{2, 0},
 			obstacles: `
 ..X`,
 		},
 		{
 			name:  "Start blocked",
-			start: core.Point{0, 0},
-			end:   core.Point{2, 0},
+			start: diagram.Point{0, 0},
+			end:   diagram.Point{2, 0},
 			obstacles: `
 X..`,
 		},
 		{
 			name:  "Completely blocked",
-			start: core.Point{0, 0},
-			end:   core.Point{2, 2},
+			start: diagram.Point{0, 0},
+			end:   diagram.Point{2, 2},
 			obstacles: `
 .....
 .XXX.
@@ -167,8 +167,8 @@ func TestAStarPathFinder_CostOptimization(t *testing.T) {
 	// Path from (0,0) to (5,5)
 	// With high turn cost, should prefer fewer turns
 	path, err := finder.FindPath(
-		core.Point{0, 0},
-		core.Point{5, 5},
+		diagram.Point{0, 0},
+		diagram.Point{5, 5},
 		nil,
 	)
 	
@@ -209,14 +209,14 @@ func TestAStarPathFinder_Performance(t *testing.T) {
 		}
 	}
 	
-	obstacles := func(p core.Point) bool {
+	obstacles := func(p diagram.Point) bool {
 		return obstacleSet[PointKey{p.X, p.Y}]
 	}
 	
 	// Find path across large grid
 	path, err := finder.FindPath(
-		core.Point{0, 0},
-		core.Point{95, 95},
+		diagram.Point{0, 0},
+		diagram.Point{95, 95},
 		obstacles,
 	)
 	
@@ -240,7 +240,7 @@ func TestAStarPathFinder_Performance(t *testing.T) {
 
 // parseObstacleMap converts ASCII art to an obstacle function.
 // '.' or ' ' = free, 'X' or '#' = obstacle
-func parseObstacleMap(mapStr string) func(core.Point) bool {
+func parseObstacleMap(mapStr string) func(diagram.Point) bool {
 	lines := strings.Split(strings.TrimSpace(mapStr), "\n")
 	obstacleSet := make(map[PointKey]bool)
 	
@@ -252,7 +252,7 @@ func parseObstacleMap(mapStr string) func(core.Point) bool {
 		}
 	}
 	
-	return func(p core.Point) bool {
+	return func(p diagram.Point) bool {
 		return obstacleSet[PointKey{p.X, p.Y}]
 	}
 }
@@ -271,8 +271,8 @@ func BenchmarkAStar_SmallGrid(b *testing.B) {
 ..........
 ..........`)
 	
-	start := core.Point{0, 0}
-	end := core.Point{9, 9}
+	start := diagram.Point{0, 0}
+	end := diagram.Point{9, 9}
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -291,12 +291,12 @@ func BenchmarkAStar_LargeGrid(b *testing.B) {
 		obstacleSet[PointKey{x, y}] = true
 	}
 	
-	obstacles := func(p core.Point) bool {
+	obstacles := func(p diagram.Point) bool {
 		return obstacleSet[PointKey{p.X, p.Y}]
 	}
 	
-	start := core.Point{0, 0}
-	end := core.Point{99, 99}
+	start := diagram.Point{0, 0}
+	end := diagram.Point{99, 99}
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

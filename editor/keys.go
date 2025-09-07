@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"os"
 	"strings"
@@ -383,7 +383,7 @@ func (e *TUIEditor) executeCommand(cmd string) {
 		
 	case "new":
 		// Clear diagram
-		e.diagram = &core.Diagram{}
+		e.diagram = &diagram.Diagram{}
 		e.selected = -1
 		
 	case "type":
@@ -391,10 +391,10 @@ func (e *TUIEditor) executeCommand(cmd string) {
 		if len(parts) > 1 {
 			switch parts[1] {
 			case "sequence", "seq":
-				e.diagram.Type = string(core.DiagramTypeSequence)
+				e.diagram.Type = string(diagram.DiagramTypeSequence)
 				e.SaveHistory()
 			case "flowchart", "flow", "":
-				e.diagram.Type = string(core.DiagramTypeFlowchart)  // Empty means flowchart
+				e.diagram.Type = string(diagram.DiagramTypeFlowchart)  // Empty means flowchart
 				e.SaveHistory()
 			default:
 				// Unknown type, ignore
@@ -450,7 +450,7 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		
 		// If in continuous connect mode, behavior depends on diagram type
 		if e.continuousConnect {
-			if e.diagram.Type == string(core.DiagramTypeSequence) {
+			if e.diagram.Type == string(diagram.DiagramTypeSequence) {
 				// Sequence diagram: chain connections (TO becomes next FROM)
 				e.selected = nodeID
 				// Jump directly to selecting the next TO node

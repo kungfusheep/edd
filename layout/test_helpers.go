@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -19,7 +19,7 @@ func NewTestValidator(t *testing.T) *TestValidator {
 }
 
 // ValidateNoOverlaps ensures no two nodes occupy the same space.
-func (v *TestValidator) ValidateNoOverlaps(nodes []core.Node) {
+func (v *TestValidator) ValidateNoOverlaps(nodes []diagram.Node) {
 	for i := 0; i < len(nodes); i++ {
 		for j := i + 1; j < len(nodes); j++ {
 			if v.nodesOverlap(nodes[i], nodes[j]) {
@@ -32,7 +32,7 @@ func (v *TestValidator) ValidateNoOverlaps(nodes []core.Node) {
 }
 
 // ValidateSpacing ensures minimum spacing between nodes.
-func (v *TestValidator) ValidateSpacing(nodes []core.Node, minSpacing int) {
+func (v *TestValidator) ValidateSpacing(nodes []diagram.Node, minSpacing int) {
 	for i := 0; i < len(nodes); i++ {
 		for j := i + 1; j < len(nodes); j++ {
 			dist := v.nodeDistance(nodes[i], nodes[j])
@@ -45,7 +45,7 @@ func (v *TestValidator) ValidateSpacing(nodes []core.Node, minSpacing int) {
 }
 
 // ValidateBounds ensures all nodes fit within reasonable canvas size.
-func (v *TestValidator) ValidateBounds(nodes []core.Node, maxWidth, maxHeight int) {
+func (v *TestValidator) ValidateBounds(nodes []diagram.Node, maxWidth, maxHeight int) {
 	for _, node := range nodes {
 		if node.X < 0 || node.Y < 0 {
 			v.t.Errorf("Node %d has negative position: (%d, %d)",
@@ -65,11 +65,11 @@ func (v *TestValidator) ValidateBounds(nodes []core.Node, maxWidth, maxHeight in
 // ValidateDeterminism ensures layout is consistent across runs.
 func (v *TestValidator) ValidateDeterminism(
 	layout LayoutEngine,
-	nodes []core.Node,
-	connections []core.Connection,
+	nodes []diagram.Node,
+	connections []diagram.Connection,
 	runs int,
 ) {
-	var firstResult []core.Node
+	var firstResult []diagram.Node
 	
 	for i := 0; i < runs; i++ {
 		result, err := layout.Layout(nodes, connections)
@@ -90,8 +90,8 @@ func (v *TestValidator) ValidateDeterminism(
 // ValidatePerformance ensures layout completes within time limit.
 func (v *TestValidator) ValidatePerformance(
 	layout LayoutEngine,
-	nodes []core.Node,
-	connections []core.Connection,
+	nodes []diagram.Node,
+	connections []diagram.Connection,
 	maxDuration time.Duration,
 ) {
 	start := time.Now()
@@ -108,7 +108,7 @@ func (v *TestValidator) ValidatePerformance(
 }
 
 // ValidateNodeSizes ensures all nodes have positive dimensions.
-func (v *TestValidator) ValidateNodeSizes(nodes []core.Node) {
+func (v *TestValidator) ValidateNodeSizes(nodes []diagram.Node) {
 	for _, node := range nodes {
 		if node.Width <= 0 {
 			v.t.Errorf("Node %d has invalid width: %d", node.ID, node.Width)
@@ -121,12 +121,12 @@ func (v *TestValidator) ValidateNodeSizes(nodes []core.Node) {
 
 // Helper methods
 
-func (v *TestValidator) nodesOverlap(a, b core.Node) bool {
+func (v *TestValidator) nodesOverlap(a, b diagram.Node) bool {
 	return !(a.X+a.Width <= b.X || b.X+b.Width <= a.X ||
 		a.Y+a.Height <= b.Y || b.Y+b.Height <= a.Y)
 }
 
-func (v *TestValidator) nodeDistance(a, b core.Node) int {
+func (v *TestValidator) nodeDistance(a, b diagram.Node) int {
 	// Calculate minimum distance between node edges
 	if v.nodesOverlap(a, b) {
 		return -1 // Overlapping
@@ -152,17 +152,17 @@ func (v *TestValidator) nodeDistance(a, b core.Node) int {
 	return hDist + vDist
 }
 
-func (v *TestValidator) nodeBounds(n core.Node) string {
+func (v *TestValidator) nodeBounds(n diagram.Node) string {
 	return fmt.Sprintf("[%d,%d - %d,%d]", n.X, n.Y, n.X+n.Width, n.Y+n.Height)
 }
 
-func (v *TestValidator) layoutsEqual(a, b []core.Node) bool {
+func (v *TestValidator) layoutsEqual(a, b []diagram.Node) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	
 	// Create maps for quick lookup
-	aMap := make(map[int]core.Node)
+	aMap := make(map[int]diagram.Node)
 	for _, node := range a {
 		aMap[node.ID] = node
 	}
@@ -184,17 +184,17 @@ func (v *TestValidator) layoutsEqual(a, b []core.Node) bool {
 // Graph generators for stress testing
 
 // GenerateLinearChain creates a simple A->B->C... chain.
-func GenerateLinearChain(length int) ([]core.Node, []core.Connection) {
-	nodes := make([]core.Node, length)
-	connections := make([]core.Connection, 0)
+func GenerateLinearChain(length int) ([]diagram.Node, []diagram.Connection) {
+	nodes := make([]diagram.Node, length)
+	connections := make([]diagram.Connection, 0)
 	
 	for i := 0; i < length; i++ {
-		nodes[i] = core.Node{
+		nodes[i] = diagram.Node{
 			ID:   i,
 			Text: []string{fmt.Sprintf("Node %d", i)},
 		}
 		if i > 0 {
-			connections = append(connections, core.Connection{
+			connections = append(connections, diagram.Connection{
 				From: i - 1,
 				To:   i,
 			})
@@ -205,9 +205,9 @@ func GenerateLinearChain(length int) ([]core.Node, []core.Connection) {
 }
 
 // GenerateTree creates a tree with specified branching factor.
-func GenerateTree(depth, branchingFactor int) ([]core.Node, []core.Connection) {
-	nodes := make([]core.Node, 0)
-	connections := make([]core.Connection, 0)
+func GenerateTree(depth, branchingFactor int) ([]diagram.Node, []diagram.Connection) {
+	nodes := make([]diagram.Node, 0)
+	connections := make([]diagram.Connection, 0)
 	nodeID := 0
 	
 	var generateLevel func(parentID, level int)
@@ -218,13 +218,13 @@ func GenerateTree(depth, branchingFactor int) ([]core.Node, []core.Connection) {
 		
 		for i := 0; i < branchingFactor; i++ {
 			nodeID++
-			nodes = append(nodes, core.Node{
+			nodes = append(nodes, diagram.Node{
 				ID:   nodeID,
 				Text: []string{fmt.Sprintf("N%d", nodeID)},
 			})
 			
 			if parentID >= 0 {
-				connections = append(connections, core.Connection{
+				connections = append(connections, diagram.Connection{
 					From: parentID,
 					To:   nodeID,
 				})
@@ -235,7 +235,7 @@ func GenerateTree(depth, branchingFactor int) ([]core.Node, []core.Connection) {
 	}
 	
 	// Create root
-	nodes = append(nodes, core.Node{
+	nodes = append(nodes, diagram.Node{
 		ID:   0,
 		Text: []string{"Root"},
 	})
@@ -245,23 +245,23 @@ func GenerateTree(depth, branchingFactor int) ([]core.Node, []core.Connection) {
 }
 
 // GenerateStarGraph creates a hub connected to many spokes.
-func GenerateStarGraph(spokeCount int) ([]core.Node, []core.Connection) {
-	nodes := make([]core.Node, spokeCount+1)
-	connections := make([]core.Connection, spokeCount)
+func GenerateStarGraph(spokeCount int) ([]diagram.Node, []diagram.Connection) {
+	nodes := make([]diagram.Node, spokeCount+1)
+	connections := make([]diagram.Connection, spokeCount)
 	
 	// Hub
-	nodes[0] = core.Node{
+	nodes[0] = diagram.Node{
 		ID:   0,
 		Text: []string{"Hub"},
 	}
 	
 	// Spokes
 	for i := 1; i <= spokeCount; i++ {
-		nodes[i] = core.Node{
+		nodes[i] = diagram.Node{
 			ID:   i,
 			Text: []string{fmt.Sprintf("Spoke %d", i)},
 		}
-		connections[i-1] = core.Connection{
+		connections[i-1] = diagram.Connection{
 			From: 0,
 			To:   i,
 		}
@@ -271,18 +271,18 @@ func GenerateStarGraph(spokeCount int) ([]core.Node, []core.Connection) {
 }
 
 // GenerateCompleteGraph creates a graph where every node connects to every other.
-func GenerateCompleteGraph(nodeCount int) ([]core.Node, []core.Connection) {
-	nodes := make([]core.Node, nodeCount)
-	connections := make([]core.Connection, 0)
+func GenerateCompleteGraph(nodeCount int) ([]diagram.Node, []diagram.Connection) {
+	nodes := make([]diagram.Node, nodeCount)
+	connections := make([]diagram.Connection, 0)
 	
 	for i := 0; i < nodeCount; i++ {
-		nodes[i] = core.Node{
+		nodes[i] = diagram.Node{
 			ID:   i,
 			Text: []string{fmt.Sprintf("N%d", i)},
 		}
 		
 		for j := 0; j < i; j++ {
-			connections = append(connections, core.Connection{
+			connections = append(connections, diagram.Connection{
 				From: j,
 				To:   i,
 			})
@@ -293,11 +293,11 @@ func GenerateCompleteGraph(nodeCount int) ([]core.Node, []core.Connection) {
 }
 
 // GenerateCycle creates a simple cycle A->B->...->A.
-func GenerateCycle(length int) ([]core.Node, []core.Connection) {
+func GenerateCycle(length int) ([]diagram.Node, []diagram.Connection) {
 	nodes, connections := GenerateLinearChain(length)
 	
 	// Close the cycle
-	connections = append(connections, core.Connection{
+	connections = append(connections, diagram.Connection{
 		From: length - 1,
 		To:   0,
 	})
@@ -306,14 +306,14 @@ func GenerateCycle(length int) ([]core.Node, []core.Connection) {
 }
 
 // GenerateRandomDAG creates a random directed acyclic graph.
-func GenerateRandomDAG(nodeCount int, edgeProbability float64) ([]core.Node, []core.Connection) {
+func GenerateRandomDAG(nodeCount int, edgeProbability float64) ([]diagram.Node, []diagram.Connection) {
 	rand.Seed(time.Now().UnixNano())
 	
-	nodes := make([]core.Node, nodeCount)
-	connections := make([]core.Connection, 0)
+	nodes := make([]diagram.Node, nodeCount)
+	connections := make([]diagram.Connection, 0)
 	
 	for i := 0; i < nodeCount; i++ {
-		nodes[i] = core.Node{
+		nodes[i] = diagram.Node{
 			ID:   i,
 			Text: []string{fmt.Sprintf("N%d", i)},
 		}
@@ -323,7 +323,7 @@ func GenerateRandomDAG(nodeCount int, edgeProbability float64) ([]core.Node, []c
 	for i := 0; i < nodeCount; i++ {
 		for j := i + 1; j < nodeCount; j++ {
 			if rand.Float64() < edgeProbability {
-				connections = append(connections, core.Connection{
+				connections = append(connections, diagram.Connection{
 					From: i,
 					To:   j,
 				})
@@ -335,21 +335,21 @@ func GenerateRandomDAG(nodeCount int, edgeProbability float64) ([]core.Node, []c
 }
 
 // GenerateDisconnectedComponents creates multiple separate graphs.
-func GenerateDisconnectedComponents(componentCount, nodesPerComponent int) ([]core.Node, []core.Connection) {
-	nodes := make([]core.Node, 0)
-	connections := make([]core.Connection, 0)
+func GenerateDisconnectedComponents(componentCount, nodesPerComponent int) ([]diagram.Node, []diagram.Connection) {
+	nodes := make([]diagram.Node, 0)
+	connections := make([]diagram.Connection, 0)
 	nodeID := 0
 	
 	for c := 0; c < componentCount; c++ {
 		// Create a small chain for each component
 		for i := 0; i < nodesPerComponent; i++ {
-			nodes = append(nodes, core.Node{
+			nodes = append(nodes, diagram.Node{
 				ID:   nodeID,
 				Text: []string{fmt.Sprintf("C%d-N%d", c, i)},
 			})
 			
 			if i > 0 {
-				connections = append(connections, core.Connection{
+				connections = append(connections, diagram.Connection{
 					From: nodeID - 1,
 					To:   nodeID,
 				})
@@ -363,8 +363,8 @@ func GenerateDisconnectedComponents(componentCount, nodesPerComponent int) ([]co
 }
 
 // GenerateTextSizeVariations creates nodes with extreme text variations.
-func GenerateTextSizeVariations() []core.Node {
-	return []core.Node{
+func GenerateTextSizeVariations() []diagram.Node {
+	return []diagram.Node{
 		{ID: 0, Text: []string{""}}, // Empty
 		{ID: 1, Text: []string{"A"}}, // Single char
 		{ID: 2, Text: []string{"This is a very long node label that should test width handling in the layout algorithm"}},

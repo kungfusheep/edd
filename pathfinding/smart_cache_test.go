@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 )
 
@@ -15,8 +15,8 @@ func TestSmartPathFinder_Caching(t *testing.T) {
 ...XXX...
 .........`)
 	
-	start := core.Point{0, 0}
-	end := core.Point{8, 3}
+	start := diagram.Point{0, 0}
+	end := diagram.Point{8, 3}
 	
 	// First call - should compute path
 	path1, err := finder.FindPath(start, end, obstacles)
@@ -72,16 +72,16 @@ func TestSmartPathFinder_Caching(t *testing.T) {
 func BenchmarkSmartPathFinder_WithCache(b *testing.B) {
 	finder := NewSmartPathFinder(DefaultPathCost)
 	
-	obstacles := CreateNodeObstacleChecker([]core.Node{
+	obstacles := CreateNodeObstacleChecker([]diagram.Node{
 		{X: 10, Y: 10, Width: 10, Height: 5},
 		{X: 30, Y: 10, Width: 10, Height: 5},
 	}, 1)
 	
 	// Test points that will be repeated
-	points := []struct{ start, end core.Point }{
-		{core.Point{0, 0}, core.Point{50, 20}},
-		{core.Point{5, 5}, core.Point{45, 25}},
-		{core.Point{0, 20}, core.Point{50, 0}},
+	points := []struct{ start, end diagram.Point }{
+		{diagram.Point{0, 0}, diagram.Point{50, 20}},
+		{diagram.Point{5, 5}, diagram.Point{45, 25}},
+		{diagram.Point{0, 20}, diagram.Point{50, 0}},
 	}
 	
 	b.ResetTimer()
@@ -98,15 +98,15 @@ func BenchmarkSmartPathFinder_NoCache(b *testing.B) {
 	finder := NewSmartPathFinder(DefaultPathCost)
 	finder.EnableCache(false)
 	
-	obstacles := CreateNodeObstacleChecker([]core.Node{
+	obstacles := CreateNodeObstacleChecker([]diagram.Node{
 		{X: 10, Y: 10, Width: 10, Height: 5},
 		{X: 30, Y: 10, Width: 10, Height: 5},
 	}, 1)
 	
-	points := []struct{ start, end core.Point }{
-		{core.Point{0, 0}, core.Point{50, 20}},
-		{core.Point{5, 5}, core.Point{45, 25}},
-		{core.Point{0, 20}, core.Point{50, 0}},
+	points := []struct{ start, end diagram.Point }{
+		{diagram.Point{0, 0}, diagram.Point{50, 20}},
+		{diagram.Point{5, 5}, diagram.Point{45, 25}},
+		{diagram.Point{0, 20}, diagram.Point{50, 0}},
 	}
 	
 	b.ResetTimer()

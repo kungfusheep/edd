@@ -1,24 +1,24 @@
 package editor
 
 import (
-	"edd/canvas"
-	"edd/core"
+	"edd/render"
+	"edd/diagram"
 	"fmt"
 )
 
 // ColoredCanvas wraps a canvas to add color support
 type ColoredCanvas struct {
-	canvas.Canvas
+	render.Canvas
 	currentColor string
 }
 
 // NewColoredCanvas creates a canvas wrapper with color support
-func NewColoredCanvas(c canvas.Canvas) *ColoredCanvas {
+func NewColoredCanvas(c render.Canvas) *ColoredCanvas {
 	return &ColoredCanvas{Canvas: c}
 }
 
 // RenderColoredPath renders a path with the specified color
-func RenderColoredPath(output string, path core.Path, color string, style string) string {
+func RenderColoredPath(output string, path diagram.Path, color string, style string) string {
 	// This is a simplified implementation that adds color codes to the output
 	// In a real implementation, we'd need to track which characters belong to which path
 	
@@ -69,13 +69,13 @@ func getStyleCharacters(style string) (horizontal, vertical rune) {
 }
 
 // applyColorCode is a placeholder - in reality we need to modify the canvas output
-func applyColorCode(c canvas.Canvas, color string) {
+func applyColorCode(c render.Canvas, color string) {
 	// This would need to be implemented differently
 	// We might need to track colored segments in the canvas
 }
 
 // resetColorCode resets to default color
-func resetColorCode(c canvas.Canvas) {
+func resetColorCode(c render.Canvas) {
 	// This would need to be implemented differently
 }
 

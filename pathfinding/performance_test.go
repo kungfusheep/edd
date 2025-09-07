@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"testing"
 	"time"
@@ -24,7 +24,7 @@ func TestCurrentPerformance(t *testing.T) {
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
 			// Create obstacles
-			obstacles := func(p core.Point) bool {
+			obstacles := func(p diagram.Point) bool {
 				// Never block corners where we place start/end
 				if p.X <= 1 || p.Y <= 1 || p.X >= s.distance-1 || p.Y >= s.distance-1 {
 					return false
@@ -36,8 +36,8 @@ func TestCurrentPerformance(t *testing.T) {
 				return float64(hash%1000) < s.obstaclesPct*1000
 			}
 			
-			start := core.Point{1, 1}
-			end := core.Point{s.distance - 1, s.distance - 1}
+			start := diagram.Point{1, 1}
+			end := diagram.Point{s.distance - 1, s.distance - 1}
 			
 			// Test with different finders
 			finders := []struct {
@@ -75,15 +75,15 @@ func BenchmarkPathfindingScalability(b *testing.B) {
 	for _, dist := range distances {
 		b.Run(fmt.Sprintf("Distance_%d", dist), func(b *testing.B) {
 			// 20% obstacle density
-			obstacles := func(p core.Point) bool {
+			obstacles := func(p diagram.Point) bool {
 				if p.X == 1 && p.Y == 1 { return false } // start
 				if p.X == dist-1 && p.Y == dist-1 { return false } // end
 				hash := uint32(p.X*7919 + p.Y*1337)
 				return hash%5 == 0
 			}
 			
-			start := core.Point{1, 1}
-			end := core.Point{dist - 1, dist - 1}
+			start := diagram.Point{1, 1}
+			end := diagram.Point{dist - 1, dist - 1}
 			
 			finder := NewSmartPathFinder(DefaultPathCost)
 			finder.EnableCache(false) // Test raw performance
@@ -105,7 +105,7 @@ func BenchmarkPathfindingScalability(b *testing.B) {
 func TestWorstCasePerformance(t *testing.T) {
 	// Create a spiral maze that forces A* to explore many cells
 	size := 50
-	obstacles := func(p core.Point) bool {
+	obstacles := func(p diagram.Point) bool {
 		// Create walls that form a spiral
 		x, y := p.X-size/2, p.Y-size/2
 		
@@ -125,8 +125,8 @@ func TestWorstCasePerformance(t *testing.T) {
 	finder.EnableCache(false)
 	
 	// Force a path through the spiral
-	start := core.Point{size/2, size/2}
-	end := core.Point{size/2 + 15, size/2}
+	start := diagram.Point{size/2, size/2}
+	end := diagram.Point{size/2 + 15, size/2}
 	
 	startTime := time.Now()
 	path, err := finder.FindPath(start, end, obstacles)

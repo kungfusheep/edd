@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 	"fmt"
 )
@@ -33,9 +33,9 @@ func NewSmartPathFinder(costs PathCost) *SmartPathFinder {
 }
 
 // FindPath finds an optimal path using the most appropriate algorithm.
-func (s *SmartPathFinder) FindPath(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+func (s *SmartPathFinder) FindPath(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	if start == end {
-		return core.Path{Points: []core.Point{start}, Cost: 0}, nil
+		return diagram.Path{Points: []diagram.Point{start}, Cost: 0}, nil
 	}
 	
 	// Check cache if enabled
@@ -58,10 +58,10 @@ func (s *SmartPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 	
 	// Check if start or end is blocked
 	if obstacles(start) {
-		return core.Path{}, fmt.Errorf("start point is blocked")
+		return diagram.Path{}, fmt.Errorf("start point is blocked")
 	}
 	if obstacles(end) {
-		return core.Path{}, fmt.Errorf("end point is blocked")
+		return diagram.Path{}, fmt.Errorf("end point is blocked")
 	}
 	
 	// Try different routing strategies
@@ -83,7 +83,7 @@ func (s *SmartPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 	// Direct paths don't work, use A*
 	astarPath, err := s.astarFinder.FindPath(start, end, obstacles)
 	if err != nil {
-		return core.Path{}, err
+		return diagram.Path{}, err
 	}
 	
 	// Optimize the A* path
@@ -104,8 +104,8 @@ func (s *SmartPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 	return optimized, nil
 }
 
-// isPathClear checks if a path is free of obstacles.
-func (s *SmartPathFinder) isPathClear(path core.Path, obstacles func(core.Point) bool) bool {
+// isPathClear checks if a path is free of render.
+func (s *SmartPathFinder) isPathClear(path diagram.Path, obstacles func(diagram.Point) bool) bool {
 	if len(path.Points) < 2 {
 		return true
 	}
@@ -121,7 +121,7 @@ func (s *SmartPathFinder) isPathClear(path core.Path, obstacles func(core.Point)
 }
 
 // optimizePath improves the visual quality of a path.
-func (s *SmartPathFinder) optimizePath(path core.Path, obstacles func(core.Point) bool) core.Path {
+func (s *SmartPathFinder) optimizePath(path diagram.Path, obstacles func(diagram.Point) bool) diagram.Path {
 	if len(path.Points) <= 2 {
 		return path
 	}
@@ -146,13 +146,13 @@ func (s *SmartPathFinder) optimizePath(path core.Path, obstacles func(core.Point
 }
 
 // reduceDogLegs tries to straighten zig-zag patterns.
-func (s *SmartPathFinder) reduceDogLegs(path core.Path, obstacles func(core.Point) bool) core.Path {
+func (s *SmartPathFinder) reduceDogLegs(path diagram.Path, obstacles func(diagram.Point) bool) diagram.Path {
 	if len(path.Points) < 4 {
 		return path
 	}
 	
 	points := path.Points
-	improved := []core.Point{points[0]}
+	improved := []diagram.Point{points[0]}
 	
 	i := 0
 	for i < len(points)-1 {
@@ -183,14 +183,14 @@ func (s *SmartPathFinder) reduceDogLegs(path core.Path, obstacles func(core.Poin
 		i++
 	}
 	
-	return core.Path{Points: improved, Cost: path.Cost}
+	return diagram.Path{Points: improved, Cost: path.Cost}
 }
 
 // canConnectDirect checks if two points can be connected via an L-shaped route.
-func (s *SmartPathFinder) canConnectDirect(start, end core.Point, obstacles func(core.Point) bool) bool {
+func (s *SmartPathFinder) canConnectDirect(start, end diagram.Point, obstacles func(diagram.Point) bool) bool {
 	// Check both L-shaped routes
-	corner1 := core.Point{X: end.X, Y: start.Y}
-	corner2 := core.Point{X: start.X, Y: end.Y}
+	corner1 := diagram.Point{X: end.X, Y: start.Y}
+	corner2 := diagram.Point{X: start.X, Y: end.Y}
 	
 	// Try horizontal-first route
 	if s.isSegmentClear(start, corner1, obstacles) && s.isSegmentClear(corner1, end, obstacles) {
@@ -206,15 +206,15 @@ func (s *SmartPathFinder) canConnectDirect(start, end core.Point, obstacles func
 }
 
 // tryDirectRoute attempts to find a clear L-shaped path between two points.
-func (s *SmartPathFinder) tryDirectRoute(start, end core.Point, obstacles func(core.Point) bool) []core.Point {
+func (s *SmartPathFinder) tryDirectRoute(start, end diagram.Point, obstacles func(diagram.Point) bool) []diagram.Point {
 	// Try horizontal-first
-	hPath := []core.Point{start, {X: end.X, Y: start.Y}, end}
+	hPath := []diagram.Point{start, {X: end.X, Y: start.Y}, end}
 	if s.isSegmentClear(start, hPath[1], obstacles) && s.isSegmentClear(hPath[1], end, obstacles) {
 		return hPath
 	}
 	
 	// Try vertical-first
-	vPath := []core.Point{start, {X: start.X, Y: end.Y}, end}
+	vPath := []diagram.Point{start, {X: start.X, Y: end.Y}, end}
 	if s.isSegmentClear(start, vPath[1], obstacles) && s.isSegmentClear(vPath[1], end, obstacles) {
 		return vPath
 	}
@@ -222,8 +222,8 @@ func (s *SmartPathFinder) tryDirectRoute(start, end core.Point, obstacles func(c
 	return nil
 }
 
-// isSegmentClear checks if a straight line segment is clear of obstacles.
-func (s *SmartPathFinder) isSegmentClear(start, end core.Point, obstacles func(core.Point) bool) bool {
+// isSegmentClear checks if a straight line segment is clear of render.
+func (s *SmartPathFinder) isSegmentClear(start, end diagram.Point, obstacles func(diagram.Point) bool) bool {
 	// Only works for horizontal or vertical segments
 	if start.X != end.X && start.Y != end.Y {
 		return false // Diagonal segments not supported
@@ -276,8 +276,8 @@ func (s *SmartPathFinder) isSegmentClear(start, end core.Point, obstacles func(c
 }
 
 // alignSegments tries to align path segments for cleaner appearance.
-func (s *SmartPathFinder) alignSegments(path core.Path, obstacles func(core.Point) bool) core.Path {
-	points := make([]core.Point, len(path.Points))
+func (s *SmartPathFinder) alignSegments(path diagram.Path, obstacles func(diagram.Point) bool) diagram.Path {
+	points := make([]diagram.Point, len(path.Points))
 	copy(points, path.Points)
 	
 	// Try to align middle points with their neighbors
@@ -287,8 +287,8 @@ func (s *SmartPathFinder) alignSegments(path core.Path, obstacles func(core.Poin
 		// Check if we can align horizontally
 		if p0.Y == p3.Y && geometry.Abs(p1.Y-p0.Y) <= 3 && geometry.Abs(p2.Y-p0.Y) <= 3 {
 			// Try to flatten this section
-			aligned1 := core.Point{X: p1.X, Y: p0.Y}
-			aligned2 := core.Point{X: p2.X, Y: p0.Y}
+			aligned1 := diagram.Point{X: p1.X, Y: p0.Y}
+			aligned2 := diagram.Point{X: p2.X, Y: p0.Y}
 			
 			if !obstacles(aligned1) && !obstacles(aligned2) &&
 				s.isSegmentClear(p0, aligned1, obstacles) &&
@@ -302,8 +302,8 @@ func (s *SmartPathFinder) alignSegments(path core.Path, obstacles func(core.Poin
 		// Check if we can align vertically
 		if p0.X == p3.X && geometry.Abs(p1.X-p0.X) <= 3 && geometry.Abs(p2.X-p0.X) <= 3 {
 			// Try to straighten this section
-			aligned1 := core.Point{X: p0.X, Y: p1.Y}
-			aligned2 := core.Point{X: p0.X, Y: p2.Y}
+			aligned1 := diagram.Point{X: p0.X, Y: p1.Y}
+			aligned2 := diagram.Point{X: p0.X, Y: p2.Y}
 			
 			if !obstacles(aligned1) && !obstacles(aligned2) &&
 				s.isSegmentClear(p0, aligned1, obstacles) &&
@@ -316,12 +316,12 @@ func (s *SmartPathFinder) alignSegments(path core.Path, obstacles func(core.Poin
 	}
 	
 	// Remove any redundant points created by alignment
-	finalPath := SimplifyPath(core.Path{Points: points})
+	finalPath := SimplifyPath(diagram.Path{Points: points})
 	finalPath.Cost = path.Cost
 	return finalPath
 }
 
-// SetPadding sets the minimum distance to maintain from obstacles.
+// SetPadding sets the minimum distance to maintain from render.
 func (s *SmartPathFinder) SetPadding(padding int) {
 	s.padding = padding
 }
@@ -353,12 +353,12 @@ func (s *SmartPathFinder) CacheStats() string {
 
 // FindPathToArea finds an optimal path from start to the edge of a target area.
 // This delegates to the internal A* pathfinder's area-based routing.
-func (s *SmartPathFinder) FindPathToArea(start core.Point, targetNode core.Node, obstacles func(core.Point) bool) (core.Path, error) {
+func (s *SmartPathFinder) FindPathToArea(start diagram.Point, targetNode diagram.Node, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	return s.astarFinder.FindPathToArea(start, targetNode, obstacles)
 }
 
 // hashObstacles creates a hash of obstacles that could affect the path.
-func (s *SmartPathFinder) hashObstacles(start, end core.Point, obstacles func(core.Point) bool) uint64 {
+func (s *SmartPathFinder) hashObstacles(start, end diagram.Point, obstacles func(diagram.Point) bool) uint64 {
 	if obstacles == nil {
 		return 0
 	}
@@ -392,7 +392,7 @@ func (s *SmartPathFinder) hashObstacles(start, end core.Point, obstacles func(co
 	// Hash obstacle positions
 	for x := minX; x <= maxX; x += step {
 		for y := minY; y <= maxY; y += step {
-			if obstacles(core.Point{X: x, Y: y}) {
+			if obstacles(diagram.Point{X: x, Y: y}) {
 				// Mix the coordinates well to avoid collisions
 				hash = hash*31 + uint64(x+1000)*7919 + uint64(y+1000)*6971
 			}

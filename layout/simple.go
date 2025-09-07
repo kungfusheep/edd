@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 	"fmt"
 	"math"
@@ -34,13 +34,13 @@ func NewSimpleLayout() *SimpleLayout {
 }
 
 // Layout positions nodes in a simple left-to-right arrangement.
-func (s *SimpleLayout) Layout(nodes []core.Node, connections []core.Connection) ([]core.Node, error) {
+func (s *SimpleLayout) Layout(nodes []diagram.Node, connections []diagram.Connection) ([]diagram.Node, error) {
 	if len(nodes) == 0 {
-		return []core.Node{}, nil
+		return []diagram.Node{}, nil
 	}
 
 	// Create a copy of nodes to avoid modifying input
-	result := make([]core.Node, len(nodes))
+	result := make([]diagram.Node, len(nodes))
 	copy(result, nodes)
 
 	// Calculate dimensions for all nodes
@@ -85,7 +85,7 @@ func (s *SimpleLayout) Layout(nodes []core.Node, connections []core.Connection) 
 	xOffset := 0
 	for _, component := range components {
 		// Get nodes for this component
-		componentNodes := make([]core.Node, len(component))
+		componentNodes := make([]diagram.Node, len(component))
 		for i, nodeID := range component {
 			componentNodes[i] = result[nodeMap[nodeID]]
 		}
@@ -152,7 +152,7 @@ func (s *SimpleLayout) SetHintStrength(strength float64) {
 }
 
 // calculateNodeDimensions sets the width and height based on text content.
-func (s *SimpleLayout) calculateNodeDimensions(node *core.Node) {
+func (s *SimpleLayout) calculateNodeDimensions(node *diagram.Node) {
 	// Height is number of lines plus borders
 	node.Height = len(node.Text) + 2
 	if node.Height < s.minNodeHeight {
@@ -177,9 +177,9 @@ func (s *SimpleLayout) calculateNodeDimensions(node *core.Node) {
 }
 
 // applyStrongHints applies position and flow hints as strong post-processing
-func (s *SimpleLayout) applyStrongHints(nodes []core.Node, connections []core.Connection) []core.Node {
+func (s *SimpleLayout) applyStrongHints(nodes []diagram.Node, connections []diagram.Connection) []diagram.Node {
 	// Build adjacency information for relationship-aware positioning
-	nodeMap := make(map[int]*core.Node)
+	nodeMap := make(map[int]*diagram.Node)
 	for i := range nodes {
 		nodeMap[nodes[i].ID] = &nodes[i]
 	}
@@ -221,9 +221,9 @@ func (s *SimpleLayout) applyStrongHints(nodes []core.Node, connections []core.Co
 }
 
 // calculateBounds finds the bounding box of all nodes
-func (s *SimpleLayout) calculateBounds(nodes []core.Node) core.Bounds {
+func (s *SimpleLayout) calculateBounds(nodes []diagram.Node) diagram.Bounds {
 	if len(nodes) == 0 {
-		return core.Bounds{}
+		return diagram.Bounds{}
 	}
 	
 	minX, minY := nodes[0].X, nodes[0].Y
@@ -244,16 +244,16 @@ func (s *SimpleLayout) calculateBounds(nodes []core.Node) core.Bounds {
 		}
 	}
 	
-	return core.Bounds{
-		Min: core.Point{X: minX, Y: minY},
-		Max: core.Point{X: maxX, Y: maxY},
+	return diagram.Bounds{
+		Min: diagram.Point{X: minX, Y: minY},
+		Max: diagram.Point{X: maxX, Y: maxY},
 	}
 }
 
 // applyPositionHintsWithRelationships applies position hints while pulling connected nodes
-func (s *SimpleLayout) applyPositionHintsWithRelationships(nodes []core.Node, hintedNodes map[int]string, neighbors map[int][]int, bounds core.Bounds) {
+func (s *SimpleLayout) applyPositionHintsWithRelationships(nodes []diagram.Node, hintedNodes map[int]string, neighbors map[int][]int, bounds diagram.Bounds) {
 	// Create a map for quick node lookup
-	nodeMap := make(map[int]*core.Node)
+	nodeMap := make(map[int]*diagram.Node)
 	for i := range nodes {
 		nodeMap[nodes[i].ID] = &nodes[i]
 	}
@@ -302,7 +302,7 @@ func (s *SimpleLayout) applyPositionHintsWithRelationships(nodes []core.Node, hi
 }
 
 // applyPositionHint moves a node to its hinted position in the 3x3 grid
-func (s *SimpleLayout) applyPositionHint(node *core.Node, hint string, bounds core.Bounds) {
+func (s *SimpleLayout) applyPositionHint(node *diagram.Node, hint string, bounds diagram.Bounds) {
 	width := bounds.Max.X - bounds.Min.X
 	height := bounds.Max.Y - bounds.Min.Y
 	
@@ -351,9 +351,9 @@ func (s *SimpleLayout) applyPositionHint(node *core.Node, hint string, bounds co
 }
 
 // enforceFlowHint ensures the target node is positioned according to flow direction
-func (s *SimpleLayout) enforceFlowHint(nodes *[]core.Node, fromID, toID int, direction string) {
+func (s *SimpleLayout) enforceFlowHint(nodes *[]diagram.Node, fromID, toID int, direction string) {
 	// Find the nodes
-	var fromNode, toNode *core.Node
+	var fromNode, toNode *diagram.Node
 	for i := range *nodes {
 		if (*nodes)[i].ID == fromID {
 			fromNode = &(*nodes)[i]
@@ -395,7 +395,7 @@ func (s *SimpleLayout) enforceFlowHint(nodes *[]core.Node, fromID, toID int, dir
 }
 
 // resolveOverlaps separates overlapping nodes
-func (s *SimpleLayout) resolveOverlaps(nodes []core.Node) {
+func (s *SimpleLayout) resolveOverlaps(nodes []diagram.Node) {
 	// Simple overlap resolution - push overlapping nodes apart
 	maxIterations := 10
 	minSpacing := 2
@@ -419,7 +419,7 @@ func (s *SimpleLayout) resolveOverlaps(nodes []core.Node) {
 }
 
 // nodesOverlap checks if two nodes overlap with given spacing
-func (s *SimpleLayout) nodesOverlap(a, b *core.Node, spacing int) bool {
+func (s *SimpleLayout) nodesOverlap(a, b *diagram.Node, spacing int) bool {
 	return a.X < b.X+b.Width+spacing && 
 	       b.X < a.X+a.Width+spacing &&
 	       a.Y < b.Y+b.Height+spacing && 
@@ -427,7 +427,7 @@ func (s *SimpleLayout) nodesOverlap(a, b *core.Node, spacing int) bool {
 }
 
 // separateNodes pushes two overlapping nodes apart
-func (s *SimpleLayout) separateNodes(a, b *core.Node, spacing int) {
+func (s *SimpleLayout) separateNodes(a, b *diagram.Node, spacing int) {
 	// Calculate centers
 	aCenterX := a.X + a.Width/2
 	aCenterY := a.Y + a.Height/2
@@ -481,7 +481,7 @@ func (s *SimpleLayout) separateNodes(a, b *core.Node, spacing int) {
 // assignLayers determines which vertical layer each node belongs to.
 // Uses a modified topological sort for O(n + e) complexity.
 // For graphs with cycles, it identifies back-edges and ignores them during layout.
-func (s *SimpleLayout) assignLayers(nodes []core.Node, outgoing, incoming map[int][]int) [][]int {
+func (s *SimpleLayout) assignLayers(nodes []diagram.Node, outgoing, incoming map[int][]int) [][]int {
 	// First, identify back-edges that create cycles
 	backEdges := s.findBackEdges(nodes, outgoing)
 
@@ -526,7 +526,7 @@ type backEdge struct {
 }
 
 // findBackEdges identifies edges that create cycles using DFS
-func (s *SimpleLayout) findBackEdges(nodes []core.Node, outgoing map[int][]int) []backEdge {
+func (s *SimpleLayout) findBackEdges(nodes []diagram.Node, outgoing map[int][]int) []backEdge {
 	backEdges := make([]backEdge, 0)
 	visited := make(map[int]int) // 0=unvisited, 1=visiting, 2=visited
 
@@ -557,7 +557,7 @@ func (s *SimpleLayout) findBackEdges(nodes []core.Node, outgoing map[int][]int) 
 }
 
 // assignLayersDAG is the original assignLayers logic for acyclic graphs
-func (s *SimpleLayout) assignLayersDAG(nodes []core.Node, outgoing, incoming map[int][]int) [][]int {
+func (s *SimpleLayout) assignLayersDAG(nodes []diagram.Node, outgoing, incoming map[int][]int) [][]int {
 	// Calculate in-degrees
 	inDegree := make(map[int]int)
 	nodeSet := make(map[int]bool)
@@ -705,7 +705,7 @@ func (s *SimpleLayout) findBestLayerForNode(nodeID int, layers [][]int, assigned
 }
 
 // detectComponents finds connected components using DFS.
-func (s *SimpleLayout) detectComponents(nodes []core.Node, outgoing, incoming map[int][]int) [][]int {
+func (s *SimpleLayout) detectComponents(nodes []diagram.Node, outgoing, incoming map[int][]int) [][]int {
 	visited := make(map[int]bool)
 	components := make([][]int, 0)
 
@@ -802,7 +802,7 @@ func (s *SimpleLayout) hasCycle(component []int, outgoing map[int][]int) bool {
 }
 
 // assignGridLayout arranges nodes in a grid pattern for small cyclic graphs
-func (s *SimpleLayout) assignGridLayout(nodes []core.Node) [][]int {
+func (s *SimpleLayout) assignGridLayout(nodes []diagram.Node) [][]int {
 	if len(nodes) == 0 {
 		return [][]int{}
 	}
@@ -909,7 +909,7 @@ func (s *SimpleLayout) isHubSpokePattern(component []int, outgoing, incoming map
 }
 
 // assignRadialLayout arranges nodes in a radial pattern around a hub
-func (s *SimpleLayout) assignRadialLayout(nodes []core.Node, hubID int, outgoing, incoming map[int][]int) [][]int {
+func (s *SimpleLayout) assignRadialLayout(nodes []diagram.Node, hubID int, outgoing, incoming map[int][]int) [][]int {
 	// Create layers: hub in center, spokes around it
 	layers := make([][]int, 3)
 
@@ -948,13 +948,13 @@ func (s *SimpleLayout) assignRadialLayout(nodes []core.Node, hubID int, outgoing
 }
 
 // positionNodes assigns X,Y coordinates to nodes based on their layers.
-func (s *SimpleLayout) positionNodes(nodes []core.Node, layers [][]int) {
+func (s *SimpleLayout) positionNodes(nodes []diagram.Node, layers [][]int) {
 	s.positionNodesWithOffset(nodes, layers, 0)
 }
 
 // positionRadialNodesWithOffset positions nodes in a radial/hub-spoke pattern
-func (s *SimpleLayout) positionRadialNodesWithOffset(nodes []core.Node, layers [][]int, xOffset int, hubID int) {
-	nodeMap := make(map[int]*core.Node)
+func (s *SimpleLayout) positionRadialNodesWithOffset(nodes []diagram.Node, layers [][]int, xOffset int, hubID int) {
+	nodeMap := make(map[int]*diagram.Node)
 	for i := range nodes {
 		nodeMap[nodes[i].ID] = &nodes[i]
 	}
@@ -1021,8 +1021,8 @@ func (s *SimpleLayout) positionRadialNodesWithOffset(nodes []core.Node, layers [
 }
 
 // positionNodesWithOffset assigns X,Y coordinates with a starting X offset.
-func (s *SimpleLayout) positionNodesWithOffset(nodes []core.Node, layers [][]int, xOffset int) {
-	nodeMap := make(map[int]*core.Node)
+func (s *SimpleLayout) positionNodesWithOffset(nodes []diagram.Node, layers [][]int, xOffset int) {
+	nodeMap := make(map[int]*diagram.Node)
 	for i := range nodes {
 		nodeMap[nodes[i].ID] = &nodes[i]
 	}

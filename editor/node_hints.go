@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 )
 
 // Available node styles in cycle order
@@ -13,7 +13,7 @@ var nodeColors = []string{"", "red", "green", "yellow", "blue", "magenta", "cyan
 // cycleNodeStyle cycles through available node styles
 func (e *TUIEditor) cycleNodeStyle(nodeID int) {
 	// Find the node
-	var node *core.Node
+	var node *diagram.Node
 	for i := range e.diagram.Nodes {
 		if e.diagram.Nodes[i].ID == nodeID {
 			node = &e.diagram.Nodes[i]
@@ -61,7 +61,7 @@ func (e *TUIEditor) cycleNodeStyle(nodeID int) {
 // cycleNodeColor cycles through available node colors
 func (e *TUIEditor) cycleNodeColor(nodeID int) {
 	// Find the node
-	var node *core.Node
+	var node *diagram.Node
 	for i := range e.diagram.Nodes {
 		if e.diagram.Nodes[i].ID == nodeID {
 			node = &e.diagram.Nodes[i]

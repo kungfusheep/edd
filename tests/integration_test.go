@@ -2,8 +2,8 @@ package tests
 
 import (
 	"encoding/json"
-	"edd/core"
-	"edd/rendering"
+	"edd/diagram"
+	"edd/render"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,7 +23,7 @@ func TestIntegrationDiagrams(t *testing.T) {
 		t.Skip("No test diagrams found")
 	}
 
-	renderer := rendering.NewRenderer()
+	renderer := render.NewRenderer()
 
 	for _, file := range files {
 		name := filepath.Base(file)
@@ -67,7 +67,7 @@ func TestIntegrationDiagrams(t *testing.T) {
 }
 
 // loadTestDiagram loads a diagram from a JSON file for testing
-func loadTestDiagram(filename string) (*core.Diagram, error) {
+func loadTestDiagram(filename string) (*diagram.Diagram, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func loadTestDiagram(filename string) (*core.Diagram, error) {
 		return nil, err
 	}
 
-	var diagram core.Diagram
+	var diagram diagram.Diagram
 	if err := json.Unmarshal(data, &diagram); err != nil {
 		return nil, err
 	}
@@ -90,27 +90,27 @@ func loadTestDiagram(filename string) (*core.Diagram, error) {
 // TestRendererEndToEnd tests a complete rendering scenario
 func TestRendererEndToEnd(t *testing.T) {
 	// Create a comprehensive test diagram
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Frontend", "React App"}},
 			{ID: 2, Text: []string{"API", "Gateway"}},
 			{ID: 3, Text: []string{"Auth", "Service"}},
 			{ID: 4, Text: []string{"User", "Service"}},
 			{ID: 5, Text: []string{"Database"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2},
 			{From: 2, To: 3},
 			{From: 2, To: 4},
 			{From: 3, To: 5},
 			{From: 4, To: 5},
 		},
-		Metadata: core.Metadata{
+		Metadata: diagram.Metadata{
 			Name: "Microservices Architecture",
 		},
 	}
 
-	renderer := rendering.NewRenderer()
+	renderer := render.NewRenderer()
 	output, err := renderer.Render(diagram)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)

@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"edd/core"
-	"edd/rendering"
+	"edd/diagram"
+	"edd/render"
 	"fmt"
 	"strings"
 	"testing"
@@ -11,19 +11,19 @@ import (
 // TestRoutingDebug uses debug mode to visualize obstacles and routing decisions
 func TestRoutingDebug(t *testing.T) {
 	// Test case 1: App Servers to Cache - should show virtual obstacles
-	diagram1 := &core.Diagram{
-		Nodes: []core.Node{
+	diagram1 := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"App", "Server 1"}, X: 10, Y: 10, Width: 12, Height: 3},
 			{ID: 2, Text: []string{"App", "Server 2"}, X: 30, Y: 10, Width: 12, Height: 3},
 			{ID: 3, Text: []string{"Cache"}, X: 50, Y: 10, Width: 10, Height: 3},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 3}, // App Server 1 -> Cache
 			{From: 2, To: 3}, // App Server 2 -> Cache
 		},
 	}
 
-	renderer := rendering.NewRenderer()
+	renderer := render.NewRenderer()
 	renderer.EnableDebug()
 	
 	output1, err := renderer.Render(diagram1)
@@ -36,13 +36,13 @@ func TestRoutingDebug(t *testing.T) {
 	fmt.Println("=====================================")
 
 	// Test case 2: Complex routing with obstacle between nodes
-	diagram2 := &core.Diagram{
-		Nodes: []core.Node{
+	diagram2 := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Source"}, X: 5, Y: 10, Width: 10, Height: 3},
 			{ID: 2, Text: []string{"Target"}, X: 45, Y: 10, Width: 10, Height: 3},
 			{ID: 3, Text: []string{"Obstacle", "In", "Path"}, X: 25, Y: 8, Width: 10, Height: 5},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2}, // Should route around obstacle
 		},
 	}
@@ -57,14 +57,14 @@ func TestRoutingDebug(t *testing.T) {
 	fmt.Println("======================================")
 
 	// Test case 3: Junction issues reproduction
-	diagram3 := &core.Diagram{
-		Nodes: []core.Node{
+	diagram3 := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}, X: 65, Y: 0, Width: 8, Height: 3},
 			{ID: 2, Text: []string{"B"}, X: 75, Y: 0, Width: 8, Height: 3},
 			{ID: 3, Text: []string{"C"}, X: 72, Y: 5, Width: 8, Height: 3},
 			{ID: 4, Text: []string{"D"}, X: 45, Y: 10, Width: 8, Height: 3},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2}, // Horizontal at Y=1
 			{From: 3, To: 1}, // Vertical through (72,1)
 			{From: 4, To: 3}, // Horizontal that needs to join vertical
@@ -90,18 +90,18 @@ func TestRoutingDebug(t *testing.T) {
 // TestVirtualObstacleAuthority tests if virtual obstacles are truly authoritative
 func TestVirtualObstacleAuthority(t *testing.T) {
 	// Create a scenario where virtual obstacles should force specific routing
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Left"}, X: 10, Y: 10, Width: 8, Height: 3},
 			{ID: 2, Text: []string{"Right"}, X: 40, Y: 10, Width: 8, Height: 3},
 			{ID: 3, Text: []string{"Middle", "Block"}, X: 24, Y: 9, Width: 10, Height: 5},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2}, // Should be forced to go around, not diagonally near Middle
 		},
 	}
 
-	renderer := rendering.NewRenderer()
+	renderer := render.NewRenderer()
 	renderer.EnableDebug()
 	
 	output, err := renderer.Render(diagram)

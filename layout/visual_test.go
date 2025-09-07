@@ -1,7 +1,7 @@
 package layout
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"strings"
 )
 
@@ -29,7 +29,7 @@ func NewVisualRenderer(width, height int) *VisualRenderer {
 }
 
 // RenderNode draws a node on the canvas
-func (r *VisualRenderer) RenderNode(node core.Node) {
+func (r *VisualRenderer) RenderNode(node diagram.Node) {
 	// Draw box
 	for y := node.Y; y < node.Y+node.Height && y < r.height; y++ {
 		for x := node.X; x < node.X+node.Width && x < r.width; x++ {
@@ -73,7 +73,7 @@ func (r *VisualRenderer) RenderNode(node core.Node) {
 }
 
 // RenderConnection draws a simple connection arrow
-func (r *VisualRenderer) RenderConnection(from, to core.Node) {
+func (r *VisualRenderer) RenderConnection(from, to diagram.Node) {
 	// Simple horizontal line from right edge of 'from' to left edge of 'to'
 	fromX := from.X + from.Width
 	fromY := from.Y + from.Height/2
@@ -104,7 +104,7 @@ func (r *VisualRenderer) String() string {
 }
 
 // RenderLayout creates a visual representation of a layout
-func RenderLayout(nodes []core.Node, connections []core.Connection) string {
+func RenderLayout(nodes []diagram.Node, connections []diagram.Connection) string {
 	if len(nodes) == 0 {
 		return "Empty layout"
 	}
@@ -129,7 +129,7 @@ func RenderLayout(nodes []core.Node, connections []core.Connection) string {
 	}
 	
 	// Draw connections
-	nodeMap := make(map[int]core.Node)
+	nodeMap := make(map[int]diagram.Node)
 	for _, node := range nodes {
 		nodeMap[node.ID] = node
 	}

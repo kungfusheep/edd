@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 )
 
@@ -9,17 +9,17 @@ func TestPathCache_BasicOperations(t *testing.T) {
 	cache := NewPathCache(10)
 	
 	// Create test paths
-	path1 := core.Path{
-		Points: []core.Point{{0, 0}, {1, 0}, {2, 0}},
+	path1 := diagram.Path{
+		Points: []diagram.Point{{0, 0}, {1, 0}, {2, 0}},
 		Cost:   20,
 	}
-	path2 := core.Path{
-		Points: []core.Point{{0, 0}, {0, 1}, {0, 2}},
+	path2 := diagram.Path{
+		Points: []diagram.Point{{0, 0}, {0, 1}, {0, 2}},
 		Cost:   30,
 	}
 	
 	// Test Put and Get
-	start1, end1 := core.Point{0, 0}, core.Point{2, 0}
+	start1, end1 := diagram.Point{0, 0}, diagram.Point{2, 0}
 	cache.Put(start1, end1, 0, path1)
 	
 	retrieved, found := cache.Get(start1, end1, 0)
@@ -32,7 +32,7 @@ func TestPathCache_BasicOperations(t *testing.T) {
 	}
 	
 	// Test different path
-	start2, end2 := core.Point{0, 0}, core.Point{0, 2}
+	start2, end2 := diagram.Point{0, 0}, diagram.Point{0, 2}
 	cache.Put(start2, end2, 0, path2)
 	
 	retrieved2, found := cache.Get(start2, end2, 0)
@@ -45,7 +45,7 @@ func TestPathCache_BasicOperations(t *testing.T) {
 	}
 	
 	// Test cache miss
-	_, found = cache.Get(core.Point{10, 10}, core.Point{20, 20}, 0)
+	_, found = cache.Get(diagram.Point{10, 10}, diagram.Point{20, 20}, 0)
 	if found {
 		t.Error("Unexpected path found in cache")
 	}
@@ -65,12 +65,12 @@ func TestPathCache_BasicOperations(t *testing.T) {
 
 func TestPathCache_ObstacleHash(t *testing.T) {
 	cache := NewPathCache(10)
-	path := core.Path{
-		Points: []core.Point{{0, 0}, {1, 0}, {2, 0}},
+	path := diagram.Path{
+		Points: []diagram.Point{{0, 0}, {1, 0}, {2, 0}},
 		Cost:   20,
 	}
 	
-	start, end := core.Point{0, 0}, core.Point{2, 0}
+	start, end := diagram.Point{0, 0}, diagram.Point{2, 0}
 	
 	// Put with obstacle hash 0
 	cache.Put(start, end, 0, path)
@@ -91,17 +91,17 @@ func TestPathCache_ObstacleHash(t *testing.T) {
 func TestPathCache_Eviction(t *testing.T) {
 	cache := NewPathCache(2) // Small cache
 	
-	path := core.Path{
-		Points: []core.Point{{0, 0}, {1, 0}},
+	path := diagram.Path{
+		Points: []diagram.Point{{0, 0}, {1, 0}},
 		Cost:   10,
 	}
 	
 	// Fill cache
-	cache.Put(core.Point{0, 0}, core.Point{1, 0}, 0, path)
-	cache.Put(core.Point{0, 0}, core.Point{0, 1}, 0, path)
+	cache.Put(diagram.Point{0, 0}, diagram.Point{1, 0}, 0, path)
+	cache.Put(diagram.Point{0, 0}, diagram.Point{0, 1}, 0, path)
 	
 	// Add third item - should trigger eviction
-	cache.Put(core.Point{1, 0}, core.Point{2, 0}, 0, path)
+	cache.Put(diagram.Point{1, 0}, diagram.Point{2, 0}, 0, path)
 	
 	_, _, evictions, size := cache.Stats()
 	if evictions != 1 {
@@ -115,10 +115,10 @@ func TestPathCache_Eviction(t *testing.T) {
 func TestCachedPathFinder(t *testing.T) {
 	// Create a simple path finder that counts calls
 	callCount := 0
-	mockFinder := PathFinderFunc(func(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+	mockFinder := PathFinderFunc(func(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 		callCount++
-		return core.Path{
-			Points: []core.Point{start, end},
+		return diagram.Path{
+			Points: []diagram.Point{start, end},
 			Cost:   10,
 		}, nil
 	})
@@ -126,7 +126,7 @@ func TestCachedPathFinder(t *testing.T) {
 	cachedFinder := NewCachedPathFinder(mockFinder, 10)
 	
 	// First call should go to underlying finder
-	path1, err := cachedFinder.FindPath(core.Point{0, 0}, core.Point{1, 0}, nil)
+	path1, err := cachedFinder.FindPath(diagram.Point{0, 0}, diagram.Point{1, 0}, nil)
 	if err != nil {
 		t.Fatalf("FindPath failed: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestCachedPathFinder(t *testing.T) {
 	}
 	
 	// Second identical call should use cache
-	path2, err := cachedFinder.FindPath(core.Point{0, 0}, core.Point{1, 0}, nil)
+	path2, err := cachedFinder.FindPath(diagram.Point{0, 0}, diagram.Point{1, 0}, nil)
 	if err != nil {
 		t.Fatalf("FindPath failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestCachedPathFinder(t *testing.T) {
 	}
 	
 	// Different endpoints should call finder again
-	_, err = cachedFinder.FindPath(core.Point{0, 0}, core.Point{2, 0}, nil)
+	_, err = cachedFinder.FindPath(diagram.Point{0, 0}, diagram.Point{2, 0}, nil)
 	if err != nil {
 		t.Fatalf("FindPath failed: %v", err)
 	}
@@ -163,40 +163,40 @@ func TestCachedPathFinder(t *testing.T) {
 }
 
 // PathFinderFunc is a function adapter for PathFinder interface
-type PathFinderFunc func(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error)
+type PathFinderFunc func(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error)
 
-func (f PathFinderFunc) FindPath(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+func (f PathFinderFunc) FindPath(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	return f(start, end, obstacles)
 }
 
 func TestCachedPathFinder_ObstacleHashing(t *testing.T) {
 	callCount := 0
-	mockFinder := PathFinderFunc(func(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+	mockFinder := PathFinderFunc(func(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 		callCount++
-		return core.Path{Points: []core.Point{start, end}, Cost: 10}, nil
+		return diagram.Path{Points: []diagram.Point{start, end}, Cost: 10}, nil
 	})
 	
 	cachedFinder := NewCachedPathFinder(mockFinder, 10)
 	
 	// Define two different obstacle functions
-	obstacles1 := func(p core.Point) bool {
+	obstacles1 := func(p diagram.Point) bool {
 		return p.X == 1 && p.Y == 0
 	}
 	
-	obstacles2 := func(p core.Point) bool {
+	obstacles2 := func(p diagram.Point) bool {
 		return p.X == 0 && p.Y == 1
 	}
 	
 	// Same endpoints but different obstacles should not use cache
-	_, _ = cachedFinder.FindPath(core.Point{0, 0}, core.Point{2, 0}, obstacles1)
-	_, _ = cachedFinder.FindPath(core.Point{0, 0}, core.Point{2, 0}, obstacles2)
+	_, _ = cachedFinder.FindPath(diagram.Point{0, 0}, diagram.Point{2, 0}, obstacles1)
+	_, _ = cachedFinder.FindPath(diagram.Point{0, 0}, diagram.Point{2, 0}, obstacles2)
 	
 	if callCount != 2 {
 		t.Errorf("Different obstacles should result in cache miss: got %d calls, want 2", callCount)
 	}
 	
 	// Same obstacles should use cache
-	_, _ = cachedFinder.FindPath(core.Point{0, 0}, core.Point{2, 0}, obstacles1)
+	_, _ = cachedFinder.FindPath(diagram.Point{0, 0}, diagram.Point{2, 0}, obstacles1)
 	if callCount != 2 {
 		t.Errorf("Same obstacles should use cache: got %d calls, want still 2", callCount)
 	}
@@ -204,8 +204,8 @@ func TestCachedPathFinder_ObstacleHashing(t *testing.T) {
 
 func BenchmarkPathCache(b *testing.B) {
 	cache := NewPathCache(1000)
-	path := core.Path{
-		Points: []core.Point{{0, 0}, {1, 0}, {2, 0}},
+	path := diagram.Path{
+		Points: []diagram.Point{{0, 0}, {1, 0}, {2, 0}},
 		Cost:   20,
 	}
 	
@@ -214,8 +214,8 @@ func BenchmarkPathCache(b *testing.B) {
 		// Mix of puts and gets
 		x := i % 100
 		y := (i / 100) % 100
-		start := core.Point{X: x, Y: y}
-		end := core.Point{X: x + 10, Y: y + 10}
+		start := diagram.Point{X: x, Y: y}
+		end := diagram.Point{X: x + 10, Y: y + 10}
 		
 		if i%2 == 0 {
 			cache.Put(start, end, 0, path)

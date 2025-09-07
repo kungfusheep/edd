@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"strings"
 	"testing"
 )
@@ -9,7 +9,7 @@ import (
 // TestRenderEmptyState tests rendering with no diagram
 func TestRenderEmptyState(t *testing.T) {
 	state := TUIState{
-		Diagram: &core.Diagram{},
+		Diagram: &diagram.Diagram{},
 		Mode:    ModeNormal,
 		Width:   80,
 		Height:  24,
@@ -29,8 +29,8 @@ func TestRenderEmptyState(t *testing.T) {
 // TestRenderWithNodes tests rendering with nodes
 func TestRenderWithNodes(t *testing.T) {
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"Server"}},
 				{ID: 2, Text: []string{"Database"}},
 			},
@@ -55,8 +55,8 @@ func TestRenderWithNodes(t *testing.T) {
 // TestRenderJumpMode tests jump label rendering
 func TestRenderJumpMode(t *testing.T) {
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"Node1"}},
 				{ID: 2, Text: []string{"Node2"}},
 				{ID: 3, Text: []string{"Node3"}},
@@ -105,7 +105,7 @@ func TestRenderTextInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := TUIState{
-				Diagram:    &core.Diagram{},
+				Diagram:    &diagram.Diagram{},
 				Mode:       ModeEdit,
 				TextBuffer: tt.textBuffer,
 				CursorPos:  tt.cursorPos,
@@ -127,12 +127,12 @@ func TestRenderTextInput(t *testing.T) {
 // TestRenderConnections tests connection rendering
 func TestRenderConnections(t *testing.T) {
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"A"}},
 				{ID: 2, Text: []string{"B"}},
 			},
-			Connections: []core.Connection{
+			Connections: []diagram.Connection{
 				{From: 1, To: 2, Label: "test"},
 			},
 		},
@@ -166,7 +166,7 @@ func TestModeTransitions(t *testing.T) {
 	
 	for _, m := range modes {
 		state := TUIState{
-			Diagram:  &core.Diagram{},
+			Diagram:  &diagram.Diagram{},
 			Mode:     m.mode,
 			EddFrame: m.face,
 		}
@@ -181,13 +181,13 @@ func TestModeTransitions(t *testing.T) {
 func TestComplexScenario(t *testing.T) {
 	// Simulate: User is connecting nodes with jump labels active
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"Web", "Server"}},
 				{ID: 2, Text: []string{"API"}},
 				{ID: 3, Text: []string{"Database"}},
 			},
-			Connections: []core.Connection{
+			Connections: []diagram.Connection{
 				{From: 1, To: 2},
 			},
 		},
@@ -212,13 +212,13 @@ func TestComplexScenario(t *testing.T) {
 // Benchmark to establish baseline performance
 func BenchmarkRenderSimple(b *testing.B) {
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"Node1"}},
 				{ID: 2, Text: []string{"Node2"}},
 				{ID: 3, Text: []string{"Node3"}},
 			},
-			Connections: []core.Connection{
+			Connections: []diagram.Connection{
 				{From: 1, To: 2},
 				{From: 2, To: 3},
 			},
@@ -235,24 +235,24 @@ func BenchmarkRenderSimple(b *testing.B) {
 
 func BenchmarkRenderComplex(b *testing.B) {
 	// Create a larger diagram
-	nodes := make([]core.Node, 20)
+	nodes := make([]diagram.Node, 20)
 	for i := range nodes {
-		nodes[i] = core.Node{
+		nodes[i] = diagram.Node{
 			ID:   i + 1,
 			Text: []string{"Node"},
 		}
 	}
 	
-	connections := make([]core.Connection, 30)
+	connections := make([]diagram.Connection, 30)
 	for i := range connections {
-		connections[i] = core.Connection{
+		connections[i] = diagram.Connection{
 			From: (i % 20) + 1,
 			To:   ((i + 5) % 20) + 1,
 		}
 	}
 	
 	state := TUIState{
-		Diagram: &core.Diagram{
+		Diagram: &diagram.Diagram{
 			Nodes:       nodes,
 			Connections: connections,
 		},

@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"unicode"
 )
 
@@ -36,12 +36,12 @@ func (e *TUIEditor) GetSelectedNode() int {
 }
 
 // GetNodePositions returns the last rendered node positions
-func (e *TUIEditor) GetNodePositions() map[int]core.Point {
+func (e *TUIEditor) GetNodePositions() map[int]diagram.Point {
 	return e.nodePositions
 }
 
 // GetConnectionPaths returns the last rendered connection paths
-func (e *TUIEditor) GetConnectionPaths() map[int]core.Path {
+func (e *TUIEditor) GetConnectionPaths() map[int]diagram.Path {
 	return e.connectionPaths
 }
 

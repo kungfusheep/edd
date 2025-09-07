@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 	"time"
 )
@@ -89,7 +89,7 @@ func BenchmarkComplexPaths(b *testing.B) {
 
 	for _, scenario := range scenarios {
 		b.Run(scenario.name, func(b *testing.B) {
-			var obstacles func(core.Point) bool
+			var obstacles func(diagram.Point) bool
 			
 			if scenario.obstacles != "" {
 				obstacles = parseObstacleMap(scenario.obstacles)
@@ -99,8 +99,8 @@ func BenchmarkComplexPaths(b *testing.B) {
 			}
 			
 			// Test points from corners
-			start := core.Point{1, 1}
-			end := core.Point{scenario.size - 2, scenario.size - 2}
+			start := diagram.Point{1, 1}
+			end := diagram.Point{scenario.size - 2, scenario.size - 2}
 			
 			// Create both cached and non-cached finders
 			smartFinder := NewSmartPathFinder(DefaultPathCost)
@@ -145,11 +145,11 @@ func BenchmarkComplexPaths(b *testing.B) {
 	}
 }
 
-func generateObstacles(size int, pattern string) func(core.Point) bool {
+func generateObstacles(size int, pattern string) func(diagram.Point) bool {
 	switch pattern {
 	case "Sparse_50x50":
 		// Random-looking but deterministic obstacles
-		return func(p core.Point) bool {
+		return func(p diagram.Point) bool {
 			// Boundaries
 			if p.X == 0 || p.Y == 0 || p.X == size-1 || p.Y == size-1 {
 				return true
@@ -159,7 +159,7 @@ func generateObstacles(size int, pattern string) func(core.Point) bool {
 		}
 	case "Diagonal_100x100":
 		// Diagonal barrier with small gaps
-		return func(p core.Point) bool {
+		return func(p diagram.Point) bool {
 			// Boundaries
 			if p.X == 0 || p.Y == 0 || p.X == size-1 || p.Y == size-1 {
 				return true
@@ -171,7 +171,7 @@ func generateObstacles(size int, pattern string) func(core.Point) bool {
 			return false
 		}
 	default:
-		return func(p core.Point) bool { return false }
+		return func(p diagram.Point) bool { return false }
 	}
 }
 
@@ -183,17 +183,17 @@ func TestPathComputationTime(t *testing.T) {
 	
 	scenarios := []struct {
 		name   string
-		start  core.Point
-		end    core.Point
-		buildObstacles func() func(core.Point) bool
+		start  diagram.Point
+		end    diagram.Point
+		buildObstacles func() func(diagram.Point) bool
 	}{
 		{
 			name:  "Long corridor with turns",
-			start: core.Point{1, 1},
-			end:   core.Point{98, 98},
-			buildObstacles: func() func(core.Point) bool {
+			start: diagram.Point{1, 1},
+			end:   diagram.Point{98, 98},
+			buildObstacles: func() func(diagram.Point) bool {
 				// Create a maze-like pattern
-				return func(p core.Point) bool {
+				return func(p diagram.Point) bool {
 					// Create walls that force a winding path
 					if p.Y%10 == 5 && p.X < 95 && p.X%10 != 5 {
 						return true
@@ -207,11 +207,11 @@ func TestPathComputationTime(t *testing.T) {
 		},
 		{
 			name:  "Dense obstacle field",
-			start: core.Point{5, 5},
-			end:   core.Point{95, 95},
-			buildObstacles: func() func(core.Point) bool {
+			start: diagram.Point{5, 5},
+			end:   diagram.Point{95, 95},
+			buildObstacles: func() func(diagram.Point) bool {
 				// 40% of cells are obstacles
-				return func(p core.Point) bool {
+				return func(p diagram.Point) bool {
 					// Never block start or end
 					if (p.X == 5 && p.Y == 5) || (p.X == 95 && p.Y == 95) {
 						return false
@@ -226,11 +226,11 @@ func TestPathComputationTime(t *testing.T) {
 		},
 		{
 			name:  "Worst case spiral",
-			start: core.Point{50, 50},
-			end:   core.Point{51, 51},
-			buildObstacles: func() func(core.Point) bool {
+			start: diagram.Point{50, 50},
+			end:   diagram.Point{51, 51},
+			buildObstacles: func() func(diagram.Point) bool {
 				// Create a spiral that forces a very long path for nearby points
-				return func(p core.Point) bool {
+				return func(p diagram.Point) bool {
 					dx := p.X - 50
 					dy := p.Y - 50
 					

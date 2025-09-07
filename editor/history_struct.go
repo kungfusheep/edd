@@ -1,12 +1,12 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 )
 
 // StructHistory manages undo/redo using direct struct storage (much faster than JSON)
 type StructHistory struct {
-	states  []*core.Diagram // Direct struct pointers
+	states  []*diagram.Diagram // Direct struct pointers
 	current int             // Current position in history
 	max     int             // Maximum number of states to keep
 }
@@ -17,16 +17,16 @@ func NewStructHistory(max int) *StructHistory {
 		max = 50
 	}
 	return &StructHistory{
-		states:  make([]*core.Diagram, 0, max),
+		states:  make([]*diagram.Diagram, 0, max),
 		current: -1,
 		max:     max,
 	}
 }
 
 // SaveState saves a new state (creates a deep copy)
-func (sh *StructHistory) SaveState(diagram *core.Diagram) error {
+func (sh *StructHistory) SaveState(d *diagram.Diagram) error {
 	// Create a deep copy of the diagram
-	clone := diagram.Clone()
+	clone := d.Clone()
 	
 	// If we're not at the end, truncate everything after current
 	if sh.current < len(sh.states)-1 {
@@ -57,7 +57,7 @@ func (sh *StructHistory) CanRedo() bool {
 }
 
 // Undo goes back one state
-func (sh *StructHistory) Undo() (*core.Diagram, error) {
+func (sh *StructHistory) Undo() (*diagram.Diagram, error) {
 	if !sh.CanUndo() {
 		return nil, nil
 	}
@@ -69,7 +69,7 @@ func (sh *StructHistory) Undo() (*core.Diagram, error) {
 }
 
 // Redo goes forward one state
-func (sh *StructHistory) Redo() (*core.Diagram, error) {
+func (sh *StructHistory) Redo() (*diagram.Diagram, error) {
 	if !sh.CanRedo() {
 		return nil, nil
 	}

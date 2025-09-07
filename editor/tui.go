@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -10,7 +10,7 @@ import (
 
 // TUIEditor represents the interactive terminal UI editor
 type TUIEditor struct {
-	diagram  *core.Diagram
+	diagram  *diagram.Diagram
 	renderer DiagramRenderer
 
 	// UI State (minimal!)
@@ -41,8 +41,8 @@ type TUIEditor struct {
 	height int
 	
 	// Positions from last layout (for jump label positioning)
-	nodePositions       map[int]core.Point // Node ID -> position from last render
-	connectionPaths     map[int]core.Path  // Connection index -> path from last render
+	nodePositions       map[int]diagram.Point // Node ID -> position from last render
+	connectionPaths     map[int]diagram.Path  // Connection index -> path from last render
 	
 	// JSON view state
 	jsonScrollOffset    int  // Current scroll position in JSON view
@@ -57,7 +57,7 @@ type TUIEditor struct {
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 	editor := &TUIEditor{
-		diagram:            &core.Diagram{Type: "box"},  // Default to box diagram
+		diagram:            &diagram.Diagram{Type: "box"},  // Default to box diagram
 		renderer:           renderer,
 		mode:               ModeNormal,
 		selected:           -1,
@@ -70,8 +70,8 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		edd:                NewEddCharacter(),
 		width:              80,
 		height:             24,
-		nodePositions:      make(map[int]core.Point),
-		connectionPaths:    make(map[int]core.Path),
+		nodePositions:      make(map[int]diagram.Point),
+		connectionPaths:    make(map[int]diagram.Path),
 		continuousConnect:  false,
 		continuousDelete:   false,
 		editingHintConn:    -1,  // Initialize to -1 (no connection being edited)
@@ -88,14 +88,14 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 }
 
 // SetDiagram sets the diagram to edit
-func (e *TUIEditor) SetDiagram(d *core.Diagram) {
+func (e *TUIEditor) SetDiagram(d *diagram.Diagram) {
 	e.diagram = d
 	// Save this as a new state in history
 	e.history.SaveState(d)
 }
 
 // GetDiagram returns the current diagram
-func (e *TUIEditor) GetDiagram() *core.Diagram {
+func (e *TUIEditor) GetDiagram() *diagram.Diagram {
 	return e.diagram
 }
 
@@ -255,7 +255,7 @@ func (e *TUIEditor) AddNode(text []string) int {
 		}
 	}
 
-	newNode := core.Node{
+	newNode := diagram.Node{
 		ID:   maxID + 1,
 		Text: text,
 	}
@@ -279,7 +279,7 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 	}
 
 	// Remove connections involving this node
-	newConnections := []core.Connection{}
+	newConnections := []diagram.Connection{}
 	for _, conn := range e.diagram.Connections {
 		if conn.From != nodeID && conn.To != nodeID {
 			newConnections = append(newConnections, conn)
@@ -295,7 +295,7 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 func (e *TUIEditor) AddConnection(from, to int, label string) {
 	// In sequence diagrams, allow multiple messages between same participants
 	// In flowcharts, check for duplicate connections
-	if e.diagram.Type != string(core.DiagramTypeSequence) {
+	if e.diagram.Type != string(diagram.DiagramTypeSequence) {
 		// Check for duplicate connections in the same direction only
 		for _, existing := range e.diagram.Connections {
 			if existing.From == from && existing.To == to {
@@ -306,7 +306,7 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		}
 	}
 	
-	conn := core.Connection{
+	conn := diagram.Connection{
 		From:  from,
 		To:    to,
 		Label: label,

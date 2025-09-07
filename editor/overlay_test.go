@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,12 +10,12 @@ import (
 // TestEdPositionBottomRight verifies Ed state is properly set
 func TestEdPositionBottomRight(t *testing.T) {
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"Node1"}},
 				{ID: 2, Text: []string{"Node2"}},
 			},
-			Connections: []core.Connection{
+			Connections: []diagram.Connection{
 				{From: 1, To: 2},
 			},
 		},
@@ -40,7 +40,7 @@ func TestSingleModeIndicator(t *testing.T) {
 	
 	for _, mode := range modes {
 		state := TUIState{
-			Diagram:  &core.Diagram{},
+			Diagram:  &diagram.Diagram{},
 			Mode:     mode,
 			EddFrame: "◉‿◉",
 		}
@@ -71,7 +71,7 @@ func TestEdFaceRendering(t *testing.T) {
 	
 	for name, face := range faces {
 		state := TUIState{
-			Diagram:  &core.Diagram{},
+			Diagram:  &diagram.Diagram{},
 			Mode:     ModeNormal,
 			EddFrame: face,
 		}
@@ -89,8 +89,8 @@ func TestEdFaceRendering(t *testing.T) {
 // TestOverlayClearance ensures overlays don't overlap diagram content
 func TestOverlayClearance(t *testing.T) {
 	state := TUIState{
-		Diagram: &core.Diagram{
-			Nodes: []core.Node{
+		Diagram: &diagram.Diagram{
+			Nodes: []diagram.Node{
 				{ID: 1, Text: []string{"TopLeft"}},
 				{ID: 2, Text: []string{"TopRight"}},
 			},
@@ -117,8 +117,8 @@ func TestOverlayClearance(t *testing.T) {
 // TestNoOverlayDuplication verifies no duplicate mode indicators
 func TestNoOverlayDuplication(t *testing.T) {
 	tui := NewTUIEditor(nil)
-	tui.SetDiagram(&core.Diagram{
-		Nodes: []core.Node{
+	tui.SetDiagram(&diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node 1"}},
 			{ID: 2, Text: []string{"Node 2"}},
 			{ID: 3, Text: []string{"Node 3"}},
@@ -148,8 +148,8 @@ func TestNoOverlayDuplication(t *testing.T) {
 // TestClearBetweenModes verifies clean transitions between modes
 func TestClearBetweenModes(t *testing.T) {
 	tui := NewTUIEditor(nil)
-	tui.SetDiagram(&core.Diagram{
-		Nodes: []core.Node{
+	tui.SetDiagram(&diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Test"}},
 		},
 	})

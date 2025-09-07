@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 )
 
 // HandleHintMenuInput processes input in hint menu mode
@@ -20,7 +20,7 @@ func (e *TUIEditor) HandleHintMenuInput(key rune) {
 // handleNodeHintInput handles hint menu input for nodes
 func (e *TUIEditor) handleNodeHintInput(key rune) {
 	// Find the node
-	var node *core.Node
+	var node *diagram.Node
 	for i := range e.diagram.Nodes {
 		if e.diagram.Nodes[i].ID == e.editingHintNode {
 			node = &e.diagram.Nodes[i]
@@ -39,7 +39,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 		node.Hints = make(map[string]string)
 	}
 	
-	isSequence := e.diagram.Type == string(core.DiagramTypeSequence)
+	isSequence := e.diagram.Type == string(diagram.DiagramTypeSequence)
 	
 	switch key {
 	// Style options for nodes/boxes
@@ -292,7 +292,7 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		conn.Hints = make(map[string]string)
 	}
 	
-	isSequence := e.diagram.Type == string(core.DiagramTypeSequence)
+	isSequence := e.diagram.Type == string(diagram.DiagramTypeSequence)
 	
 	switch key {
 	// Style options for connections
@@ -398,7 +398,7 @@ func (e *TUIEditor) GetHintMenuDisplay() string {
 // getNodeHintMenuDisplay returns the hint menu display for a node
 func (e *TUIEditor) getNodeHintMenuDisplay() string {
 	// Find the node
-	var node *core.Node
+	var node *diagram.Node
 	for i := range e.diagram.Nodes {
 		if e.diagram.Nodes[i].ID == e.editingHintNode {
 			node = &e.diagram.Nodes[i]
@@ -446,7 +446,7 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 	}
 	
 	// Different menu for sequence diagrams
-	if e.diagram.Type == string(core.DiagramTypeSequence) {
+	if e.diagram.Type == string(diagram.DiagramTypeSequence) {
 		boxStyle := "rounded"
 		if s, ok := node.Hints["box-style"]; ok {
 			boxStyle = s
@@ -531,7 +531,7 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 	}
 	
 	// Different menu for sequence diagrams
-	if e.diagram.Type == string(core.DiagramTypeSequence) {
+	if e.diagram.Type == string(diagram.DiagramTypeSequence) {
 		return "\n" +
 			"Message: " + fromText + " → " + toText + " | style=" + style + ", color=" + color + "\n" +
 			"Style: [a]Solid [b]Dashed [c]Dotted | Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +

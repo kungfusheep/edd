@@ -1,7 +1,7 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"encoding/json"
 	"testing"
 )
@@ -37,7 +37,7 @@ func TestConnectionHints(t *testing.T) {
 	}
 	
 	// Parse back
-	var loaded core.Diagram
+	var loaded diagram.Diagram
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
@@ -124,12 +124,12 @@ func TestHintMenuInput(t *testing.T) {
 
 func TestHintMenuEnterExitsToNormal(t *testing.T) {
 	// Create a simple diagram with nodes
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node 1"}},
 			{ID: 2, Text: []string{"Node 2"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "connects"},
 		},
 	}
@@ -202,12 +202,12 @@ func TestHintMenuEnterExitsToNormal(t *testing.T) {
 
 func TestHintMenuESCReturnsToJump(t *testing.T) {
 	// Create a simple diagram with nodes
-	diagram := &core.Diagram{
-		Nodes: []core.Node{
+	diagram := &diagram.Diagram{
+		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node 1"}},
 			{ID: 2, Text: []string{"Node 2"}},
 		},
-		Connections: []core.Connection{
+		Connections: []diagram.Connection{
 			{From: 1, To: 2, Label: "connects"},
 		},
 	}

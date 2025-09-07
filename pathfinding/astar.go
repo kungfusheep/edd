@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"container/heap"
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 	"fmt"
 	"math"
@@ -10,7 +10,7 @@ import (
 
 // AStarNode represents a state in the A* search.
 type AStarNode struct {
-	Point     core.Point
+	Point     diagram.Point
 	GCost     int        // Cost from start
 	HCost     int        // Heuristic cost to goal
 	FCost     int        // GCost + HCost
@@ -41,7 +41,7 @@ func (nq NodeQueue) Less(i, j int) bool {
 }
 
 // symmetricOrder provides a deterministic ordering that promotes symmetry
-func symmetricOrder(p1, p2 core.Point) bool {
+func symmetricOrder(p1, p2 diagram.Point) bool {
 	// Order by sum of coordinates first (promotes diagonal movement)
 	sum1 := p1.X + p1.Y
 	sum2 := p2.X + p2.Y
@@ -99,19 +99,19 @@ func NewAStarPathFinder(costs PathCost) *AStarPathFinder {
 	}
 }
 
-// FindPath finds an optimal path from start to end avoiding obstacles.
-func (a *AStarPathFinder) FindPath(start, end core.Point, obstacles func(core.Point) bool) (core.Path, error) {
+// FindPath finds an optimal path from start to end avoiding render.
+func (a *AStarPathFinder) FindPath(start, end diagram.Point, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	if start == end {
-		return core.Path{Points: []core.Point{start}, Cost: 0}, nil
+		return diagram.Path{Points: []diagram.Point{start}, Cost: 0}, nil
 	}
 	
 	// Check if start or end is blocked
 	if obstacles != nil {
 		if obstacles(start) {
-			return core.Path{}, fmt.Errorf("start point is blocked")
+			return diagram.Path{}, fmt.Errorf("start point is blocked")
 		}
 		if obstacles(end) {
-			return core.Path{}, fmt.Errorf("end point is blocked")
+			return diagram.Path{}, fmt.Errorf("end point is blocked")
 		}
 	}
 	
@@ -125,8 +125,8 @@ func (a *AStarPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 	startNode := &AStarNode{
 		Point:     start,
 		GCost:     0,
-		HCost:     a.heuristic(start, end, None),
-		Direction: None,
+		HCost:     a.heuristic(start, end, DirNone),
+		Direction: DirNone,
 	}
 	startNode.FCost = startNode.GCost + startNode.HCost
 	
@@ -140,7 +140,7 @@ func (a *AStarPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 		// Safety check
 		nodesExplored++
 		if nodesExplored > a.maxNodes {
-			return core.Path{}, fmt.Errorf("pathfinding exceeded node limit")
+			return diagram.Path{}, fmt.Errorf("pathfinding exceeded node limit")
 		}
 		
 		// Get node with lowest F cost
@@ -202,11 +202,11 @@ func (a *AStarPathFinder) FindPath(start, end core.Point, obstacles func(core.Po
 		}
 	}
 	
-	return core.Path{}, fmt.Errorf("no path found")
+	return diagram.Path{}, fmt.Errorf("no path found")
 }
 
 // heuristic calculates the estimated cost to reach the goal.
-func (a *AStarPathFinder) heuristic(current, goal core.Point, currentDir Direction) int {
+func (a *AStarPathFinder) heuristic(current, goal diagram.Point, currentDir Direction) int {
 	// Manhattan distance
 	dx := geometry.Abs(goal.X - current.X)
 	dy := geometry.Abs(goal.Y - current.Y)
@@ -229,12 +229,12 @@ func (a *AStarPathFinder) heuristic(current, goal core.Point, currentDir Directi
 }
 
 // calculateGCost calculates the cost to move from current to next.
-func (a *AStarPathFinder) calculateGCost(current *AStarNode, next core.Point, nextDir Direction, obstacles func(core.Point) bool) int {
+func (a *AStarPathFinder) calculateGCost(current *AStarNode, next diagram.Point, nextDir Direction, obstacles func(diagram.Point) bool) int {
 	// Base movement cost
 	cost := a.costs.StraightCost
 	
 	// Add turn cost if changing direction
-	if current.Parent != nil && current.Direction != None && current.Direction != nextDir {
+	if current.Parent != nil && current.Direction != DirNone && current.Direction != nextDir {
 		cost += a.costs.TurnCost
 	}
 	
@@ -256,13 +256,13 @@ func (a *AStarPathFinder) calculateGCost(current *AStarNode, next core.Point, ne
 	
 	// Direction bias (prefer horizontal/vertical based on setting)
 	if a.costs.DirectionBias != 0 {
-		if a.costs.DirectionBias > 0 && (nextDir == East || nextDir == West) {
+		if a.costs.DirectionBias > 0 && (nextDir == DirEast || nextDir == DirWest) {
 			// Prefer horizontal movement
 			bias := geometry.Abs(a.costs.DirectionBias)
 			if bias < cost {
 				cost -= bias
 			}
-		} else if a.costs.DirectionBias < 0 && (nextDir == North || nextDir == South) {
+		} else if a.costs.DirectionBias < 0 && (nextDir == DirNorth || nextDir == DirSouth) {
 			// Prefer vertical movement
 			bias := geometry.Abs(a.costs.DirectionBias)
 			if bias < cost {
@@ -275,25 +275,25 @@ func (a *AStarPathFinder) calculateGCost(current *AStarNode, next core.Point, ne
 }
 
 // reconstructPath builds the final path from the goal node.
-func (a *AStarPathFinder) reconstructPath(goalNode *AStarNode) core.Path {
-	points := []core.Point{}
+func (a *AStarPathFinder) reconstructPath(goalNode *AStarNode) diagram.Path {
+	points := []diagram.Point{}
 	totalCost := goalNode.GCost
 	
 	// Walk backwards from goal to start
 	current := goalNode
 	for current != nil {
-		points = append([]core.Point{current.Point}, points...)
+		points = append([]diagram.Point{current.Point}, points...)
 		current = current.Parent
 	}
 	
-	return core.Path{
+	return diagram.Path{
 		Points: points,
 		Cost:   totalCost,
 	}
 }
 
-// countAdjacentObstacles counts how many adjacent cells contain obstacles.
-func (a *AStarPathFinder) countAdjacentObstacles(p core.Point, obstacles func(core.Point) bool) int {
+// countAdjacentObstacles counts how many adjacent cells contain render.
+func (a *AStarPathFinder) countAdjacentObstacles(p diagram.Point, obstacles func(diagram.Point) bool) int {
 	count := 0
 	// Check all 4 cardinal directions
 	neighbors := GetNeighbors(p)
@@ -313,15 +313,15 @@ func (a *AStarPathFinder) SetMaxNodes(max int) {
 // FindPathToArea finds an optimal path from start to the edge of a target area.
 // The target area is defined by a rectangle (node bounds).
 // The path will terminate at the first point on the edge of the area that is not blocked.
-func (a *AStarPathFinder) FindPathToArea(start core.Point, targetNode core.Node, obstacles func(core.Point) bool) (core.Path, error) {
+func (a *AStarPathFinder) FindPathToArea(start diagram.Point, targetNode diagram.Node, obstacles func(diagram.Point) bool) (diagram.Path, error) {
 	// Check if start is blocked
 	if obstacles != nil && obstacles(start) {
-		return core.Path{}, fmt.Errorf("start point is blocked")
+		return diagram.Path{}, fmt.Errorf("start point is blocked")
 	}
 	
 	// Check if start is already at the target edge
 	if isAtNodeEdge(start, targetNode) {
-		return core.Path{Points: []core.Point{start}, Cost: 0}, nil
+		return diagram.Path{Points: []diagram.Point{start}, Cost: 0}, nil
 	}
 	
 	// Initialize open and closed sets
@@ -334,8 +334,8 @@ func (a *AStarPathFinder) FindPathToArea(start core.Point, targetNode core.Node,
 	startNode := &AStarNode{
 		Point:     start,
 		GCost:     0,
-		HCost:     a.heuristicToArea(start, targetNode, None),
-		Direction: None,
+		HCost:     a.heuristicToArea(start, targetNode, DirNone),
+		Direction: DirNone,
 	}
 	startNode.FCost = startNode.GCost + startNode.HCost
 	
@@ -349,7 +349,7 @@ func (a *AStarPathFinder) FindPathToArea(start core.Point, targetNode core.Node,
 		// Safety check
 		nodesExplored++
 		if nodesExplored > a.maxNodes {
-			return core.Path{}, fmt.Errorf("pathfinding exceeded node limit")
+			return diagram.Path{}, fmt.Errorf("pathfinding exceeded node limit")
 		}
 		
 		// Get node with lowest F cost
@@ -415,11 +415,11 @@ func (a *AStarPathFinder) FindPathToArea(start core.Point, targetNode core.Node,
 		}
 	}
 	
-	return core.Path{}, fmt.Errorf("no path found to target area")
+	return diagram.Path{}, fmt.Errorf("no path found to target area")
 }
 
 // heuristicToArea calculates the estimated cost to reach the target area.
-func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.Node, currentDir Direction) int {
+func (a *AStarPathFinder) heuristicToArea(current diagram.Point, targetNode diagram.Node, currentDir Direction) int {
 	// Calculate minimum Manhattan distance to any edge of the target
 	minDist := math.MaxInt32
 	
@@ -465,7 +465,7 @@ func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.No
 	h := minDist * a.costs.StraightCost
 	
 	// Add minimum turn cost if we'll need at least one turn
-	if minDist > 0 && currentDir != None {
+	if minDist > 0 && currentDir != DirNone {
 		// Simplified turn estimation
 		h += a.costs.TurnCost / 2
 	}
@@ -474,7 +474,7 @@ func (a *AStarPathFinder) heuristicToArea(current core.Point, targetNode core.No
 }
 
 // isAtNodeEdge checks if a point is exactly at the edge of a node (not inside).
-func isAtNodeEdge(p core.Point, node core.Node) bool {
+func isAtNodeEdge(p diagram.Point, node diagram.Node) bool {
 	// Check if on the perimeter of the node
 	onVerticalEdge := (p.X == node.X-1 || p.X == node.X+node.Width) && 
 	                  p.Y >= node.Y-1 && p.Y <= node.Y+node.Height

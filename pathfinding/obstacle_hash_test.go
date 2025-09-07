@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"testing"
 )
 
@@ -10,15 +10,15 @@ func TestSmartPathFinder_ObstacleHashing(t *testing.T) {
 	
 	// Test case 1: Obstacle outside direct bounding box should affect hash
 	t.Run("Detour obstacle detection", func(t *testing.T) {
-		start := core.Point{0, 0}
-		end := core.Point{10, 0}
+		start := diagram.Point{0, 0}
+		end := diagram.Point{10, 0}
 		
 		// Obstacle at Y=-5 forces detour but is outside direct bounding box
-		obstacles1 := func(p core.Point) bool {
+		obstacles1 := func(p diagram.Point) bool {
 			return p.X == 5 && p.Y == 0 // Direct path blocked
 		}
 		
-		obstacles2 := func(p core.Point) bool {
+		obstacles2 := func(p diagram.Point) bool {
 			return (p.X == 5 && p.Y == 0) || // Direct path blocked
 				(p.X == 5 && p.Y == -5) // Additional obstacle on detour path
 		}
@@ -41,12 +41,12 @@ func TestSmartPathFinder_ObstacleHashing(t *testing.T) {
 	
 	// Test case 2: Same obstacles, different endpoints should have different hashes
 	t.Run("Endpoint differentiation", func(t *testing.T) {
-		obstacles := func(p core.Point) bool {
+		obstacles := func(p diagram.Point) bool {
 			return p.X == 5 && p.Y == 5
 		}
 		
-		hash1 := finder.hashObstacles(core.Point{0, 0}, core.Point{10, 10}, obstacles)
-		hash2 := finder.hashObstacles(core.Point{0, 0}, core.Point{10, 11}, obstacles)
+		hash1 := finder.hashObstacles(diagram.Point{0, 0}, diagram.Point{10, 10}, obstacles)
+		hash2 := finder.hashObstacles(diagram.Point{0, 0}, diagram.Point{10, 11}, obstacles)
 		
 		if hash1 == hash2 {
 			t.Error("Hashes should differ for different endpoints")
@@ -56,7 +56,7 @@ func TestSmartPathFinder_ObstacleHashing(t *testing.T) {
 	// Test case 3: Verify cache correctness with complex obstacles
 	t.Run("Cache correctness", func(t *testing.T) {
 		// Create a complex obstacle pattern
-		obstacles := func(p core.Point) bool {
+		obstacles := func(p diagram.Point) bool {
 			// Vertical wall with a gap
 			if p.X == 5 && p.Y >= -5 && p.Y <= 5 && p.Y != 0 {
 				return true
@@ -64,8 +64,8 @@ func TestSmartPathFinder_ObstacleHashing(t *testing.T) {
 			return false
 		}
 		
-		start := core.Point{0, 0}
-		end := core.Point{10, 0}
+		start := diagram.Point{0, 0}
+		end := diagram.Point{10, 0}
 		
 		// First call - computes path
 		path1, err := finder.FindPath(start, end, obstacles)
@@ -109,18 +109,18 @@ func TestObstacleHashCollisions(t *testing.T) {
 	
 	testCases := []struct {
 		name      string
-		start     core.Point
-		end       core.Point
+		start     diagram.Point
+		end       diagram.Point
 		obstacles string
 	}{
 		{
 			"Empty grid",
-			core.Point{0, 0}, core.Point{5, 5},
+			diagram.Point{0, 0}, diagram.Point{5, 5},
 			"",
 		},
 		{
 			"Single obstacle",
-			core.Point{0, 0}, core.Point{5, 5},
+			diagram.Point{0, 0}, diagram.Point{5, 5},
 			`
 .....
 ..X..
@@ -128,7 +128,7 @@ func TestObstacleHashCollisions(t *testing.T) {
 		},
 		{
 			"Wall",
-			core.Point{0, 0}, core.Point{5, 5},
+			diagram.Point{0, 0}, diagram.Point{5, 5},
 			`
 .....
 XXXX.
@@ -136,7 +136,7 @@ XXXX.
 		},
 		{
 			"Different wall",
-			core.Point{0, 0}, core.Point{5, 5},
+			diagram.Point{0, 0}, diagram.Point{5, 5},
 			`
 .....
 .XXXX
@@ -144,7 +144,7 @@ XXXX.
 		},
 		{
 			"Vertical wall",
-			core.Point{0, 0}, core.Point{5, 5},
+			diagram.Point{0, 0}, diagram.Point{5, 5},
 			`
 ..X..
 ..X..

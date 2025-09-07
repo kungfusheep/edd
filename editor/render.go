@@ -1,14 +1,14 @@
 package editor
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"strings"
 )
 
 // TUIState represents the complete state for rendering
 type TUIState struct {
-	Diagram    *core.Diagram
+	Diagram    *diagram.Diagram
 	Mode       Mode
 	Selected   int            // Currently selected node ID
 	JumpLabels map[int]rune   // Jump labels for nodes
@@ -64,7 +64,7 @@ func RenderTUIWithRenderer(state TUIState, renderer DiagramRenderer) string {
 }
 
 // renderDiagramSimple creates a simple text representation for testing
-func renderDiagramSimple(diagram *core.Diagram) string {
+func renderDiagramSimple(d *diagram.Diagram) string {
 	var lines []string
 	
 	// Add empty lines at top
@@ -72,16 +72,16 @@ func renderDiagramSimple(diagram *core.Diagram) string {
 	lines = append(lines, "")
 	
 	// Simple representation of nodes
-	for _, node := range diagram.Nodes {
+	for _, node := range d.Nodes {
 		nodeStr := fmt.Sprintf("  [%d] %s", node.ID, strings.Join(node.Text, " "))
 		lines = append(lines, nodeStr)
 	}
 	
 	// Add connections
-	if len(diagram.Connections) > 0 {
+	if len(d.Connections) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, "  Connections:")
-		for _, conn := range diagram.Connections {
+		for _, conn := range d.Connections {
 			connStr := fmt.Sprintf("    %d -> %d", conn.From, conn.To)
 			if conn.Label != "" {
 				connStr += fmt.Sprintf(" (%s)", conn.Label)

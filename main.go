@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"edd/core"
-	"edd/rendering"
-	"edd/tui"
+	"edd/diagram"
+	"edd/render"
+	"edd/terminal"
 	"edd/validation"
 	"flag"
 	"fmt"
@@ -88,7 +88,7 @@ func main() {
 	}
 	
 	// Create renderer
-	renderer := rendering.NewRenderer()
+	renderer := render.NewRenderer()
 	
 	// Enable validation if requested
 	if *validate {
@@ -128,7 +128,7 @@ func main() {
 }
 
 // loadDiagram loads a diagram from a JSON file
-func loadDiagram(filename string) (*core.Diagram, error) {
+func loadDiagram(filename string) (*diagram.Diagram, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("opening file: %w", err)
@@ -140,27 +140,27 @@ func loadDiagram(filename string) (*core.Diagram, error) {
 		return nil, fmt.Errorf("reading file: %w", err)
 	}
 	
-	var diagram core.Diagram
-	if err := json.Unmarshal(data, &diagram); err != nil {
+	var d diagram.Diagram
+	if err := json.Unmarshal(data, &d); err != nil {
 		return nil, fmt.Errorf("parsing JSON: %w", err)
 	}
 	
 	// Basic validation
-	if len(diagram.Nodes) == 0 {
+	if len(d.Nodes) == 0 {
 		return nil, fmt.Errorf("diagram has no nodes")
 	}
 	
 	// Ensure all connections have unique IDs
-	core.EnsureUniqueConnectionIDs(&diagram)
+	diagram.EnsureUniqueConnectionIDs(&d)
 	
 	// Default arrows to true for all connections
-	for i := range diagram.Connections {
+	for i := range d.Connections {
 		// Default arrows to true if not explicitly set to false
-		if !diagram.Connections[i].Arrow {
-			diagram.Connections[i].Arrow = true
+		if !d.Connections[i].Arrow {
+			d.Connections[i].Arrow = true
 		}
 	}
 	
-	return &diagram, nil
+	return &d, nil
 }
 

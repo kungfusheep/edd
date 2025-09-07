@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"fmt"
 	"testing"
 )
@@ -11,17 +11,17 @@ func TestSmartPathFinder_Basic(t *testing.T) {
 	
 	tests := []struct {
 		name      string
-		start     core.Point
-		end       core.Point
+		start     diagram.Point
+		end       diagram.Point
 		obstacles string
-		checkPath func(path core.Path) error
+		checkPath func(path diagram.Path) error
 	}{
 		{
 			name:      "Direct path when clear",
-			start:     core.Point{0, 0},
-			end:       core.Point{5, 5},
+			start:     diagram.Point{0, 0},
+			end:       diagram.Point{5, 5},
 			obstacles: "",
-			checkPath: func(path core.Path) error {
+			checkPath: func(path diagram.Path) error {
 				// Should use direct L-shaped path
 				if len(path.Points) != 3 {
 					return fmt.Errorf("expected 3 points for L-shaped path, got %d", len(path.Points))
@@ -31,11 +31,11 @@ func TestSmartPathFinder_Basic(t *testing.T) {
 		},
 		{
 			name:  "Falls back to A* when blocked",
-			start: core.Point{0, 0},
-			end:   core.Point{5, 0},
+			start: diagram.Point{0, 0},
+			end:   diagram.Point{5, 0},
 			obstacles: `
 .XX...`,
-			checkPath: func(path core.Path) error {
+			checkPath: func(path diagram.Path) error {
 				// Should route around obstacle
 				foundDetour := false
 				for _, p := range path.Points {
@@ -81,8 +81,8 @@ func TestSmartPathFinder_Optimization(t *testing.T) {
 ..........`)
 	
 	// Path that should be optimized
-	start := core.Point{0, 0}
-	end := core.Point{9, 4}
+	start := diagram.Point{0, 0}
+	end := diagram.Point{9, 4}
 	
 	path, err := finder.FindPath(start, end, obstacles)
 	if err != nil {
@@ -117,8 +117,8 @@ func TestSmartPathFinder_Padding(t *testing.T) {
 	
 	// Path from left to right of obstacle - should go around with padding
 	path, err := finder.FindPath(
-		core.Point{0, 1},
-		core.Point{6, 1},
+		diagram.Point{0, 1},
+		diagram.Point{6, 1},
 		obstacles,
 	)
 	
@@ -165,12 +165,12 @@ func TestSmartPathFinder_ComplexScenario(t *testing.T) {
 	// Multiple test paths
 	tests := []struct {
 		name  string
-		start core.Point
-		end   core.Point
+		start diagram.Point
+		end   diagram.Point
 	}{
-		{"Around top boxes", core.Point{0, 0}, core.Point{19, 0}},
-		{"Through middle gap", core.Point{0, 5}, core.Point{19, 5}},
-		{"Complex route", core.Point{5, 2}, core.Point{14, 8}},
+		{"Around top boxes", diagram.Point{0, 0}, diagram.Point{19, 0}},
+		{"Through middle gap", diagram.Point{0, 5}, diagram.Point{19, 5}},
+		{"Complex route", diagram.Point{5, 2}, diagram.Point{14, 8}},
 	}
 	
 	for _, tt := range tests {
@@ -207,7 +207,7 @@ func BenchmarkSmartPathFinder(b *testing.B) {
 	finder := NewSmartPathFinder(DefaultPathCost)
 	
 	// Create a realistic diagram scenario
-	nodes := []core.Node{
+	nodes := []diagram.Node{
 		{X: 10, Y: 10, Width: 10, Height: 5},
 		{X: 30, Y: 10, Width: 10, Height: 5},
 		{X: 50, Y: 10, Width: 10, Height: 5},
@@ -218,8 +218,8 @@ func BenchmarkSmartPathFinder(b *testing.B) {
 	
 	obstacles := CreateNodeObstacleChecker(nodes, 1)
 	
-	start := core.Point{5, 12}
-	end := core.Point{55, 42}
+	start := diagram.Point{5, 12}
+	end := diagram.Point{55, 42}
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

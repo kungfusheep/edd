@@ -1,7 +1,7 @@
 package pathfinding
 
 import (
-	"edd/core"
+	"edd/diagram"
 	"edd/geometry"
 	"math"
 )
@@ -18,9 +18,9 @@ const (
 
 // ConnectionPoint represents a potential connection point on a node's perimeter
 type ConnectionPoint struct {
-	Point core.Point
+	Point diagram.Point
 	Side  Side
-	Node  *core.Node
+	Node  *diagram.Node
 }
 
 // ConnectionOptimizer finds optimal connection points on node perimeters
@@ -37,17 +37,17 @@ func NewConnectionOptimizer(pathFinder PathFinder) *ConnectionOptimizer {
 
 // OptimizeConnectionPoints finds the best entry/exit points for a connection between two nodes
 func (c *ConnectionOptimizer) OptimizeConnectionPoints(
-	fromNode, toNode *core.Node,
-	obstacles func(core.Point) bool,
-) (from, to core.Point) {
+	fromNode, toNode *diagram.Node,
+	obstacles func(diagram.Point) bool,
+) (from, to diagram.Point) {
 	// Simple implementation: choose the sides that face each other
 	// and pick the center point of that side
 	
-	fromCenter := core.Point{
+	fromCenter := diagram.Point{
 		X: fromNode.X + fromNode.Width/2,
 		Y: fromNode.Y + fromNode.Height/2,
 	}
-	toCenter := core.Point{
+	toCenter := diagram.Point{
 		X: toNode.X + toNode.Width/2,
 		Y: toNode.Y + toNode.Height/2,
 	}
@@ -61,13 +61,13 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 		// Horizontal connection
 		if dx > 0 {
 			// To node is to the right
-			from = core.Point{
+			from = diagram.Point{
 				X: fromNode.X + fromNode.Width,
 				Y: fromNode.Y + fromNode.Height/2,
 			}
 		} else {
 			// To node is to the left
-			from = core.Point{
+			from = diagram.Point{
 				X: fromNode.X - 1,
 				Y: fromNode.Y + fromNode.Height/2,
 			}
@@ -76,13 +76,13 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 		// Vertical connection
 		if dy > 0 {
 			// To node is below
-			from = core.Point{
+			from = diagram.Point{
 				X: fromNode.X + fromNode.Width/2,
 				Y: fromNode.Y + fromNode.Height,
 			}
 		} else {
 			// To node is above
-			from = core.Point{
+			from = diagram.Point{
 				X: fromNode.X + fromNode.Width/2,
 				Y: fromNode.Y - 1,
 			}
@@ -97,13 +97,13 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 		// Horizontal connection
 		if dx > 0 {
 			// From node is to the right
-			to = core.Point{
+			to = diagram.Point{
 				X: toNode.X + toNode.Width,
 				Y: toNode.Y + toNode.Height/2,
 			}
 		} else {
 			// From node is to the left
-			to = core.Point{
+			to = diagram.Point{
 				X: toNode.X - 1,
 				Y: toNode.Y + toNode.Height/2,
 			}
@@ -112,13 +112,13 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 		// Vertical connection
 		if dy > 0 {
 			// From node is below
-			to = core.Point{
+			to = diagram.Point{
 				X: toNode.X + toNode.Width/2,
 				Y: toNode.Y + toNode.Height,
 			}
 		} else {
 			// From node is above
-			to = core.Point{
+			to = diagram.Point{
 				X: toNode.X + toNode.Width/2,
 				Y: toNode.Y - 1,
 			}
@@ -133,10 +133,10 @@ func (c *ConnectionOptimizer) OptimizeConnectionPoints(
 
 // refinConnectionPoints tries to find better connection points by testing alternatives
 func (c *ConnectionOptimizer) refinConnectionPoints(
-	fromNode, toNode *core.Node,
-	initialFrom, initialTo core.Point,
-	obstacles func(core.Point) bool,
-) (from, to core.Point) {
+	fromNode, toNode *diagram.Node,
+	initialFrom, initialTo diagram.Point,
+	obstacles func(diagram.Point) bool,
+) (from, to diagram.Point) {
 	// If no pathfinder or obstacles, just use initial points
 	if c.pathFinder == nil || obstacles == nil {
 		return initialFrom, initialTo
@@ -192,7 +192,7 @@ func (c *ConnectionOptimizer) refinConnectionPoints(
 }
 
 // countTurns counts the number of direction changes in a path
-func countTurns(path core.Path) int {
+func countTurns(path diagram.Path) int {
 	if len(path.Points) < 3 {
 		return 0
 	}
@@ -201,7 +201,7 @@ func countTurns(path core.Path) int {
 	for i := 2; i < len(path.Points); i++ {
 		dir1 := GetDirection(path.Points[i-2], path.Points[i-1])
 		dir2 := GetDirection(path.Points[i-1], path.Points[i])
-		if dir1 != dir2 && dir1 != None && dir2 != None {
+		if dir1 != dir2 && dir1 != DirNone && dir2 != DirNone {
 			turns++
 		}
 	}
@@ -209,13 +209,13 @@ func countTurns(path core.Path) int {
 }
 
 // OptimizeSelfConnection finds good points for a self-connecting edge
-func (c *ConnectionOptimizer) OptimizeSelfConnection(node *core.Node) (from, to core.Point) {
+func (c *ConnectionOptimizer) OptimizeSelfConnection(node *diagram.Node) (from, to diagram.Point) {
 	// For self connections, exit from right, go around, enter from bottom
-	from = core.Point{
+	from = diagram.Point{
 		X: node.X + node.Width,
 		Y: node.Y + node.Height/3,
 	}
-	to = core.Point{
+	to = diagram.Point{
 		X: node.X + node.Width/3,
 		Y: node.Y + node.Height,
 	}
@@ -223,7 +223,7 @@ func (c *ConnectionOptimizer) OptimizeSelfConnection(node *core.Node) (from, to 
 }
 
 // GetConnectionSide determines which side of a node a point is closest to
-func GetConnectionSide(point core.Point, node *core.Node) Side {
+func GetConnectionSide(point diagram.Point, node *diagram.Node) Side {
 	// Calculate distances to each side
 	distTop := float64(point.Y - (node.Y - 1))
 	distRight := float64((node.X + node.Width) - point.X)
@@ -246,7 +246,7 @@ func GetConnectionSide(point core.Point, node *core.Node) Side {
 }
 
 // GenerateCandidatePoints generates all possible connection points for a node
-func GenerateCandidatePoints(node *core.Node, side Side) []ConnectionPoint {
+func GenerateCandidatePoints(node *diagram.Node, side Side) []ConnectionPoint {
 	points := []ConnectionPoint{}
 	
 	// Minimum gap from corners to avoid arrow rendering issues
@@ -260,7 +260,7 @@ func GenerateCandidatePoints(node *core.Node, side Side) []ConnectionPoint {
 		if startX < endX {
 			for x := startX; x < endX; x++ {
 				points = append(points, ConnectionPoint{
-					Point: core.Point{X: x, Y: y},
+					Point: diagram.Point{X: x, Y: y},
 					Side:  SideTop,
 					Node:  node,
 				})
@@ -273,7 +273,7 @@ func GenerateCandidatePoints(node *core.Node, side Side) []ConnectionPoint {
 		if startY < endY {
 			for y := startY; y < endY; y++ {
 				points = append(points, ConnectionPoint{
-					Point: core.Point{X: x, Y: y},
+					Point: diagram.Point{X: x, Y: y},
 					Side:  SideRight,
 					Node:  node,
 				})
@@ -286,7 +286,7 @@ func GenerateCandidatePoints(node *core.Node, side Side) []ConnectionPoint {
 		if startX < endX {
 			for x := startX; x < endX; x++ {
 				points = append(points, ConnectionPoint{
-					Point: core.Point{X: x, Y: y},
+					Point: diagram.Point{X: x, Y: y},
 					Side:  SideBottom,
 					Node:  node,
 				})
@@ -299,7 +299,7 @@ func GenerateCandidatePoints(node *core.Node, side Side) []ConnectionPoint {
 		if startY < endY {
 			for y := startY; y < endY; y++ {
 				points = append(points, ConnectionPoint{
-					Point: core.Point{X: x, Y: y},
+					Point: diagram.Point{X: x, Y: y},
 					Side:  SideLeft,
 					Node:  node,
 				})
