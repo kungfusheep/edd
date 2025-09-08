@@ -8,14 +8,14 @@ import (
 
 // generateLargeDiagram creates a diagram with the specified number of nodes
 func generateLargeDiagram(nodes, connectionsPerNode int) *diagram.Diagram {
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes:       make([]diagram.Node, nodes),
 		Connections: make([]diagram.Connection, 0, nodes*connectionsPerNode),
 	}
 
 	// Create nodes
 	for i := 0; i < nodes; i++ {
-		diagram.Nodes[i] = diagram.Node{
+		d.Nodes[i] = diagram.Node{
 			ID:   i + 1,
 			Text: []string{fmt.Sprintf("Node %d", i+1)},
 		}
@@ -31,14 +31,14 @@ func generateLargeDiagram(nodes, connectionsPerNode int) *diagram.Diagram {
 		
 		// Add some additional forward connections
 		for j := 1; j < connectionsPerNode && i+j+1 < nodes; j++ {
-			diagram.Connections = append(diagram.Connections, diagram.Connection{
+			d.Connections = append(d.Connections, diagram.Connection{
 				From: i + 1,
 				To:   i + j + 2,
 			})
 		}
 	}
 
-	return diagram
+	return d
 }
 
 // BenchmarkRenderer tests rendering performance
@@ -55,12 +55,12 @@ func BenchmarkRenderer(b *testing.B) {
 
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("%d_nodes", size.nodes), func(b *testing.B) {
-			diagram := generateLargeDiagram(size.nodes, size.connections)
+			d := generateLargeDiagram(size.nodes, size.connections)
 			renderer := NewRenderer()
 			
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, err := renderer.Render(diagram)
+				_, err := renderer.Render(d)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -68,21 +68,21 @@ func BenchmarkRenderer(b *testing.B) {
 			
 			// Report useful metrics
 			b.ReportMetric(float64(size.nodes), "nodes")
-			b.ReportMetric(float64(len(diagram.Connections)), "connections")
+			b.ReportMetric(float64(len(d.Connections)), "connections")
 		})
 	}
 }
 
 // BenchmarkRendererMemory tests memory usage
 func BenchmarkRendererMemory(b *testing.B) {
-	diagram := generateLargeDiagram(100, 2)
+	d := generateLargeDiagram(100, 2)
 	renderer := NewRenderer()
 	
 	b.ResetTimer()
 	b.ReportAllocs()
 	
 	for i := 0; i < b.N; i++ {
-		_, err := renderer.Render(diagram)
+		_, err := renderer.Render(d)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -9,7 +9,7 @@ import (
 // TestRendererBasic tests the basic rendering functionality
 func TestRendererBasic(t *testing.T) {
 	// Create a simple two-node diagram
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Hello"}},
 			{ID: 2, Text: []string{"World"}},
@@ -23,7 +23,7 @@ func TestRendererBasic(t *testing.T) {
 	renderer := NewRenderer()
 	
 	// Render the diagram
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render diagram: %v", err)
 	}
@@ -52,13 +52,13 @@ func TestRendererBasic(t *testing.T) {
 
 // TestRendererEmptyDiagram tests rendering an empty diagram
 func TestRendererEmptyDiagram(t *testing.T) {
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes:       []diagram.Node{},
 		Connections: []diagram.Connection{},
 	}
 	
 	renderer := NewRenderer()
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render empty diagram: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestRendererEmptyDiagram(t *testing.T) {
 
 // TestRendererSingleNode tests rendering a single node with no connections
 func TestRendererSingleNode(t *testing.T) {
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Lonely", "Node"}},
 		},
@@ -79,7 +79,7 @@ func TestRendererSingleNode(t *testing.T) {
 	}
 	
 	renderer := NewRenderer()
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render single node: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRendererSingleNode(t *testing.T) {
 
 // TestRendererMultipleConnections tests rendering with multiple connections
 func TestRendererMultipleConnections(t *testing.T) {
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}},
 			{ID: 2, Text: []string{"B"}},
@@ -109,7 +109,7 @@ func TestRendererMultipleConnections(t *testing.T) {
 	}
 	
 	renderer := NewRenderer()
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render multiple connections: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestRendererMultipleConnections(t *testing.T) {
 
 // TestRendererSelfLoop tests rendering a node that connects to itself
 func TestRendererSelfLoop(t *testing.T) {
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Recursive"}},
 		},
@@ -146,7 +146,7 @@ func TestRendererSelfLoop(t *testing.T) {
 	}
 	
 	renderer := NewRenderer()
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render self-loop: %v", err)
 	}

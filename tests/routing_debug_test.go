@@ -90,7 +90,7 @@ func TestRoutingDebug(t *testing.T) {
 // TestVirtualObstacleAuthority tests if virtual obstacles are truly authoritative
 func TestVirtualObstacleAuthority(t *testing.T) {
 	// Create a scenario where virtual obstacles should force specific routing
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Left"}, X: 10, Y: 10, Width: 8, Height: 3},
 			{ID: 2, Text: []string{"Right"}, X: 40, Y: 10, Width: 8, Height: 3},
@@ -104,7 +104,7 @@ func TestVirtualObstacleAuthority(t *testing.T) {
 	renderer := render.NewRenderer()
 	renderer.EnableDebug()
 	
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Render failed: %v", err)
 	}

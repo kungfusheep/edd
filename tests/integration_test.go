@@ -29,13 +29,13 @@ func TestIntegrationDiagrams(t *testing.T) {
 		name := filepath.Base(file)
 		t.Run(name, func(t *testing.T) {
 			// Read and parse the diagram
-			diagram, err := loadTestDiagram(file)
+			d, err := loadTestDiagram(file)
 			if err != nil {
 				t.Fatalf("Failed to load diagram: %v", err)
 			}
 
 			// Render the diagram
-			output, err := renderer.Render(diagram)
+			output, err := renderer.Render(d)
 			if err != nil {
 				// Some diagrams might fail with simple layout (e.g., cycles)
 				if strings.Contains(err.Error(), "cycle") || strings.Contains(err.Error(), "blocked") {
@@ -52,7 +52,7 @@ func TestIntegrationDiagrams(t *testing.T) {
 			}
 
 			// Check that all node texts appear in output
-			for _, node := range diagram.Nodes {
+			for _, node := range d.Nodes {
 				for _, text := range node.Text {
 					if !strings.Contains(output, text) {
 						t.Errorf("Missing node text in output: %s", text)
@@ -79,18 +79,18 @@ func loadTestDiagram(filename string) (*diagram.Diagram, error) {
 		return nil, err
 	}
 
-	var diagram diagram.Diagram
-	if err := json.Unmarshal(data, &diagram); err != nil {
+	var d diagram.Diagram
+	if err := json.Unmarshal(data, &d); err != nil {
 		return nil, err
 	}
 
-	return &diagram, nil
+	return &d, nil
 }
 
 // TestRendererEndToEnd tests a complete rendering scenario
 func TestRendererEndToEnd(t *testing.T) {
 	// Create a comprehensive test diagram
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Frontend", "React App"}},
 			{ID: 2, Text: []string{"API", "Gateway"}},
@@ -111,7 +111,7 @@ func TestRendererEndToEnd(t *testing.T) {
 	}
 
 	renderer := render.NewRenderer()
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}

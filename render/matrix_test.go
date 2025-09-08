@@ -25,13 +25,13 @@ func TestMatrixCanvas_Creation(t *testing.T) {
 			canvas := NewMatrixCanvas(tt.width, tt.height)
 			
 			// Check dimensions
-			w, h := render.Size()
+			w, h := canvas.Size()
 			if w != tt.width || h != tt.height {
 				t.Errorf("Size() = (%d, %d), want (%d, %d)", w, h, tt.width, tt.height)
 			}
 			
 			// Check matrix dimensions
-			matrix := render.Matrix()
+			matrix := canvas.Matrix()
 			if len(matrix) != tt.height {
 				t.Errorf("Matrix height = %d, want %d", len(matrix), tt.height)
 			}
@@ -76,7 +76,7 @@ func TestMatrixCanvas_GetSet(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := render.Set(tt.point, tt.char)
+			err := canvas.Set(tt.point, tt.char)
 			
 			if tt.valid && err != nil {
 				t.Errorf("Set() error = %v, want nil", err)
@@ -86,7 +86,7 @@ func TestMatrixCanvas_GetSet(t *testing.T) {
 			}
 			
 			// Check Get
-			got := render.Get(tt.point)
+			got := canvas.Get(tt.point)
 			if tt.valid {
 				if got != tt.char {
 					t.Errorf("Get() = %c, want %c", got, tt.char)
@@ -100,7 +100,7 @@ func TestMatrixCanvas_GetSet(t *testing.T) {
 	}
 	
 	// Validate the matrix has valid adjacencies
-	validator.ValidateMatrix(render.Matrix())
+	validator.ValidateMatrix(canvas.Matrix())
 }
 
 // TestMatrixCanvas_Clear tests the clear operation.
@@ -110,14 +110,14 @@ func TestMatrixCanvas_Clear(t *testing.T) {
 	// Set some characters
 	points := []diagram.Point{{5, 5}, {0, 0}, {9, 9}, {3, 7}}
 	for _, p := range points {
-		render.Set(p, 'X')
+		canvas.Set(p, 'X')
 	}
 	
 	// Clear
-	render.Clear()
+	canvas.Clear()
 	
 	// Check all cells are spaces
-	matrix := render.Matrix()
+	matrix := canvas.Matrix()
 	for y := 0; y < 10; y++ {
 		for x := 0; x < 10; x++ {
 			if matrix[y][x] != ' ' {
@@ -132,21 +132,21 @@ func TestMatrixCanvas_String(t *testing.T) {
 	canvas := NewMatrixCanvas(5, 3)
 	
 	// Draw a simple pattern
-	render.Set(diagram.Point{0, 0}, '╭')
-	render.Set(diagram.Point{1, 0}, '─')
-	render.Set(diagram.Point{2, 0}, '─')
-	render.Set(diagram.Point{3, 0}, '─')
-	render.Set(diagram.Point{4, 0}, '╮')
+	canvas.Set(diagram.Point{0, 0}, '╭')
+	canvas.Set(diagram.Point{1, 0}, '─')
+	canvas.Set(diagram.Point{2, 0}, '─')
+	canvas.Set(diagram.Point{3, 0}, '─')
+	canvas.Set(diagram.Point{4, 0}, '╮')
 	
-	render.Set(diagram.Point{0, 1}, '│')
-	render.Set(diagram.Point{2, 1}, 'X')
-	render.Set(diagram.Point{4, 1}, '│')
+	canvas.Set(diagram.Point{0, 1}, '│')
+	canvas.Set(diagram.Point{2, 1}, 'X')
+	canvas.Set(diagram.Point{4, 1}, '│')
 	
-	render.Set(diagram.Point{0, 2}, '╰')
-	render.Set(diagram.Point{1, 2}, '─')
-	render.Set(diagram.Point{2, 2}, '─')
-	render.Set(diagram.Point{3, 2}, '─')
-	render.Set(diagram.Point{4, 2}, '╯')
+	canvas.Set(diagram.Point{0, 2}, '╰')
+	canvas.Set(diagram.Point{1, 2}, '─')
+	canvas.Set(diagram.Point{2, 2}, '─')
+	canvas.Set(diagram.Point{3, 2}, '─')
+	canvas.Set(diagram.Point{4, 2}, '╯')
 	
 	expected := `╭───╮
 │ X │
@@ -215,14 +215,14 @@ func TestMatrixCanvas_DrawBox(t *testing.T) {
 				canvas = NewMatrixCanvas(14, 7)
 			}
 			
-			err := render.DrawBox(tt.x, tt.y, tt.w, tt.h, tt.style)
+			err := canvas.DrawBox(tt.x, tt.y, tt.w, tt.h, tt.style)
 			
 			if err != nil {
 				t.Fatalf("DrawBox() error = %v", err)
 			}
 			
 			validator.AssertCanvasEquals(canvas, tt.canvas)
-			validator.ValidateMatrix(render.Matrix())
+			validator.ValidateMatrix(canvas.Matrix())
 		})
 	}
 }
@@ -296,7 +296,7 @@ func TestMatrixCanvas_DrawLine(t *testing.T) {
 	}
 }
 
-// TestMatrixCanvas_DrawText tests text render.
+// TestMatrixCanvas_DrawText tests text canvas.
 func TestMatrixCanvas_DrawText(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -330,7 +330,7 @@ func TestMatrixCanvas_DrawText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			canvas := NewMatrixCanvas(10, 4)
-			err := render.DrawText(tt.x, tt.y, tt.text)
+			err := canvas.DrawText(tt.x, tt.y, tt.text)
 			
 			if err != nil {
 				t.Fatalf("DrawText() error = %v", err)
@@ -388,7 +388,7 @@ func TestMatrixCanvas_Performance(t *testing.T) {
 			}
 			
 			// Ensure it's actually initialized
-			if render.Get(diagram.Point{0, 0}) != ' ' {
+			if canvas.Get(diagram.Point{0, 0}) != ' ' {
 				t.Error("Canvas not properly initialized")
 			}
 		})
@@ -398,11 +398,11 @@ func TestMatrixCanvas_Performance(t *testing.T) {
 			
 			// Add some content
 			for i := 0; i < 10; i++ {
-				render.DrawBox(i*10, i*5, 8, 4, DefaultBoxStyle)
+				canvas.DrawBox(i*10, i*5, 8, 4, DefaultBoxStyle)
 			}
 			
 			start := time.Now()
-			_ = render.String()
+			_ = canvas.String()
 			duration := time.Since(start)
 			
 			// Should serialize 1000x1000 in < 10ms
@@ -455,14 +455,14 @@ func TestMatrixCanvas_DrawSmartPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			canvas := NewMatrixCanvas(9, 7)
-			err := render.DrawSmartPath(tt.points)
+			err := canvas.DrawSmartPath(tt.points)
 			
 			if err != nil {
 				t.Fatalf("DrawSmartPath() error = %v", err)
 			}
 			
 			validator.AssertCanvasEquals(canvas, tt.canvas)
-			validator.ValidateMatrix(render.Matrix())
+			validator.ValidateMatrix(canvas.Matrix())
 		})
 	}
 }
@@ -488,7 +488,7 @@ func TestMatrixCanvas_UnicodeEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			canvas := NewMatrixCanvas(20, 3)
-			err := render.DrawText(tt.x, tt.y, tt.text)
+			err := canvas.DrawText(tt.x, tt.y, tt.text)
 			
 			if err != nil {
 				t.Fatalf("DrawText() error = %v", err)
@@ -497,7 +497,7 @@ func TestMatrixCanvas_UnicodeEdgeCases(t *testing.T) {
 			// Check text was placed by measuring actual width
 			actualWidth := 0
 			for i := 0; i < 20-tt.x; i++ {
-				char := render.Get(diagram.Point{tt.x + i, tt.y})
+				char := canvas.Get(diagram.Point{tt.x + i, tt.y})
 				if char != ' ' {
 					actualWidth = i + 1
 				}
@@ -523,35 +523,35 @@ func TestMatrixCanvas_BoundaryConditions(t *testing.T) {
 		{
 			name: "Box at exact boundary",
 			test: func() error {
-				return render.DrawBox(0, 0, 10, 10, DefaultBoxStyle)
+				return canvas.DrawBox(0, 0, 10, 10, DefaultBoxStyle)
 			},
 			want: true,
 		},
 		{
 			name: "Box exceeding width",
 			test: func() error {
-				return render.DrawBox(5, 5, 10, 4, DefaultBoxStyle)
+				return canvas.DrawBox(5, 5, 10, 4, DefaultBoxStyle)
 			},
 			want: false,
 		},
 		{
 			name: "Box exceeding height", 
 			test: func() error {
-				return render.DrawBox(5, 5, 4, 10, DefaultBoxStyle)
+				return canvas.DrawBox(5, 5, 4, 10, DefaultBoxStyle)
 			},
 			want: false,
 		},
 		{
 			name: "Text at right edge",
 			test: func() error {
-				return render.DrawText(8, 5, "Hi")
+				return canvas.DrawText(8, 5, "Hi")
 			},
 			want: true, // Should clip
 		},
 		{
 			name: "Line crossing boundary",
 			test: func() error {
-				return render.DrawLine(diagram.Point{5, 5}, diagram.Point{15, 15}, '*')
+				return canvas.DrawLine(diagram.Point{5, 5}, diagram.Point{15, 15}, '*')
 			},
 			want: true, // Should clip
 		},
@@ -559,7 +559,7 @@ func TestMatrixCanvas_BoundaryConditions(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			render.Clear()
+			canvas.Clear()
 			err := tt.test()
 			
 			if tt.want && err != nil {
@@ -663,7 +663,7 @@ func TestMatrixCanvas_ConcurrentAccess(t *testing.T) {
 	
 	// Fill with some content
 	for i := 0; i < 10; i++ {
-		render.DrawBox(i*10, i*10, 8, 8, DefaultBoxStyle)
+		canvas.DrawBox(i*10, i*10, 8, 8, DefaultBoxStyle)
 	}
 	
 	// Concurrent reads should be safe
@@ -676,14 +676,14 @@ func TestMatrixCanvas_ConcurrentAccess(t *testing.T) {
 			for j := 0; j < 1000; j++ {
 				x := j % 100
 				y := (j / 100) % 100
-				_ = render.Get(diagram.Point{x, y})
+				_ = canvas.Get(diagram.Point{x, y})
 			}
 			
 			// Get matrix
-			_ = render.Matrix()
+			_ = canvas.Matrix()
 			
 			// Get string
-			_ = render.String()
+			_ = canvas.String()
 		}()
 	}
 	
@@ -704,12 +704,12 @@ func BenchmarkMatrixCanvas_String_100x100(b *testing.B) {
 	canvas := NewMatrixCanvas(100, 100)
 	// Add some content
 	for i := 0; i < 5; i++ {
-		render.DrawBox(i*15, i*10, 12, 8, DefaultBoxStyle)
+		canvas.DrawBox(i*15, i*10, 12, 8, DefaultBoxStyle)
 	}
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = render.String()
+		_ = canvas.String()
 	}
 }
 
@@ -718,7 +718,7 @@ func BenchmarkMatrixCanvas_DrawBox(b *testing.B) {
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		render.DrawBox(10, 10, 20, 15, DefaultBoxStyle)
-		render.Clear()
+		canvas.DrawBox(10, 10, 20, 15, DefaultBoxStyle)
+		canvas.Clear()
 	}
 }

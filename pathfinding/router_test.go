@@ -3,13 +3,12 @@ package pathfinding
 import (
 	"edd/diagram"
 	"edd/geometry"
-	"edd/pathfinding"
 	"testing"
 )
 
 func TestRouter_RouteConnection(t *testing.T) {
 	// Create a simple pathfinder
-	pf := pathfinding.NewAStarPathFinder(pathfinding.PathCost{
+	pf := NewAStarPathFinder(PathCost{
 		StraightCost: 10,
 		TurnCost: 5,
 	})
@@ -98,7 +97,7 @@ func TestRouter_RouteConnection(t *testing.T) {
 }
 
 func TestRouter_RouteConnections(t *testing.T) {
-	pf := pathfinding.NewAStarPathFinder(pathfinding.PathCost{
+	pf := NewAStarPathFinder(PathCost{
 		StraightCost: 10,
 		TurnCost: 5,
 	})

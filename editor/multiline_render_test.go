@@ -11,7 +11,7 @@ func TestMultilineNodeRendering(t *testing.T) {
 	renderer := NewRealRenderer()
 	
 	// Create a diagram with multi-line nodes
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{
 				ID:   1,
@@ -29,7 +29,7 @@ func TestMultilineNodeRendering(t *testing.T) {
 	}
 	
 	// Render the diagram
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}

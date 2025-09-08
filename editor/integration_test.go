@@ -8,7 +8,7 @@ import (
 
 func TestConnectionDeletionWithRendering(t *testing.T) {
 	// Create a test diagram with connections
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A"}, X: 0, Y: 0, Width: 10, Height: 3},
 			{ID: 2, Text: []string{"Node B"}, X: 20, Y: 0, Width: 10, Height: 3},
@@ -24,7 +24,7 @@ func TestConnectionDeletionWithRendering(t *testing.T) {
 	// Create TUI editor with real renderer
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 	tui.SetTerminalSize(80, 24)
 
 	// Render once to populate connection paths
@@ -61,9 +61,9 @@ func TestConnectionDeletionWithRendering(t *testing.T) {
 	}
 
 	// Delete the first connection
-	beforeCount := len(diagram.Connections)
+	beforeCount := len(d.Connections)
 	tui.handleJumpKey(firstLabel)
-	afterCount := len(diagram.Connections)
+	afterCount := len(d.Connections)
 
 	if afterCount != beforeCount-1 {
 		t.Errorf("Connection not deleted: before=%d, after=%d", beforeCount, afterCount)
@@ -84,7 +84,7 @@ func TestConnectionDeletionWithRendering(t *testing.T) {
 
 func TestConnectionLabelPositioning(t *testing.T) {
 	// Test that connection labels are positioned at path midpoints
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}, X: 0, Y: 0, Width: 5, Height: 3},
 			{ID: 2, Text: []string{"B"}, X: 10, Y: 0, Width: 5, Height: 3},
@@ -96,7 +96,7 @@ func TestConnectionLabelPositioning(t *testing.T) {
 
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Render to populate paths
 	tui.Render()
@@ -133,7 +133,7 @@ func TestConnectionLabelPositioning(t *testing.T) {
 
 func TestConnectionLabelAssignment(t *testing.T) {
 	// Test that connection labels are assigned in delete and edit modes, but not connect mode
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}},
 			{ID: 2, Text: []string{"B"}},
@@ -145,7 +145,7 @@ func TestConnectionLabelAssignment(t *testing.T) {
 
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Test edit mode - SHOULD assign connection labels (for editing connection labels)
 	tui.handleNormalKey('e')

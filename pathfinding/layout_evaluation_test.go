@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/pathfinding"
+	"edd/render"
 	"fmt"
 	"strings"
 	"testing"
@@ -150,7 +150,7 @@ func TestLayoutQualityEvaluation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create pathfinder and router
-			pf := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
+			pf := NewSmartPathFinder(PathCost{
 				StraightCost:  10,
 				TurnCost:      20,
 				ProximityCost: -5,

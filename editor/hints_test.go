@@ -18,20 +18,20 @@ func TestConnectionHints(t *testing.T) {
 	tui.AddConnection(id1, id2, "test")
 	
 	// Get the connection
-	diagram := tui.GetDiagram()
-	if len(diagram.Connections) != 1 {
+	d := tui.GetDiagram()
+	if len(d.Connections) != 1 {
 		t.Fatal("Expected 1 connection")
 	}
 	
 	// Add hints manually (simulating hint menu)
-	conn := &diagram.Connections[0]
+	conn := &d.Connections[0]
 	conn.Hints = map[string]string{
 		"style": "dashed",
 		"color": "blue",
 	}
 	
 	// Test that hints are preserved in JSON
-	data, err := json.Marshal(diagram)
+	data, err := json.Marshal(d)
 	if err != nil {
 		t.Fatalf("Failed to marshal: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestHintMenuInput(t *testing.T) {
 
 func TestHintMenuEnterExitsToNormal(t *testing.T) {
 	// Create a simple diagram with nodes
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node 1"}},
 			{ID: 2, Text: []string{"Node 2"}},
@@ -137,7 +137,7 @@ func TestHintMenuEnterExitsToNormal(t *testing.T) {
 	// Create TUI editor
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Test node hints menu
 	t.Run("NodeHintsEnterKey", func(t *testing.T) {
@@ -202,7 +202,7 @@ func TestHintMenuEnterExitsToNormal(t *testing.T) {
 
 func TestHintMenuESCReturnsToJump(t *testing.T) {
 	// Create a simple diagram with nodes
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node 1"}},
 			{ID: 2, Text: []string{"Node 2"}},
@@ -215,7 +215,7 @@ func TestHintMenuESCReturnsToJump(t *testing.T) {
 	// Create TUI editor
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Test node hints menu ESC behavior
 	t.Run("NodeHintsESCKey", func(t *testing.T) {

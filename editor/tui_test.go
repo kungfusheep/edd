@@ -7,7 +7,7 @@ import (
 
 func TestConnectionDeletion(t *testing.T) {
 	// Create a test diagram
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A"}},
 			{ID: 2, Text: []string{"Node B"}},
@@ -23,11 +23,11 @@ func TestConnectionDeletion(t *testing.T) {
 	// Create TUI editor
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Verify initial state
-	if len(diagram.Connections) != 3 {
-		t.Fatalf("Expected 3 connections, got %d", len(diagram.Connections))
+	if len(d.Connections) != 3 {
+		t.Fatalf("Expected 3 connections, got %d", len(d.Connections))
 	}
 
 	// Start delete mode - simulate pressing 'd'
@@ -60,9 +60,9 @@ func TestConnectionDeletion(t *testing.T) {
 	}
 
 	// Simulate pressing the connection's label key
-	beforeCount := len(diagram.Connections)
+	beforeCount := len(d.Connections)
 	tui.handleJumpKey(firstConnLabel)
-	afterCount := len(diagram.Connections)
+	afterCount := len(d.Connections)
 
 	// Verify connection was deleted
 	if afterCount != beforeCount-1 {
@@ -85,7 +85,7 @@ func TestConnectionDeletion(t *testing.T) {
 
 func TestConnectionDeletionFullFlow(t *testing.T) {
 	// Test the full key sequence: d -> connection_label
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}},
 			{ID: 2, Text: []string{"B"}},
@@ -97,7 +97,7 @@ func TestConnectionDeletionFullFlow(t *testing.T) {
 
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Press 'd' to enter delete mode
 	result := tui.handleKey('d')
@@ -124,16 +124,16 @@ func TestConnectionDeletionFullFlow(t *testing.T) {
 	}
 
 	// Press the connection label to delete it
-	initialConnCount := len(diagram.Connections)
+	initialConnCount := len(d.Connections)
 	result = tui.handleKey(connLabel)
 	if result {
 		t.Error("handleKey returned true (exit) when it shouldn't")
 	}
 
 	// Check connection was deleted
-	if len(diagram.Connections) != initialConnCount-1 {
+	if len(d.Connections) != initialConnCount-1 {
 		t.Errorf("Connection not deleted: expected %d connections, got %d", 
-			initialConnCount-1, len(diagram.Connections))
+			initialConnCount-1, len(d.Connections))
 	}
 
 	// Should be back in normal mode
@@ -144,7 +144,7 @@ func TestConnectionDeletionFullFlow(t *testing.T) {
 
 func TestNodeDeletionStillWorks(t *testing.T) {
 	// Ensure node deletion still works after our changes
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Node A"}},
 			{ID: 2, Text: []string{"Node B"}},
@@ -156,7 +156,7 @@ func TestNodeDeletionStillWorks(t *testing.T) {
 
 	renderer := NewRealRenderer()
 	tui := NewTUIEditor(renderer)
-	tui.SetDiagram(diagram)
+	tui.SetDiagram(d)
 
 	// Press 'd' to enter delete mode
 	tui.handleKey('d')
@@ -177,17 +177,17 @@ func TestNodeDeletionStillWorks(t *testing.T) {
 	}
 
 	// Press the node label to delete it
-	initialNodeCount := len(diagram.Nodes)
+	initialNodeCount := len(d.Nodes)
 	tui.handleKey(nodeLabel)
 
 	// Check node was deleted
-	if len(diagram.Nodes) != initialNodeCount-1 {
+	if len(d.Nodes) != initialNodeCount-1 {
 		t.Errorf("Node not deleted: expected %d nodes, got %d", 
-			initialNodeCount-1, len(diagram.Nodes))
+			initialNodeCount-1, len(d.Nodes))
 	}
 
 	// Check that connections involving the deleted node were also removed
-	for _, conn := range diagram.Connections {
+	for _, conn := range d.Connections {
 		if conn.From == nodeID || conn.To == nodeID {
 			t.Errorf("Connection involving deleted node %d still exists", nodeID)
 		}

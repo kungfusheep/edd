@@ -1,13 +1,12 @@
 package render
 
 import (
-	"edd/render"
 	"fmt"
 	"testing"
 )
 
 func TestJunctionResolver_VisualDemo(t *testing.T) {
-	jr := render.NewJunctionResolver()
+	jr := NewJunctionResolver()
 	
 	// Demo: Arrow meeting a line
 	fmt.Println("\nArrow meets line demonstrations:")

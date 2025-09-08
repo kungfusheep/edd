@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"edd/render"
 	"edd/diagram"
 )
 
@@ -119,16 +118,16 @@ func TestVisualRendering(t *testing.T) {
 			// Test both Unicode and ASCII modes
 			for _, unicodeMode := range []bool{true, false} {
 				modeName := "Unicode"
-				caps := render.TerminalCapabilities{UnicodeLevel: render.UnicodeFull}
+				caps := TerminalCapabilities{UnicodeLevel: UnicodeFull}
 				if !unicodeMode {
 					modeName = "ASCII"
-					caps = render.TerminalCapabilities{UnicodeLevel: render.UnicodeNone}
+					caps = TerminalCapabilities{UnicodeLevel: UnicodeNone}
 				}
 
-				c := render.NewMatrixCanvas(tt.width, tt.height)
-				renderer := render.NewPathRenderer(caps)
+				c := NewMatrixCanvas(tt.width, tt.height)
+				renderer := NewPathRenderer(caps)
 				// Use preserve corners mode for better box appearance
-				renderer.SetRenderMode(render.RenderModePreserveCorners)
+				renderer.SetRenderMode(RenderModePreserveCorners)
 
 				// Draw all paths
 				for _, path := range tt.paths {
@@ -152,8 +151,8 @@ func TestVisualRendering(t *testing.T) {
 
 // TestOverlappingPaths tests junction resolution with overlapping paths
 func TestOverlappingPaths(t *testing.T) {
-	c := render.NewMatrixCanvas(15, 10)
-	renderer := render.NewPathRenderer(render.TerminalCapabilities{UnicodeLevel: render.UnicodeFull})
+	c := NewMatrixCanvas(15, 10)
+	renderer := NewPathRenderer(TerminalCapabilities{UnicodeLevel: UnicodeFull})
 	// Use standard mode to test junction resolution
 	// (preserve corners mode would keep separate boxes visually distinct)
 

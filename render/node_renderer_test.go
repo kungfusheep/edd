@@ -87,21 +87,21 @@ func TestNodeRendererBasicStyles(t *testing.T) {
 			}
 			
 			// Check corners
-			if render.Get(diagram.Point{X: 2, Y: 2}) != tt.wantChars.topLeft {
+			if canvas.Get(diagram.Point{X: 2, Y: 2}) != tt.wantChars.topLeft {
 				t.Errorf("Top-left corner: got %c, want %c", 
-					render.Get(diagram.Point{X: 2, Y: 2}), tt.wantChars.topLeft)
+					canvas.Get(diagram.Point{X: 2, Y: 2}), tt.wantChars.topLeft)
 			}
-			if render.Get(diagram.Point{X: 11, Y: 2}) != tt.wantChars.topRight {
+			if canvas.Get(diagram.Point{X: 11, Y: 2}) != tt.wantChars.topRight {
 				t.Errorf("Top-right corner: got %c, want %c", 
-					render.Get(diagram.Point{X: 11, Y: 2}), tt.wantChars.topRight)
+					canvas.Get(diagram.Point{X: 11, Y: 2}), tt.wantChars.topRight)
 			}
-			if render.Get(diagram.Point{X: 2, Y: 5}) != tt.wantChars.bottomLeft {
+			if canvas.Get(diagram.Point{X: 2, Y: 5}) != tt.wantChars.bottomLeft {
 				t.Errorf("Bottom-left corner: got %c, want %c", 
-					render.Get(diagram.Point{X: 2, Y: 5}), tt.wantChars.bottomLeft)
+					canvas.Get(diagram.Point{X: 2, Y: 5}), tt.wantChars.bottomLeft)
 			}
-			if render.Get(diagram.Point{X: 11, Y: 5}) != tt.wantChars.bottomRight {
+			if canvas.Get(diagram.Point{X: 11, Y: 5}) != tt.wantChars.bottomRight {
 				t.Errorf("Bottom-right corner: got %c, want %c", 
-					render.Get(diagram.Point{X: 11, Y: 5}), tt.wantChars.bottomRight)
+					canvas.Get(diagram.Point{X: 11, Y: 5}), tt.wantChars.bottomRight)
 			}
 		})
 	}
@@ -132,8 +132,8 @@ func TestNodeRendererFallback(t *testing.T) {
 	}
 	
 	// Should fall back to rounded (default)
-	if render.Get(diagram.Point{X: 2, Y: 2}) != '╭' {
-		t.Errorf("Should fall back to rounded style, got %c", render.Get(diagram.Point{X: 2, Y: 2}))
+	if canvas.Get(diagram.Point{X: 2, Y: 2}) != '╭' {
+		t.Errorf("Should fall back to rounded style, got %c", canvas.Get(diagram.Point{X: 2, Y: 2}))
 	}
 }
 
@@ -162,8 +162,8 @@ func TestNodeRendererASCIIFallback(t *testing.T) {
 	}
 	
 	// Should use ASCII style
-	if render.Get(diagram.Point{X: 2, Y: 2}) != '+' {
-		t.Errorf("Should use ASCII style for ASCII terminal, got %c", render.Get(diagram.Point{X: 2, Y: 2}))
+	if canvas.Get(diagram.Point{X: 2, Y: 2}) != '+' {
+		t.Errorf("Should use ASCII style for ASCII terminal, got %c", canvas.Get(diagram.Point{X: 2, Y: 2}))
 	}
 }
 
@@ -188,7 +188,7 @@ func TestNodeRendererText(t *testing.T) {
 		t.Fatalf("Failed to render node: %v", err)
 	}
 	
-	output := render.String()
+	output := canvas.String()
 	lines := strings.Split(output, "\n")
 	
 	// Check that text appears in the right place (line 1 at y=1, line 2 at y=2)
@@ -228,12 +228,12 @@ func TestNodeRendererColors(t *testing.T) {
 	}
 	
 	// Check that the box uses double-line style
-	if render.Get(diagram.Point{X: 2, Y: 2}) != '╔' {
-		t.Errorf("Expected double-line top-left corner, got %c", render.Get(diagram.Point{X: 2, Y: 2}))
+	if canvas.Get(diagram.Point{X: 2, Y: 2}) != '╔' {
+		t.Errorf("Expected double-line top-left corner, got %c", canvas.Get(diagram.Point{X: 2, Y: 2}))
 	}
 	
 	// The colored output should contain ANSI color codes
-	coloredOutput := render.ColoredString()
+	coloredOutput := canvas.ColoredString()
 	if !strings.Contains(coloredOutput, "\033[") {
 		t.Errorf("Expected colored output to contain ANSI codes")
 	}
@@ -270,7 +270,7 @@ func TestNodeRendererVisualRegression(t *testing.T) {
  ╰────────╯    
                `
 	
-	actual := render.String()
+	actual := canvas.String()
 	if actual != expected {
 		t.Errorf("Visual regression failed.\nExpected:\n%s\nGot:\n%s", expected, actual)
 		// Print with visible spaces for debugging

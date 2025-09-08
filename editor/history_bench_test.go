@@ -34,12 +34,12 @@ func createTestDiagram(nodes, connections int) *diagram.Diagram {
 
 // Benchmark JSON serialization approach
 func BenchmarkHistoryJSON(b *testing.B) {
-	diagram := createTestDiagram(20, 15) // Reasonable size diagram
+	d := createTestDiagram(20, 15) // Reasonable size diagram
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Simulate save
-		data, _ := json.Marshal(diagram)
+		data, _ := json.Marshal(d)
 		_ = string(data)
 		
 		// Simulate restore
@@ -80,12 +80,12 @@ func cloneDiagram(d *diagram.Diagram) *diagram.Diagram {
 
 // Benchmark struct cloning approach
 func BenchmarkHistoryStruct(b *testing.B) {
-	diagram := createTestDiagram(20, 15) // Same size as JSON test
+	d := createTestDiagram(20, 15) // Same size as JSON test
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Simulate save (clone)
-		clone := cloneDiagram(diagram)
+		clone := cloneDiagram(d)
 		
 		// Simulate restore (just return the clone)
 		_ = clone
@@ -94,12 +94,12 @@ func BenchmarkHistoryStruct(b *testing.B) {
 
 // Benchmark memory allocations for JSON
 func BenchmarkHistoryJSONAllocs(b *testing.B) {
-	diagram := createTestDiagram(20, 15)
+	d := createTestDiagram(20, 15)
 	
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		data, _ := json.Marshal(diagram)
+		data, _ := json.Marshal(d)
 		var restored diagram.Diagram
 		json.Unmarshal(data, &restored)
 	}
@@ -107,12 +107,12 @@ func BenchmarkHistoryJSONAllocs(b *testing.B) {
 
 // Benchmark memory allocations for struct cloning
 func BenchmarkHistoryStructAllocs(b *testing.B) {
-	diagram := createTestDiagram(20, 15)
+	d := createTestDiagram(20, 15)
 	
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_ = cloneDiagram(diagram)
+		_ = cloneDiagram(d)
 	}
 }
 
@@ -129,11 +129,11 @@ func BenchmarkHistoryScaling(b *testing.B) {
 	}
 	
 	for _, size := range sizes {
-		diagram := createTestDiagram(size.nodes, size.conns)
+		d := createTestDiagram(size.nodes, size.conns)
 		
 		b.Run("JSON/"+size.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				data, _ := json.Marshal(diagram)
+				data, _ := json.Marshal(d)
 				var restored diagram.Diagram
 				json.Unmarshal(data, &restored)
 			}
@@ -141,7 +141,7 @@ func BenchmarkHistoryScaling(b *testing.B) {
 		
 		b.Run("Struct/"+size.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				_ = cloneDiagram(diagram)
+				_ = cloneDiagram(d)
 			}
 		})
 	}

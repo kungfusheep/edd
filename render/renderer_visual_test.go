@@ -144,7 +144,7 @@ func TestRendererVisualOutput(t *testing.T) {
 // TestConnectionPointDebug helps debug connection point calculation
 func TestConnectionPointDebug(t *testing.T) {
 	// Create a simple diagram
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"A"}},
 			{ID: 2, Text: []string{"B"}},
@@ -155,7 +155,7 @@ func TestConnectionPointDebug(t *testing.T) {
 	}
 	
 	renderer := NewRenderer()
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}

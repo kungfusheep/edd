@@ -3,7 +3,7 @@ package pathfinding
 import (
 	"edd/diagram"
 	"edd/geometry"
-	"edd/pathfinding"
+	"edd/render"
 	"fmt"
 	"strings"
 	"testing"
@@ -81,7 +81,7 @@ func TestSpreadingAnalysis(t *testing.T) {
 			height := 10 + tt.nodeHeight
 
 			// Create pathfinder and router
-			pf := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
+			pf := NewSmartPathFinder(PathCost{
 				StraightCost:  10,
 				TurnCost:      20,
 				ProximityCost: -5,
@@ -249,7 +249,7 @@ func TestBidirectionalSpacing(t *testing.T) {
 	}
 
 	// Create pathfinder and router
-	pf := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
+	pf := NewSmartPathFinder(PathCost{
 		StraightCost:  10,
 		TurnCost:      20,
 		ProximityCost: -5,

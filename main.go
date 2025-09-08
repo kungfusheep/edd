@@ -58,15 +58,15 @@ func main() {
 	// Handle interactive mode (including demo mode)
 	if *interactive || *edit || *demo || (len(args) == 0 && !*validate && !*debug && !*showObstacles) {
 		// Launch TUI (with demo settings if applicable)
-		var demoSettings *tui.DemoSettings
+		var demoSettings *terminal.DemoSettings
 		if *demo {
-			demoSettings = &tui.DemoSettings{
+			demoSettings = &terminal.DemoSettings{
 				MinDelay:  *minDelay,
 				MaxDelay:  *maxDelay,
 				LineDelay: *lineDelay,
 			}
 		}
-		if err := tui.RunInteractiveWithDemo(filename, demoSettings); err != nil {
+		if err := terminal.RunInteractiveWithDemo(filename, demoSettings); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

@@ -1,17 +1,16 @@
 package render
 
 import (
-	"edd/render"
 	"edd/diagram"
 	"strings"
 	"testing"
 )
 
 func TestCanvasAndNodeRenderer(t *testing.T) {
-	caps := render.TerminalCapabilities{UnicodeLevel: render.UnicodeExtended}
-	nodeRenderer := render.NewNodeRenderer(caps)
+	caps := TerminalCapabilities{UnicodeLevel: UnicodeExtended}
+	nodeRenderer := NewNodeRenderer(caps)
 	
-	c := render.NewMatrixCanvas(30, 10)
+	c := NewMatrixCanvas(30, 10)
 	node := diagram.Node{
 		ID:     1,
 		X:      5,
@@ -35,10 +34,10 @@ func TestCanvasAndNodeRenderer(t *testing.T) {
 }
 
 func TestSequenceRendererBasic(t *testing.T) {
-	caps := render.TerminalCapabilities{UnicodeLevel: render.UnicodeExtended}
+	caps := TerminalCapabilities{UnicodeLevel: UnicodeExtended}
 	renderer := NewSequenceRenderer(caps)
 	
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"User"}},
 			{ID: 2, Text: []string{"Server"}},
@@ -50,14 +49,14 @@ func TestSequenceRendererBasic(t *testing.T) {
 	}
 	
 	// Get required canvas size
-	width, height := renderer.GetBounds(diagram)
+	width, height := renderer.GetBounds(d)
 	if width <= 0 || height <= 0 {
 		t.Fatalf("Invalid bounds: %dx%d", width, height)
 	}
 	t.Logf("Canvas size: %dx%d", width, height)
 	
 	// Render directly to string
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}
@@ -97,10 +96,10 @@ func TestSequenceRendererBasic(t *testing.T) {
 }
 
 func TestSequenceRendererSelfMessage(t *testing.T) {
-	caps := render.TerminalCapabilities{UnicodeLevel: render.UnicodeExtended}
+	caps := TerminalCapabilities{UnicodeLevel: UnicodeExtended}
 	renderer := NewSequenceRenderer(caps)
 	
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"System"}},
 		},
@@ -109,7 +108,7 @@ func TestSequenceRendererSelfMessage(t *testing.T) {
 		},
 	}
 	
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}
@@ -124,10 +123,10 @@ func TestSequenceRendererSelfMessage(t *testing.T) {
 }
 
 func TestSequenceRendererMultipleParticipants(t *testing.T) {
-	caps := render.TerminalCapabilities{UnicodeLevel: render.UnicodeExtended}
+	caps := TerminalCapabilities{UnicodeLevel: UnicodeExtended}
 	renderer := NewSequenceRenderer(caps)
 	
-	diagram := &diagram.Diagram{
+	d := &diagram.Diagram{
 		Nodes: []diagram.Node{
 			{ID: 1, Text: []string{"Client"}},
 			{ID: 2, Text: []string{"Server"}},
@@ -141,7 +140,7 @@ func TestSequenceRendererMultipleParticipants(t *testing.T) {
 		},
 	}
 	
-	output, err := renderer.Render(diagram)
+	output, err := renderer.Render(d)
 	if err != nil {
 		t.Fatalf("Failed to render: %v", err)
 	}

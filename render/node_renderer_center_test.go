@@ -127,7 +127,7 @@ func TestNodeRendererCenterText(t *testing.T) {
 			}
 
 			// Get the rendered output
-			output := render.String()
+			output := canvas.String()
 			lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 
 			// Check expected lines
