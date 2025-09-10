@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 )
 
@@ -103,8 +103,8 @@ func (d *DirectPathFinder) middleSplitPath(start, end diagram.Point) []diagram.P
 	midY := (start.Y + end.Y) / 2
 	
 	// Choose which dimension to split on based on aspect ratio
-	dx := geometry.Abs(end.X - start.X)
-	dy := geometry.Abs(end.Y - start.Y)
+	dx := layout.Abs(end.X - start.X)
+	dy := layout.Abs(end.Y - start.Y)
 	
 	if dx > dy {
 		// Wider than tall - split vertically

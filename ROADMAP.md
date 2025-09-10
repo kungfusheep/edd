@@ -3,15 +3,9 @@
 
 ## Feature Ideas
 
-bold text / center text 
-layout hints - weights, alignments, etc.
 export to / plant / mermaid / text
 
 decision tree diagram graph
-sequence diagram
-
-some text editing bugs related to alt-backspace & similar
-
 
 more deterministic layouts 
 

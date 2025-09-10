@@ -3,7 +3,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 	"math"
 )
@@ -41,7 +41,7 @@ var EdgeHuggingPathCost = PathCost{
 
 // ManhattanDistance calculates the Manhattan distance between two points.
 func ManhattanDistance(p1, p2 diagram.Point) int {
-	return geometry.Abs(p1.X-p2.X) + geometry.Abs(p1.Y-p2.Y)
+	return layout.Abs(p1.X-p2.X) + layout.Abs(p1.Y-p2.Y)
 }
 
 // EuclideanDistance calculates the Euclidean distance between two points.
@@ -111,7 +111,7 @@ func GetNeighborsSymmetric(p, goal diagram.Point) []diagram.Point {
 		var primary, secondary []diagram.Point
 		
 		// Prioritize based on which axis has more distance to cover
-		if geometry.Abs(dx) > geometry.Abs(dy) {
+		if layout.Abs(dx) > layout.Abs(dy) {
 			// Horizontal is primary
 			if dx > 0 {
 				primary = append(primary, diagram.Point{X: p.X + 1, Y: p.Y}) // East
@@ -123,7 +123,7 @@ func GetNeighborsSymmetric(p, goal diagram.Point) []diagram.Point {
 			} else {
 				secondary = append(secondary, diagram.Point{X: p.X, Y: p.Y - 1}) // North
 			}
-		} else if geometry.Abs(dy) > geometry.Abs(dx) {
+		} else if layout.Abs(dy) > layout.Abs(dx) {
 			// Vertical is primary
 			if dy > 0 {
 				primary = append(primary, diagram.Point{X: p.X, Y: p.Y + 1}) // South
@@ -156,8 +156,8 @@ func GetNeighborsSymmetric(p, goal diagram.Point) []diagram.Point {
 			// Return both options first, then the opposite directions
 			// This ensures both paths are explored with equal priority
 			return []diagram.Point{horizontal, vertical,
-				{X: p.X - dx/geometry.Abs(dx), Y: p.Y}, // Opposite horizontal
-				{X: p.X, Y: p.Y - dy/geometry.Abs(dy)},  // Opposite vertical
+				{X: p.X - dx/layout.Abs(dx), Y: p.Y}, // Opposite horizontal
+				{X: p.X, Y: p.Y - dy/layout.Abs(dy)},  // Opposite vertical
 			}
 		}
 		
@@ -255,8 +255,8 @@ func OptimizePath(path diagram.Path, obstacles func(diagram.Point) bool) diagram
 // canConnectDirectly checks if two points can be connected with a straight line
 func canConnectDirectly(p1, p2 diagram.Point, obstacles func(diagram.Point) bool) bool {
 	// Use Bresenham's line algorithm to check all points on the line
-	dx := geometry.Abs(p2.X - p1.X)
-	dy := geometry.Abs(p2.Y - p1.Y)
+	dx := layout.Abs(p2.X - p1.X)
+	dy := layout.Abs(p2.Y - p1.Y)
 	
 	x, y := p1.X, p1.Y
 	

@@ -27,28 +27,9 @@ type DemoSettings struct {
 	LineDelay int // Extra delay between lines in ms
 }
 
-// RunInteractive launches the TUI editor
-func RunInteractive(filename string) error {
-	return RunInteractiveWithDemo(filename, nil)
-}
-
-// RunInteractiveWithDemo launches the TUI editor with optional demo mode
-func RunInteractiveWithDemo(filename string, demoSettings *DemoSettings) error {
-	// Create the real renderer
-	renderer := editor.NewRealRenderer()
-
-	// Create TUI editor
-	tui := editor.NewTUIEditor(renderer)
-
-	// Load diagram if filename provided
-	if filename != "" {
-		diagram, err := loadDiagramFile(filename)
-		if err != nil {
-			return fmt.Errorf("failed to load diagram: %w", err)
-		}
-		tui.SetDiagram(diagram)
-	}
-
+// RunTUILoop runs the terminal UI loop with an already-configured TUI editor
+// This is called from main.go after setting up the editor
+func RunTUILoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettings) error {
 	// Setup terminal
 	if err := setupTerminal(); err != nil {
 		return fmt.Errorf("failed to setup terminal: %w", err)

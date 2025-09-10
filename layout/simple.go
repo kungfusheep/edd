@@ -2,7 +2,6 @@ package layout
 
 import (
 	"edd/diagram"
-	"edd/geometry"
 	"fmt"
 	"math"
 	"sort"
@@ -291,10 +290,10 @@ func (s *SimpleLayout) applyPositionHintsWithRelationships(nodes []diagram.Node,
 			dy := node.Y - neighbor.Y
 			
 			// Apply gentle pull (30% strength)
-			if geometry.Abs(dx) > s.horizontalSpacing*3 {
+			if Abs(dx) > s.horizontalSpacing*3 {
 				neighbor.X += dx / 3
 			}
-			if geometry.Abs(dy) > s.verticalSpacing*3 {
+			if Abs(dy) > s.verticalSpacing*3 {
 				neighbor.Y += dy / 3
 			}
 		}
@@ -444,7 +443,7 @@ func (s *SimpleLayout) separateNodes(a, b *diagram.Node, spacing int) {
 	}
 	
 	// Determine primary separation direction (horizontal or vertical)
-	if geometry.Abs(dx) > geometry.Abs(dy) {
+	if Abs(dx) > Abs(dy) {
 		// Separate horizontally
 		if dx > 0 {
 			// B is to the right of A

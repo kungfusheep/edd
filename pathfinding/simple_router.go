@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 )
 
@@ -70,7 +70,7 @@ func (sr *SimpleRouter) RouteConnection(conn diagram.Connection, nodes []diagram
 	// 	fmt.Printf("  Target node: pos=(%d,%d) size=(%dx%d) center=(%d,%d)\n",
 	// 		targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height, targetCenter.X, targetCenter.Y)
 	// 	fmt.Printf("  Distance: dx=%d, dy=%d, |dy|=%d\n", 
-	// 		targetCenter.X - sourceCenter.X, targetCenter.Y - sourceCenter.Y, geometry.Abs(targetCenter.Y - sourceCenter.Y))
+	// 		targetCenter.X - sourceCenter.X, targetCenter.Y - sourceCenter.Y, layout.Abs(targetCenter.Y - sourceCenter.Y))
 	// 	
 	// 	// Check the Y ranges
 	// 	fmt.Printf("  Source Y range: %d to %d\n", sourceNode.Y, sourceNode.Y + sourceNode.Height - 1)
@@ -268,7 +268,7 @@ func findNodeEdgeIntersection(from, to diagram.Point, node *diagram.Node, isExit
 	centerY := node.Y + node.Height/2
 	
 	// Determine which edge based on direction
-	if geometry.Abs(to.X - centerX) > geometry.Abs(to.Y - centerY) {
+	if layout.Abs(to.X - centerX) > layout.Abs(to.Y - centerY) {
 		// Horizontal edge
 		if to.X > centerX {
 			return diagram.Point{X: right, Y: centerY}
@@ -308,7 +308,7 @@ func getNodeEdgePoint(fromNode, toNode *diagram.Node) diagram.Point {
 	dy := toCenter.Y - fromCenter.Y
 	
 	// Choose edge point based on direction
-	if geometry.Abs(dx) > geometry.Abs(dy) {
+	if layout.Abs(dx) > layout.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Exit from right edge

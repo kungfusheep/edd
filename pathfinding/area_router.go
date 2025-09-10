@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 )
 
@@ -73,7 +73,7 @@ func (ar *AreaRouter) RouteConnection(conn diagram.Connection, nodes []diagram.N
 	//     targetNode.ID, targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height, targetCenter.X, targetCenter.Y)
 	
 	// Choose exit point on source edge based on direction to target
-	if geometry.Abs(dx) > geometry.Abs(dy) {
+	if layout.Abs(dx) > layout.Abs(dy) {
 		// Primarily horizontal movement
 		if dx > 0 {
 			// Exit from right edge (one unit past the actual edge for pathfinding)

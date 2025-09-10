@@ -1,8 +1,9 @@
-package pathfinding
+package tests
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
+	"edd/pathfinding"
 	"edd/render"
 	"fmt"
 	"strings"
@@ -81,12 +82,12 @@ func TestSpreadingAnalysis(t *testing.T) {
 			height := 10 + tt.nodeHeight
 
 			// Create pathfinder and router
-			pf := NewSmartPathFinder(PathCost{
+			pf := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
 				StraightCost:  10,
 				TurnCost:      20,
 				ProximityCost: -5,
 			})
-			router := NewRouter(pf)
+			router := pathfinding.NewRouter(pf)
 
 			// Create canvas
 			c := render.NewMatrixCanvas(width, height)
@@ -179,7 +180,7 @@ func analyzeSpreadingQuality(t *testing.T, name string, nodes []diagram.Node, pa
 		
 		for i := 0; i < len(startPoints)-1; i++ {
 			for j := i + 1; j < len(startPoints); j++ {
-				dist := geometry.Abs(startPoints[i].Y - startPoints[j].Y) + geometry.Abs(startPoints[i].X - startPoints[j].X)
+				dist := layout.Abs(startPoints[i].Y - startPoints[j].Y) + layout.Abs(startPoints[i].X - startPoints[j].X)
 				if dist < minDist {
 					minDist = dist
 				}
@@ -249,12 +250,12 @@ func TestBidirectionalSpacing(t *testing.T) {
 	}
 
 	// Create pathfinder and router
-	pf := NewSmartPathFinder(PathCost{
+	pf := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
 		StraightCost:  10,
 		TurnCost:      20,
 		ProximityCost: -5,
 	})
-	router := NewRouter(pf)
+	router := pathfinding.NewRouter(pf)
 
 	// Create canvas
 	c := render.NewMatrixCanvas(45, 16)
@@ -296,13 +297,13 @@ func TestBidirectionalSpacing(t *testing.T) {
 	}
 
 	// Draw connections with arrows
-	arrowConfig := NewArrowConfig()
+	arrowConfig := pathfinding.NewArrowConfig()
 	// Set arrows for backward connections
-	arrowConfig.SetArrowType(2, 1, ArrowStart)
+	arrowConfig.SetArrowType(2, 1, pathfinding.ArrowStart)
 	
-	connectionsWithArrows := ApplyArrowConfig(connections, paths, arrowConfig)
+	connectionsWithArrows := pathfinding.ApplyArrowConfig(connections, paths, arrowConfig)
 	for _, cwa := range connectionsWithArrows {
-		hasArrow := cwa.ArrowType == ArrowEnd || cwa.ArrowType == ArrowBoth
+		hasArrow := cwa.ArrowType == pathfinding.ArrowEnd || cwa.ArrowType == pathfinding.ArrowBoth
 		renderer.RenderPath(c, cwa.Path, hasArrow)
 	}
 

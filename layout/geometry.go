@@ -1,4 +1,6 @@
-package geometry
+package layout
+
+// Geometry utility functions merged from geometry package
 
 // Abs returns the absolute value of an integer.
 func Abs(x int) int {

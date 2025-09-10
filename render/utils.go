@@ -146,7 +146,7 @@ func (oc *OffsetCanvas) Set(p diagram.Point, char rune) error {
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
-	return oc.Set(translated, char)
+	return oc.canvas.Set(translated, char)
 }
 
 // SetWithColor sets a character with color if the underlying canvas supports it.
@@ -161,7 +161,7 @@ func (oc *OffsetCanvas) SetWithColor(p diagram.Point, char rune, color string) e
 		return coloredCanvas.SetWithColor(translated, char, color)
 	}
 	// Fall back to regular set
-	return oc.Set(translated, char)
+	return oc.canvas.Set(translated, char)
 }
 
 // SetWithColorAndStyle sets a character with color and style if the underlying canvas supports it.
@@ -176,12 +176,12 @@ func (oc *OffsetCanvas) SetWithColorAndStyle(p diagram.Point, char rune, color s
 		return coloredCanvas.SetWithColorAndStyle(translated, char, color, style)
 	}
 	// Fall back to regular set
-	return oc.Set(translated, char)
+	return oc.canvas.Set(translated, char)
 }
 
-// Size returns the size of the underlying 
+// Size returns the size of the underlying canvas
 func (oc *OffsetCanvas) Size() (width, height int) {
-	return oc.Size()
+	return oc.canvas.Size()
 }
 
 // Get returns the character at the given position (after applying offset).
@@ -191,15 +191,15 @@ func (oc *OffsetCanvas) Get(p diagram.Point) rune {
 		X: p.X - oc.offset.X,
 		Y: p.Y - oc.offset.Y,
 	}
-	return oc.Get(translated)
+	return oc.canvas.Get(translated)
 }
 
-// Clear clears the underlying 
+// Clear clears the underlying canvas
 func (oc *OffsetCanvas) Clear() {
-	oc.Clear()
+	oc.canvas.Clear()
 }
 
 // String returns the canvas as a string.
 func (oc *OffsetCanvas) String() string {
-	return oc.String()
+	return oc.canvas.String()
 }

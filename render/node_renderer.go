@@ -150,7 +150,8 @@ func (r *NodeRenderer) drawText(canvas Canvas, node diagram.Node, hints map[stri
 		// Draw the text
 		for j, ch := range line {
 			if x+j < node.X+node.Width-1 { // Keep text within borders
-				r.setCharWithStyle(canvas, diagram.Point{X: x + j, Y: y}, ch, textColor, isBold, isItalic)
+				pos := diagram.Point{X: x + j, Y: y}
+				r.setCharWithStyle(canvas, pos, ch, textColor, isBold, isItalic)
 			}
 		}
 		

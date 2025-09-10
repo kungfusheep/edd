@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 	"math"
 )
@@ -122,7 +122,7 @@ func getConnectionPoint(fromNode, toNode *diagram.Node) diagram.Point {
 	// Choose connection point based on direction
 	// Connection points are placed ON the box edges for proper connection termination
 	// Prefer horizontal connections over vertical when possible
-	if geometry.Abs(dx) > geometry.Abs(dy) {
+	if layout.Abs(dx) > layout.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Connect from right side (on the edge)
@@ -174,7 +174,7 @@ func getEdgePoint(fromNode, toNode *diagram.Node) diagram.Point {
 	
 	// Choose edge point based on direction
 	// Edge points are ON the box edges for proper junction creation
-	if geometry.Abs(dx) > geometry.Abs(dy) {
+	if layout.Abs(dx) > layout.Abs(dy) {
 		// Horizontal connection
 		if dx > 0 {
 			// Connect from right side (at the edge)

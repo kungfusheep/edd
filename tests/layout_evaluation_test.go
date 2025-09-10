@@ -1,7 +1,8 @@
-package pathfinding
+package tests
 
 import (
 	"edd/diagram"
+	"edd/pathfinding"
 	"edd/render"
 	"fmt"
 	"strings"
@@ -150,12 +151,12 @@ func TestLayoutQualityEvaluation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create pathfinder and router
-			pf := NewSmartPathFinder(PathCost{
+			pf := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
 				StraightCost:  10,
 				TurnCost:      20,
 				ProximityCost: -5,
 			})
-			router := NewRouter(pf)
+			router := pathfinding.NewRouter(pf)
 
 			// Create canvas
 			c := render.NewMatrixCanvas(tt.width, tt.height)
@@ -210,7 +211,7 @@ func TestLayoutQualityEvaluation(t *testing.T) {
 						}
 					}
 					if node != nil {
-						paths[i] = HandleSelfLoops(conn, node)
+						paths[i] = pathfinding.HandleSelfLoops(conn, node)
 					}
 				}
 			}

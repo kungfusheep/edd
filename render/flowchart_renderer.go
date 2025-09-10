@@ -111,6 +111,7 @@ func (r *FlowchartRenderer) Render(d *diagram.Diagram) (string, error) {
 		return "", fmt.Errorf("failed to render to canvas: %w", err)
 	}
 	
+	
 	// Step 7: Convert canvas to string output
 	var output string
 	if coloredCanvas, ok := c.(*ColoredMatrixCanvas); ok {

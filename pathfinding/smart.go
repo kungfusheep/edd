@@ -2,7 +2,7 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 )
 
@@ -285,7 +285,7 @@ func (s *SmartPathFinder) alignSegments(path diagram.Path, obstacles func(diagra
 		p0, p1, p2, p3 := points[i-1], points[i], points[i+1], points[i+2]
 		
 		// Check if we can align horizontally
-		if p0.Y == p3.Y && geometry.Abs(p1.Y-p0.Y) <= 3 && geometry.Abs(p2.Y-p0.Y) <= 3 {
+		if p0.Y == p3.Y && layout.Abs(p1.Y-p0.Y) <= 3 && layout.Abs(p2.Y-p0.Y) <= 3 {
 			// Try to flatten this section
 			aligned1 := diagram.Point{X: p1.X, Y: p0.Y}
 			aligned2 := diagram.Point{X: p2.X, Y: p0.Y}
@@ -300,7 +300,7 @@ func (s *SmartPathFinder) alignSegments(path diagram.Path, obstacles func(diagra
 		}
 		
 		// Check if we can align vertically
-		if p0.X == p3.X && geometry.Abs(p1.X-p0.X) <= 3 && geometry.Abs(p2.X-p0.X) <= 3 {
+		if p0.X == p3.X && layout.Abs(p1.X-p0.X) <= 3 && layout.Abs(p2.X-p0.X) <= 3 {
 			// Try to straighten this section
 			aligned1 := diagram.Point{X: p0.X, Y: p1.Y}
 			aligned2 := diagram.Point{X: p0.X, Y: p2.Y}

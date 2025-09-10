@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/json"
 	"edd/diagram"
+	"edd/editor"
 	"edd/render"
 	"edd/terminal"
 	"edd/validation"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 )
 
@@ -66,7 +68,7 @@ func main() {
 				LineDelay: *lineDelay,
 			}
 		}
-		if err := terminal.RunInteractiveWithDemo(filename, demoSettings); err != nil {
+		if err := runInteractiveMode(filename, demoSettings); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -161,6 +163,46 @@ func loadDiagram(filename string) (*diagram.Diagram, error) {
 		}
 	}
 	
+	return &d, nil
+}
+
+// runInteractiveMode launches the TUI editor with optional demo mode
+// This is the main entry point for interactive editing
+func runInteractiveMode(filename string, demoSettings *terminal.DemoSettings) error {
+	// Create the real renderer
+	renderer := editor.NewRealRenderer()
+
+	// Create TUI editor
+	tui := editor.NewTUIEditor(renderer)
+
+	// Load diagram if filename provided
+	if filename != "" {
+		d, err := loadInteractiveDiagram(filename)
+		if err != nil {
+			return fmt.Errorf("failed to load diagram: %w", err)
+		}
+		tui.SetDiagram(d)
+	}
+
+	// Delegate to terminal package for the actual TUI loop
+	return terminal.RunTUILoop(tui, filename, demoSettings)
+}
+
+// loadInteractiveDiagram loads a diagram from a JSON file for interactive editing
+func loadInteractiveDiagram(filename string) (*diagram.Diagram, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var d diagram.Diagram
+	if err := json.Unmarshal(data, &d); err != nil {
+		return nil, err
+	}
+
+	// Ensure all connections have unique IDs
+	diagram.EnsureUniqueConnectionIDs(&d)
+
 	return &d, nil
 }
 

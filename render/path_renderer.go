@@ -2,7 +2,7 @@ package render
 
 import (
 	"edd/diagram"
-	"edd/geometry"
+	"edd/layout"
 	"fmt"
 )
 
@@ -419,6 +419,7 @@ func (r *PathRenderer) drawSegmentSkippingCornersWithOptions(canvas Canvas, from
 				continue
 			}
 			
+			
 			// Handle endpoint with arrow
 			if x == endX && drawArrow {
 				arrowChar := r.style.ArrowRight
@@ -756,16 +757,16 @@ func (r *PathRenderer) getCornerChar(prev, current, next diagram.Point) rune {
 	
 	// Normalize to directions (-1, 0, 1)
 	if dxIn != 0 {
-		dxIn = dxIn / geometry.Abs(dxIn)
+		dxIn = dxIn / layout.Abs(dxIn)
 	}
 	if dyIn != 0 {
-		dyIn = dyIn / geometry.Abs(dyIn)
+		dyIn = dyIn / layout.Abs(dyIn)
 	}
 	if dxOut != 0 {
-		dxOut = dxOut / geometry.Abs(dxOut)
+		dxOut = dxOut / layout.Abs(dxOut)
 	}
 	if dyOut != 0 {
-		dyOut = dyOut / geometry.Abs(dyOut)
+		dyOut = dyOut / layout.Abs(dyOut)
 	}
 	
 	// Determine which corner to use based on the turn direction
