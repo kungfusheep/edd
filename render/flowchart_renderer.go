@@ -174,14 +174,14 @@ func (r *FlowchartRenderer) renderToCanvas(d *diagram.Diagram, layoutNodes []dia
 	connectionsWithArrows := pathfinding.ApplyArrowConfig(d.Connections, paths, arrowConfig)
 	
 	// Step 5: Render all connections
-	// Note: connectionsWithArrows maintains the same order as d.Connections
-	for i, cwa := range connectionsWithArrows {
+	// Note: connectionsWithArrows may not maintain the same order as d.Connections if some connections failed to route
+	for _, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == pathfinding.ArrowEnd || cwa.ArrowType == pathfinding.ArrowBoth
 		
-		// Check if this connection has hints
-		if i < len(d.Connections) && d.Connections[i].Hints != nil && len(d.Connections[i].Hints) > 0 {
+		// Check if this connection has hints - use the connection from cwa, not d.Connections[i]
+		if cwa.Connection.Hints != nil && len(cwa.Connection.Hints) > 0 {
 			// Use RenderPathWithHints to apply visual hints
-			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, d.Connections[i].Hints)
+			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, cwa.Connection.Hints)
 		} else {
 			// Use RenderPathWithOptions to enable connection endpoint handling
 			r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
@@ -190,9 +190,9 @@ func (r *FlowchartRenderer) renderToCanvas(d *diagram.Diagram, layoutNodes []dia
 	
 	// Step 6: Render connection labels after all paths are drawn
 	// This ensures labels are placed on top of the lines
-	for i, conn := range d.Connections {
-		if conn.Label != "" && i < len(connectionsWithArrows) {
-			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, LabelMiddle)
+	for _, cwa := range connectionsWithArrows {
+		if cwa.Connection.Label != "" {
+			r.labelRenderer.RenderLabel(offsetCanvas, cwa.Path, cwa.Connection.Label, LabelMiddle)
 		}
 	}
 	

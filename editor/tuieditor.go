@@ -309,7 +309,19 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		}
 	}
 	
+	// Generate a unique ID for the new connection
+	// Use the index as the ID (connections.length will be the new index)
+	connID := len(e.diagram.Connections)
+	
+	// Make sure this ID isn't already used
+	for _, existing := range e.diagram.Connections {
+		if existing.ID >= connID {
+			connID = existing.ID + 1
+		}
+	}
+	
 	conn := diagram.Connection{
+		ID:    connID,
 		From:  from,
 		To:    to,
 		Label: label,
