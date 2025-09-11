@@ -201,7 +201,7 @@ func (e *TUIEditor) Render() string {
 			// Apply scroll offset if needed
 			lines := strings.Split(output, "\n")
 			totalLines := len(lines)
-			visibleLines := e.height - 5 // Reserve space for status, Ed, etc.
+			visibleLines := e.height - 4 // Reserve space for status, Ed, etc. (reduced by 1 for extra line)
 			
 			// For sequence diagrams, find the header size (participant boxes)
 			headerLines := 0
@@ -211,14 +211,14 @@ func (e *TUIEditor) Render() string {
 				// Look for the first lifeline (vertical line) to determine where headers end
 				for i, line := range lines {
 					if strings.Contains(line, "│") && i > 0 {
-						// Found a lifeline, headers are above this
-						// Add a bit of padding
-						headerLines = i + 1
+						// Found a lifeline, headers include this line plus one more
+						// to show the complete bottom of the boxes and connection to lifelines
+						headerLines = i + 2  // Include the lifeline start and one more line
 						break
 					}
-					// Safety check - headers shouldn't be more than 10 lines
-					if i > 10 {
-						headerLines = 5 // Default to 5 lines for headers
+					// Safety check - headers shouldn't be more than 12 lines
+					if i > 12 {
+						headerLines = 7 // Default to 7 lines for headers
 						break
 					}
 				}
