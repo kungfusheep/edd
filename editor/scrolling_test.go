@@ -267,3 +267,77 @@ func TestAutoScrollAfterManualScroll(t *testing.T) {
 		t.Error("Should be at bottom, but found 'lines below' indicator")
 	}
 }
+
+// Test sticky headers for sequence diagrams
+func TestStickyHeadersSequenceDiagram(t *testing.T) {
+	renderer := NewRealRenderer()
+	tui := NewTUIEditor(renderer)
+	
+	// Create a tall sequence diagram
+	d := &diagram.Diagram{
+		Type: "sequence",
+		Nodes: []diagram.Node{},
+	}
+	
+	// Add actors
+	for i := 0; i < 5; i++ {
+		d.Nodes = append(d.Nodes, diagram.Node{
+			ID:   i,
+			Text: []string{fmt.Sprintf("Service%d", i)},
+		})
+	}
+	
+	// Add many messages to make it tall
+	for i := 0; i < 20; i++ {
+		from := i % 5
+		to := (i + 1) % 5
+		d.Connections = append(d.Connections, diagram.Connection{
+			ID:    i,
+			From:  from,
+			To:    to,
+			Label: fmt.Sprintf("Request_%d", i),
+		})
+	}
+	
+	tui.SetDiagram(d)
+	tui.SetTerminalSize(80, 25) // Small height to force scrolling
+	
+	// Initial render - will auto-scroll to bottom
+	tui.Render()
+	
+	// Scroll to middle
+	tui.ScrollDiagram(-30)
+	output := tui.Render()
+	
+	// When scrolled past headers in a sequence diagram, headers should be pinned
+	if tui.diagramScrollOffset > 10 { // Assuming headers are ~5-10 lines
+		if !strings.Contains(output, "Service0") {
+			t.Error("Sticky headers: Service0 should be visible at top when scrolled")
+		}
+		if !strings.Contains(output, "Service4") {
+			t.Error("Sticky headers: Service4 should be visible at top when scrolled")
+		}
+		// Should have the separator line
+		if !strings.Contains(output, "─────") {
+			t.Error("Expected separator line between sticky headers and content")
+		}
+		// Should indicate headers are pinned
+		if !strings.Contains(output, "headers pinned") {
+			t.Error("Expected 'headers pinned' indicator when using sticky headers")
+		}
+	}
+	
+	// Scroll to top
+	tui.ScrollToTop()
+	output2 := tui.Render()
+	
+	// Log for debugging
+	t.Logf("At top, scroll offset: %d", tui.diagramScrollOffset)
+	
+	// At top, headers should be in normal position (no long separator)
+	// The separator we add for sticky headers is very long
+	longSeparator := "─────────────────────────────────────"
+	if strings.Contains(output2, longSeparator) {
+		t.Error("Should not have sticky header separator line when at top of diagram")
+	}
+}

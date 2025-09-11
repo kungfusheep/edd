@@ -203,6 +203,27 @@ func (e *TUIEditor) Render() string {
 			totalLines := len(lines)
 			visibleLines := e.height - 5 // Reserve space for status, Ed, etc.
 			
+			// For sequence diagrams, find the header size (participant boxes)
+			headerLines := 0
+			if e.diagram.Type == "sequence" && len(lines) > 0 {
+				// In sequence diagrams, participants are drawn at the top
+				// They typically take up 3-5 lines (box with text inside)
+				// Look for the first lifeline (vertical line) to determine where headers end
+				for i, line := range lines {
+					if strings.Contains(line, "│") && i > 0 {
+						// Found a lifeline, headers are above this
+						// Add a bit of padding
+						headerLines = i + 1
+						break
+					}
+					// Safety check - headers shouldn't be more than 10 lines
+					if i > 10 {
+						headerLines = 5 // Default to 5 lines for headers
+						break
+					}
+				}
+			}
+			
 			// Check if content exceeds screen height
 			if totalLines > visibleLines {
 				maxScroll := totalLines - visibleLines
@@ -231,21 +252,53 @@ func (e *TUIEditor) Render() string {
 				
 				// Debug log
 				if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-					fmt.Fprintf(f, "Scroll: offset=%d, total=%d, visible=%d, max=%d, start=%d, end=%d\n", 
-						e.diagramScrollOffset, totalLines, visibleLines, maxScroll, startLine, endLine)
+					fmt.Fprintf(f, "Scroll: offset=%d, total=%d, visible=%d, max=%d, start=%d, end=%d, headers=%d\n", 
+						e.diagramScrollOffset, totalLines, visibleLines, maxScroll, startLine, endLine, headerLines)
 					f.Close()
 				}
 				
-				// Extract visible portion
-				scrolledLines := lines[startLine:endLine]
+				// Extract visible portion with sticky headers for sequence diagrams
+				var scrolledLines []string
+				if e.diagram.Type == "sequence" && headerLines > 0 && startLine > headerLines {
+					// We're scrolled past the headers - make them sticky
+					// Include the header lines at the top
+					scrolledLines = lines[:headerLines]
+					
+					// Add a separator line to show we're in sticky header mode
+					scrolledLines = append(scrolledLines, "─────────────────────────────────────────────────────────────────────────────")
+					
+					// Then add the scrolled content (adjust for header lines we're adding)
+					remainingSpace := visibleLines - headerLines - 1 // -1 for separator
+					actualStart := startLine
+					actualEnd := actualStart + remainingSpace
+					if actualEnd > totalLines {
+						actualEnd = totalLines
+					}
+					scrolledLines = append(scrolledLines, lines[actualStart:actualEnd]...)
+				} else {
+					// Normal scrolling (not a sequence diagram or not scrolled past headers)
+					scrolledLines = lines[startLine:endLine]
+				}
 				output = strings.Join(scrolledLines, "\n")
 				
 				// Add scroll indicators
-				if startLine > 0 {
-					output = fmt.Sprintf("[↑ %d more lines above]\n", startLine) + output
-				}
-				if endLine < totalLines {
-					output = output + fmt.Sprintf("\n[↓ %d more lines below]", totalLines-endLine)
+				if e.diagram.Type == "sequence" && headerLines > 0 && startLine > headerLines {
+					// For sticky headers, adjust the indicators
+					output = fmt.Sprintf("[↑ %d more lines above (headers pinned)]\n", startLine-headerLines) + output
+					
+					// Check if there are more lines below (accounting for sticky header space)
+					actualEnd := startLine + (visibleLines - headerLines - 1)
+					if actualEnd < totalLines {
+						output = output + fmt.Sprintf("\n[↓ %d more lines below]", totalLines-actualEnd)
+					}
+				} else {
+					// Normal scroll indicators (also for sequence diagrams when not using sticky headers)
+					if startLine > 0 {
+						output = fmt.Sprintf("[↑ %d more lines above]\n", startLine) + output
+					}
+					if endLine < totalLines {
+						output = output + fmt.Sprintf("\n[↓ %d more lines below]", totalLines-endLine)
+					}
 				}
 			} else {
 				// Content fits on screen, reset scroll offset and clear changed flag
