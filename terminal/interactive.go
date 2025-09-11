@@ -386,6 +386,10 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 	var buf bytes.Buffer
 	
 	for {
+		// Update terminal size on each iteration (handles resize)
+		width, height := getTerminalSize()
+		tui.SetTerminalSize(width, height)
+		
 		// Buffer all output to reduce flicker
 		buf.Reset()
 		
@@ -1045,6 +1049,18 @@ func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		tui.Undo()
 	case 18: // Ctrl+R for redo
 		tui.Redo()
+	case 'J': // Scroll down
+		tui.ScrollDiagram(tui.GetTerminalHeight() / 2)
+	case 'K': // Scroll up
+		tui.ScrollDiagram(-tui.GetTerminalHeight() / 2)
+	case 21: // Ctrl+U - scroll up half page
+		tui.ScrollDiagram(-tui.GetTerminalHeight() / 2)
+	case 4: // Ctrl+D - scroll down half page
+		tui.ScrollDiagram(tui.GetTerminalHeight() / 2)
+	case 'g': // Go to top
+		tui.ScrollToTop()
+	case 'G': // Go to bottom
+		tui.ScrollToBottom()
 	case ':': // Command mode
 		tui.StartCommand()
 	case '?', 'h': // Help
@@ -1210,6 +1226,15 @@ func showHelp() {
 	fmt.Println("  j     - Toggle JSON view")
 	fmt.Println("  u     - Undo")
 	fmt.Println("  Ctrl+R - Redo")
+	fmt.Println()
+	fmt.Println("  Scrolling (for large diagrams):")
+	fmt.Println("  J     - Scroll down half page")
+	fmt.Println("  K     - Scroll up half page")
+	fmt.Println("  g     - Go to top")
+	fmt.Println("  G     - Go to bottom")
+	fmt.Println("  Ctrl+U - Scroll up half page")
+	fmt.Println("  Ctrl+D - Scroll down half page")
+	fmt.Println()
 	fmt.Println("  P     - Play demo (from demo.json)")
 	fmt.Println("  R     - Create example demo.json")
 	fmt.Println("  q     - Quit")

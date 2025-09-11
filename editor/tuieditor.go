@@ -50,6 +50,10 @@ type TUIEditor struct {
 	// JSON view state
 	jsonScrollOffset    int  // Current scroll position in JSON view
 	
+	// Diagram view state
+	diagramScrollOffset int  // Current vertical scroll position in diagram view
+	diagramChanged      bool // Track if diagram was modified since last render
+	
 	// History management
 	history            *StructHistory  // Undo/redo history (optimized struct-based)
 	
@@ -80,6 +84,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		editingHintConn:    -1,  // Initialize to -1 (no connection being edited)
 		editingHintNode:    -1,  // Initialize to -1 (no node being edited)
 		jsonScrollOffset:   0,
+		diagramScrollOffset: 0,  // Initialize diagram scroll offset
 		history:            NewStructHistory(50), // 50 states max (optimized)
 		connectFrom:        -1,  // Initialize test-only field
 	}
@@ -93,6 +98,8 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 // SetDiagram sets the diagram to edit
 func (e *TUIEditor) SetDiagram(d *diagram.Diagram) {
 	e.diagram = d
+	// Mark as changed to trigger auto-scroll if needed
+	e.diagramChanged = true
 	// Save this as a new state in history
 	e.history.SaveState(d)
 }
@@ -106,6 +113,32 @@ func (e *TUIEditor) GetDiagram() *diagram.Diagram {
 func (e *TUIEditor) SetTerminalSize(width, height int) {
 	e.width = width
 	e.height = height
+}
+
+// GetTerminalHeight returns the terminal height
+func (e *TUIEditor) GetTerminalHeight() int {
+	return e.height
+}
+
+// ScrollDiagram scrolls the diagram view by the given amount
+func (e *TUIEditor) ScrollDiagram(delta int) {
+	e.diagramScrollOffset += delta
+	if e.diagramScrollOffset < 0 {
+		e.diagramScrollOffset = 0
+	}
+	// Note: Maximum scroll limit is handled in Render() based on actual content size
+}
+
+// ScrollToTop scrolls the diagram view to the top
+func (e *TUIEditor) ScrollToTop() {
+	e.diagramScrollOffset = 0
+}
+
+// ScrollToBottom scrolls the diagram view to the bottom
+func (e *TUIEditor) ScrollToBottom() {
+	// Set a flag to scroll to bottom on next render
+	// (we don't know the actual max until render calculates it)
+	e.diagramChanged = true
 }
 
 // Run starts the interactive editor loop
@@ -164,6 +197,62 @@ func (e *TUIEditor) Render() string {
 			// Store node positions and connection paths for jump label rendering
 			e.nodePositions = positions.Positions
 			e.connectionPaths = positions.ConnectionPaths
+			
+			// Apply scroll offset if needed
+			lines := strings.Split(output, "\n")
+			totalLines := len(lines)
+			visibleLines := e.height - 5 // Reserve space for status, Ed, etc.
+			
+			// Check if content exceeds screen height
+			if totalLines > visibleLines {
+				maxScroll := totalLines - visibleLines
+				
+				// Auto-scroll to bottom if diagram changed (new content added)
+				if e.diagramChanged {
+					// Scroll to bottom to show new content
+					e.diagramScrollOffset = maxScroll
+					// Clear the changed flag after handling it
+					e.diagramChanged = false
+				}
+				
+				// Clamp scroll offset to valid range
+				if e.diagramScrollOffset < 0 {
+					e.diagramScrollOffset = 0
+				} else if e.diagramScrollOffset > maxScroll {
+					e.diagramScrollOffset = maxScroll
+				}
+				
+				// Calculate visible window
+				startLine := e.diagramScrollOffset
+				endLine := startLine + visibleLines
+				if endLine > totalLines {
+					endLine = totalLines
+				}
+				
+				// Debug log
+				if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "Scroll: offset=%d, total=%d, visible=%d, max=%d, start=%d, end=%d\n", 
+						e.diagramScrollOffset, totalLines, visibleLines, maxScroll, startLine, endLine)
+					f.Close()
+				}
+				
+				// Extract visible portion
+				scrolledLines := lines[startLine:endLine]
+				output = strings.Join(scrolledLines, "\n")
+				
+				// Add scroll indicators
+				if startLine > 0 {
+					output = fmt.Sprintf("[↑ %d more lines above]\n", startLine) + output
+				}
+				if endLine < totalLines {
+					output = output + fmt.Sprintf("\n[↓ %d more lines below]", totalLines-endLine)
+				}
+			} else {
+				// Content fits on screen, reset scroll offset and clear changed flag
+				e.diagramScrollOffset = 0
+				e.diagramChanged = false
+			}
+			
 			return output
 		}
 		// If there was an error, fall through to simple rendering
@@ -265,6 +354,9 @@ func (e *TUIEditor) AddNode(text []string) int {
 
 	e.diagram.Nodes = append(e.diagram.Nodes, newNode)
 	
+	// Mark diagram as changed to trigger auto-scroll
+	e.diagramChanged = true
+	
 	// Save to history after modification
 	e.SaveHistory()
 	
@@ -327,6 +419,9 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		Label: label,
 	}
 	e.diagram.Connections = append(e.diagram.Connections, conn)
+	
+	// Mark diagram as changed to trigger auto-scroll
+	e.diagramChanged = true
 	
 	// Save to history after modification
 	e.SaveHistory()
@@ -1354,15 +1449,68 @@ func (e *TUIEditor) getNodeColor(nodeID int) string {
 
 // handleNormalKey processes keys in normal mode
 func (e *TUIEditor) handleNormalKey(key rune) bool {
-	// Debug logging
+	// Debug logging - log ALL keys including control codes
 	if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "Normal mode key pressed: %c (%d), current diagram type: %s\n", key, key, e.diagram.Type)
+		if key < 32 {
+			fmt.Fprintf(f, "Normal mode CONTROL key pressed: Ctrl+%c (code %d), current diagram type: %s\n", key+64, key, e.diagram.Type)
+		} else {
+			fmt.Fprintf(f, "Normal mode key pressed: %c (%d), current diagram type: %s\n", key, key, e.diagram.Type)
+		}
+		f.Close()
+	}
+	
+	// Test logging - log EVERY key before switch
+	if f, err := os.OpenFile("/tmp/edd_all_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "About to switch on key: %c (%d)\n", key, key)
 		f.Close()
 	}
 	
 	switch key {
 	case 'q', 3: // q or Ctrl+C to quit
 		return true
+		
+	case 21: // Ctrl+U - scroll up half page (check before 'u' for undo)
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Ctrl+U pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			f.Close()
+		}
+		e.diagramScrollOffset -= e.height / 2
+		if e.diagramScrollOffset < 0 {
+			e.diagramScrollOffset = 0
+		}
+		return false
+		
+	case 4: // Ctrl+D - scroll down half page (check before 'd' for delete)
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Ctrl+D pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			f.Close()
+		}
+		e.diagramScrollOffset += e.height / 2
+		// The maximum will be clamped when rendering
+		return false
+		
+	case 6: // Ctrl+F - scroll down (forward) - alternative to Ctrl+D
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Ctrl+F pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			f.Close()
+		}
+		e.diagramScrollOffset += e.height / 2
+		return false
+		
+	case 2: // Ctrl+B - scroll up (backward) - alternative to Ctrl+U
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Ctrl+B pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			f.Close()
+		}
+		e.diagramScrollOffset -= e.height / 2
+		if e.diagramScrollOffset < 0 {
+			e.diagramScrollOffset = 0
+		}
+		return false
 		
 	case 27: // ESC - if we have a previous jump action, restart that jump mode
 		if e.previousJumpAction != 0 {
@@ -1420,6 +1568,26 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'j': // Toggle JSON view
 		e.SetMode(ModeJSON)
 		e.jsonScrollOffset = 0  // Reset scroll when entering JSON mode
+		
+	case 'J': // Scroll down (capital J)
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "J pressed (scroll down), current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			f.Close()
+		}
+		e.diagramScrollOffset += e.height / 2
+		// The maximum will be clamped when rendering
+		
+	case 'K': // Scroll up (capital K)
+		// Debug log
+		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "K pressed (scroll up), current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			f.Close()
+		}
+		e.diagramScrollOffset -= e.height / 2
+		if e.diagramScrollOffset < 0 {
+			e.diagramScrollOffset = 0
+		}
 		
 	case 't': // Toggle diagram type
 		// Debug log
