@@ -857,71 +857,9 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 			}
 		}
 	}
-	
-	// Now draw a legend at the bottom showing what each label means
-	// Find the bottom of the screen (we'll put it above the status line)
-	buf.WriteString("\033[999;1H") // Go to bottom
-	buf.WriteString("\033[5A")      // Move up 5 lines from bottom
-	buf.WriteString("\033[K")       // Clear line
 
-	// Draw connection legend header based on action
-	jumpAction := tui.GetJumpAction()
-	if jumpAction == editor.JumpActionDelete {
-		buf.WriteString("\033[91mDelete Connection:\033[0m ")
-	} else if jumpAction == editor.JumpActionEdit {
-		buf.WriteString("\033[93mEdit Connection Label:\033[0m ")
-	} else if jumpAction == editor.JumpActionHint {
-		buf.WriteString("\033[95mEdit Hints - Connections:\033[0m ")
-	} else {
-		buf.WriteString("\033[91mConnection Labels:\033[0m ")
-	}
-	
-	// Draw each connection label with its endpoints
-	labelCount := 0
-	for connIndex := 0; connIndex < len(d.Connections); connIndex++ {
-		if label, hasLabel := labels[connIndex]; hasLabel {
-			conn := d.Connections[connIndex]
-			
-			// Find node names
-			var fromText, toText string
-			for _, node := range d.Nodes {
-				if node.ID == conn.From && len(node.Text) > 0 {
-					fromText = node.Text[0]
-					// Truncate by runes, not bytes
-					runes := []rune(fromText)
-					if len(runes) > 8 {
-						fromText = string(runes[:8])
-					}
-				}
-				if node.ID == conn.To && len(node.Text) > 0 {
-					toText = node.Text[0]
-					// Truncate by runes, not bytes
-					runes := []rune(toText)
-					if len(runes) > 8 {
-						toText = string(runes[:8])
-					}
-				}
-			}
-			
-			// Choose color based on action
-			if jumpAction == editor.JumpActionEdit {
-				// Yellow background for edit mode
-				fmt.Fprintf(&buf, "\033[43;30m%c\033[0m=%s→%s  ", label, fromText, toText)
-			} else if jumpAction == editor.JumpActionHint {
-				// Magenta background for hint mode
-				fmt.Fprintf(&buf, "\033[45;97m%c\033[0m=%s→%s  ", label, fromText, toText)
-			} else {
-				// Red background for delete mode
-				fmt.Fprintf(&buf, "\033[41;97m%c\033[0m=%s→%s  ", label, fromText, toText)
-			}
-
-			labelCount++
-			// Start a new line after every 3 entries to avoid running off screen
-			if labelCount % 3 == 0 && connIndex < len(d.Connections)-1 {
-				buf.WriteString("\n                     ") // Indent continuation lines
-			}
-		}
-	}
+	// The legend box at the bottom was removed to prevent vertical content shift
+	// Labels are now shown directly on the arrows themselves
 
 	// Restore cursor
 	buf.WriteString("\033[u")

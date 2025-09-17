@@ -98,8 +98,9 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 // SetDiagram sets the diagram to edit
 func (e *TUIEditor) SetDiagram(d *diagram.Diagram) {
 	e.diagram = d
-	// Mark as changed to trigger auto-scroll if needed
-	e.diagramChanged = true
+	// Don't auto-scroll when loading a diagram - start at the top
+	e.diagramScrollOffset = 0
+	e.diagramChanged = false
 	// Save this as a new state in history
 	e.history.SaveState(d)
 }
@@ -147,9 +148,9 @@ func (e *TUIEditor) ScrollToTop() {
 // ScrollToBottom scrolls the diagram view to the bottom
 func (e *TUIEditor) ScrollToBottom() {
 	// Set a flag to scroll to bottom on next render
-	// (we don't know the actual max until render calculates it)
+	// This is used when new content is added to show it immediately
 	e.diagramChanged = true
-	
+
 	// Labels will be reassigned on next render when scroll position is updated
 }
 
