@@ -300,6 +300,13 @@ func clearStdinBuffer() {
 }
 
 func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettings) error {
+	// Debug: Log that we're starting the interactive loop
+	if f, err := os.OpenFile("/tmp/edd_startup.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		fmt.Fprintf(f, "=== runInteractiveLoop started ===\n")
+		fmt.Fprintf(f, "Filename: %s\n", filename)
+		f.Close()
+	}
+
 	// Switch to alternate screen buffer and hide cursor
 	fmt.Print("\033[?1049h") // Enter alternate screen
 	fmt.Print("\033[2J\033[H\033[?25l") // Clear and hide cursor
@@ -696,39 +703,11 @@ func positionCursor(tui *editor.TUIEditor) {
 }
 
 func drawJumpLabels(tui *editor.TUIEditor, output string) {
-	// Get jump labels and state from TUI
-	labels := tui.GetJumpLabels()
-	if len(labels) == 0 {
-		return
-	}
-
-	nodePositions := tui.GetNodePositions()
-	selectedNode := tui.GetSelectedNode()
-	jumpAction := tui.GetJumpAction()
-
-	// Save cursor once
-	fmt.Print("\033[s")
-
-	// Draw labels using known positions
-	for nodeID, label := range labels {
-		if pos, ok := nodePositions[nodeID]; ok {
-			// Position at top-left corner of node (offset by 1 for terminal indexing)
-			// Add 1 to position to draw label inside the box corner
-			fmt.Printf("\033[%d;%dH", pos.Y+1, pos.X+2)
-
-			// Determine what to display
-			if jumpAction == editor.JumpActionConnectTo && nodeID == selectedNode {
-				// This is the "FROM" node in connection mode
-				fmt.Printf("\033[32;1mFROM\033[0m") // Green "FROM"
-			} else {
-				// Regular jump label - single character in yellow
-				fmt.Printf("\033[33;1m%c\033[0m", label) // Yellow label
-			}
-		}
-	}
-
-	// Restore cursor
-	fmt.Print("\033[u")
+	// Use the new testable label calculation
+	hasScrollIndicator := strings.HasPrefix(output, "[↑")
+	positions := tui.CalculateLabelPositions(hasScrollIndicator)
+	labelOutput := editor.RenderLabelsToString(positions)
+	fmt.Print(labelOutput)
 }
 
 func drawConnectionLabels(tui *editor.TUIEditor) {
@@ -740,21 +719,26 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 
 	connectionPaths := tui.GetConnectionPaths()
 	d := tui.GetDiagram()
-	
+	termHeight := tui.GetTerminalHeight()
+
+
+	// Buffer all output to prevent flicker
+	var buf bytes.Buffer
+
 	// Save cursor once
-	fmt.Print("\033[s")
-	
+	buf.WriteString("\033[s")
+
 	// First, draw simple labels on the connections themselves
 	// Track occupied positions to avoid overlaps
 	occupiedPositions := make(map[string]bool)
-	
+
 	for connIndex := 0; connIndex < len(d.Connections); connIndex++ {
 		if label, hasLabel := labels[connIndex]; hasLabel {
 			if path, ok := connectionPaths[connIndex]; ok && len(path.Points) > 1 {
 				// Place label at different percentages for each connection
 				percentages := []float64{0.25, 0.40, 0.55, 0.70, 0.85}
 				percentage := percentages[connIndex % len(percentages)]
-				
+
 				labelIndex := int(float64(len(path.Points)) * percentage)
 				if labelIndex < 1 {
 					labelIndex = 1
@@ -762,24 +746,24 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 				if labelIndex >= len(path.Points) {
 					labelIndex = len(path.Points) - 1
 				}
-				
+
 				labelPoint := path.Points[labelIndex]
-				
+
 				// Try to find a clear spot near this point
 				offsets := []struct{ dx, dy int }{
-					{0, 0},   // On the line
+					{0, 0},   // On the line (preferred - labels should be on arrows)
 					{1, 0},   // Right
 					{-1, 0},  // Left
 					{0, -1},  // Above
 					{0, 1},   // Below
 				}
-				
+
 				var labelX, labelY int
 				for _, offset := range offsets {
 					testX := labelPoint.X + offset.dx
 					testY := labelPoint.Y + offset.dy
 					posKey := fmt.Sprintf("%d,%d", testX, testY)
-					
+
 					if !occupiedPositions[posKey] {
 						labelX = testX
 						labelY = testY
@@ -789,27 +773,48 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 						break
 					}
 				}
-				
+
 				// If no position found, use the original point
 				if labelX == 0 && labelY == 0 {
 					labelX = labelPoint.X
 					labelY = labelPoint.Y
 				}
-				
+
+				// The path points are in DIAGRAM coordinates, need viewport conversion
+				scrollOffset := tui.GetDiagramScrollOffset()
+				viewportY := 0
+				viewportX := labelX + 1  // X doesn't need scroll adjustment
+
+				// Convert Y from diagram to viewport coordinates
+				if d.Type == "sequence" && scrollOffset > 7 {
+					// With sticky headers, content area starts after headers
+					// Headers take 8 lines total (not 9)
+					headerLines := 7  // Reduced from 8 to move labels up by 1
+					viewportY = headerLines + 1 + (labelY - scrollOffset)
+				} else {
+					// Normal scrolling
+					viewportY = labelY - scrollOffset + 1
+				}
+
+				// Skip if the label would be outside the visible area
+				if viewportY < 1 || viewportY > termHeight-3 {
+					continue
+				}
+
 				// Draw simple label on the connection
-				fmt.Printf("\033[%d;%dH", labelY+1, labelX+1)
-				
+				fmt.Fprintf(&buf, "\033[%d;%dH", viewportY, viewportX)
+
 				// Choose color based on action
 				jumpAction := tui.GetJumpAction()
 				if jumpAction == editor.JumpActionEdit {
 					// Yellow background for edit mode
-					fmt.Printf("\033[43;30;1m %c \033[0m", label) // Yellow bg, black text
+					fmt.Fprintf(&buf, "\033[43;30;1m %c \033[0m", label) // Yellow bg, black text
 				} else if jumpAction == editor.JumpActionHint {
 					// Magenta background for hint mode
-					fmt.Printf("\033[45;97;1m %c \033[0m", label) // Magenta bg, white text
+					fmt.Fprintf(&buf, "\033[45;97;1m %c \033[0m", label) // Magenta bg, white text
 				} else {
 					// Red background for delete mode
-					fmt.Printf("\033[41;97;1m %c \033[0m", label) // Red bg, white text
+					fmt.Fprintf(&buf, "\033[41;97;1m %c \033[0m", label) // Red bg, white text
 				}
 			}
 		}
@@ -817,20 +822,20 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 	
 	// Now draw a legend at the bottom showing what each label means
 	// Find the bottom of the screen (we'll put it above the status line)
-	fmt.Print("\033[999;1H") // Go to bottom
-	fmt.Print("\033[5A")      // Move up 5 lines from bottom
-	fmt.Print("\033[K")       // Clear line
-	
+	buf.WriteString("\033[999;1H") // Go to bottom
+	buf.WriteString("\033[5A")      // Move up 5 lines from bottom
+	buf.WriteString("\033[K")       // Clear line
+
 	// Draw connection legend header based on action
 	jumpAction := tui.GetJumpAction()
 	if jumpAction == editor.JumpActionDelete {
-		fmt.Print("\033[91mDelete Connection:\033[0m ")
+		buf.WriteString("\033[91mDelete Connection:\033[0m ")
 	} else if jumpAction == editor.JumpActionEdit {
-		fmt.Print("\033[93mEdit Connection Label:\033[0m ")
+		buf.WriteString("\033[93mEdit Connection Label:\033[0m ")
 	} else if jumpAction == editor.JumpActionHint {
-		fmt.Print("\033[95mEdit Hints - Connections:\033[0m ")
+		buf.WriteString("\033[95mEdit Hints - Connections:\033[0m ")
 	} else {
-		fmt.Print("\033[91mConnection Labels:\033[0m ")
+		buf.WriteString("\033[91mConnection Labels:\033[0m ")
 	}
 	
 	// Draw each connection label with its endpoints
@@ -863,25 +868,28 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 			// Choose color based on action
 			if jumpAction == editor.JumpActionEdit {
 				// Yellow background for edit mode
-				fmt.Printf("\033[43;30m%c\033[0m=%s→%s  ", label, fromText, toText)
+				fmt.Fprintf(&buf, "\033[43;30m%c\033[0m=%s→%s  ", label, fromText, toText)
 			} else if jumpAction == editor.JumpActionHint {
 				// Magenta background for hint mode
-				fmt.Printf("\033[45;97m%c\033[0m=%s→%s  ", label, fromText, toText)
+				fmt.Fprintf(&buf, "\033[45;97m%c\033[0m=%s→%s  ", label, fromText, toText)
 			} else {
 				// Red background for delete mode
-				fmt.Printf("\033[41;97m%c\033[0m=%s→%s  ", label, fromText, toText)
+				fmt.Fprintf(&buf, "\033[41;97m%c\033[0m=%s→%s  ", label, fromText, toText)
 			}
-			
+
 			labelCount++
 			// Start a new line after every 3 entries to avoid running off screen
 			if labelCount % 3 == 0 && connIndex < len(d.Connections)-1 {
-				fmt.Print("\n                     ") // Indent continuation lines
+				buf.WriteString("\n                     ") // Indent continuation lines
 			}
 		}
 	}
-	
+
 	// Restore cursor
-	fmt.Print("\033[u")
+	buf.WriteString("\033[u")
+
+	// Write all buffered output at once to prevent flicker
+	fmt.Print(buf.String())
 }
 
 func drawEd(tui *editor.TUIEditor) {
@@ -956,7 +964,7 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 	if filename != "" {
 		fmt.Printf("[ %s ] ", filename)
 	} else {
-		fmt.Print("[ untitled ] ")
+		fmt.Print("[ DEBUG_VERSION_untitled ] ")
 	}
 
 	// Show node/connection count
@@ -1013,6 +1021,12 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 }
 
 func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
+	// Debug: Log key presses in normal mode
+	if f, err := os.OpenFile("/tmp/edd_startup.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "handleNormalMode: key='%c' (%d)\n", key, key)
+		f.Close()
+	}
+
 	switch key {
 	case 'q', 3: // q or Ctrl+C
 		return true // Exit

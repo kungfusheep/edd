@@ -42,10 +42,12 @@ func GetHelpText() string {
 		{
 			Name: "Navigation & View",
 			Commands: []HelpCommand{
-				{"j", "Toggle JSON view"},
+				{"J", "Toggle JSON view"},
+			{"j/k", "Scroll down/up (line by line)"},
+			{"Ctrl+D/U", "Scroll down/up (half page)"},
 				{"t", "Toggle diagram type (sequence/box)"},
 				{"E", "Edit in external editor"},
-				{"?/h", "Show this help"},
+				{"?", "Show this help"},
 			},
 		},
 		{
@@ -91,5 +93,5 @@ func GetHelpText() string {
 
 // GetCompactHelp returns a single-line help hint
 func GetCompactHelp() string {
-	return "a:add c:connect e:edit d:delete H:hints j:json u:undo ?:help q:quit"
+	return "a:add c:connect e:edit d:delete H:hints J:json j/k:scroll u:undo ?:help q:quit"
 }

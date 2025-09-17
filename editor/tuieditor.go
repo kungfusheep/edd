@@ -126,12 +126,22 @@ func (e *TUIEditor) ScrollDiagram(delta int) {
 	if e.diagramScrollOffset < 0 {
 		e.diagramScrollOffset = 0
 	}
+	
+	// If we're in jump mode, reassign labels for the new viewport
+	if e.mode == ModeJump {
+		e.assignJumpLabels()
+	}
 	// Note: Maximum scroll limit is handled in Render() based on actual content size
 }
 
 // ScrollToTop scrolls the diagram view to the top
 func (e *TUIEditor) ScrollToTop() {
 	e.diagramScrollOffset = 0
+	
+	// If we're in jump mode, reassign labels for the new viewport
+	if e.mode == ModeJump {
+		e.assignJumpLabels()
+	}
 }
 
 // ScrollToBottom scrolls the diagram view to the bottom
@@ -139,6 +149,8 @@ func (e *TUIEditor) ScrollToBottom() {
 	// Set a flag to scroll to bottom on next render
 	// (we don't know the actual max until render calculates it)
 	e.diagramChanged = true
+	
+	// Labels will be reassigned on next render when scroll position is updated
 }
 
 // Run starts the interactive editor loop
@@ -699,43 +711,168 @@ func (e *TUIEditor) HandleArrowKey(direction rune) {
 // Methods from jump.go
 // ============================================
 
-// Jump label characters in order of preference (home row first)
-const jumpChars = "asdfghjklqwertyuiopzxcvbnm"
+// Jump label characters in alphabetical order for predictable label assignment
+const jumpChars = "abcdefghijklmnopqrstuvwxyz"
 
 // startJump initiates jump mode with labels
 func (e *TUIEditor) startJump(action JumpAction) {
+	// Debug logging
+	if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "\n=== startJump called ===\n")
+		fmt.Fprintf(f, "Action: %v, current mode: %v\n", action, e.mode)
+		fmt.Fprintf(f, "Current scroll offset: %d\n", e.diagramScrollOffset)
+		fmt.Fprintf(f, "Node positions available: %d\n", len(e.nodePositions))
+		f.Close()
+	}
+
 	e.jumpAction = action
 	e.assignJumpLabels()
 	e.SetMode(ModeJump)
 }
-// assignJumpLabels assigns single-character labels to nodes and connections
+// isNodeVisible checks if a node is visible in the current viewport
+func (e *TUIEditor) isNodeVisible(nodeID int) bool {
+	pos, exists := e.nodePositions[nodeID]
+	if !exists {
+		// If we don't have position info yet, assume visible
+		// This can happen when jump mode is entered before rendering
+		// or when the renderer hasn't provided positions
+		return true
+	}
+
+	// Check if the node is in the visible viewport
+	// Calculate visible range based on scroll offset
+	visibleStart := e.diagramScrollOffset
+	visibleEnd := e.diagramScrollOffset + e.height - 4 // Account for UI elements
+
+	// Special handling for sequence diagrams with sticky headers
+	if e.diagram.Type == "sequence" && e.diagramScrollOffset > 7 {
+		// When sticky headers are active, participants in the header area
+		// remain visible until we've scrolled way past them
+		if pos.Y < 7 {
+			// In sequence diagrams, participants (at Y < 7) have lifelines that extend
+			// through the entire diagram. They remain visible via sticky headers
+			// as long as we're viewing any part of the diagram content.
+
+			// Participants are visible via sticky headers as long as there's still
+			// some diagram content in the viewport
+			// Estimate total content height based on connections
+			contentHeight := 7 // Header area
+			for range e.diagram.Connections {
+				// Each connection takes roughly 2-3 lines
+				contentHeight += 2
+			}
+
+			// If we've scrolled past all content, participants aren't visible
+			if e.diagramScrollOffset >= contentHeight {
+				return false
+			}
+
+			// Otherwise participants are visible via sticky headers
+			return true
+		}
+		// For non-participant nodes, adjust visible range for the space taken by headers
+		visibleEnd = e.diagramScrollOffset + e.height - 4 - 8 // Subtract header space
+	}
+
+	// Check if node's Y position is within visible range
+	// Account for node height (typically 3 lines for a box)
+	nodeTop := pos.Y
+	nodeBottom := pos.Y + 3 // Assume nodes are about 3 lines tall
+
+	// Node is visible if any part of it is in the visible range
+	return nodeBottom >= visibleStart && nodeTop < visibleEnd
+}
+
+// isConnectionVisible checks if a connection has at least one visible endpoint
+func (e *TUIEditor) isConnectionVisible(connIndex int) bool {
+	if connIndex >= len(e.diagram.Connections) {
+		return false
+	}
+
+	conn := e.diagram.Connections[connIndex]
+	// Connection is visible if either endpoint is visible
+	return e.isNodeVisible(conn.From) || e.isNodeVisible(conn.To)
+}
+
+// assignJumpLabels assigns single-character labels to visible nodes and connections
 func (e *TUIEditor) assignJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
 	e.connectionLabels = make(map[int]rune)
 	
+	// Debug logging
+	if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		fmt.Fprintf(f, "\n=== assignJumpLabels called ===\n")
+		fmt.Fprintf(f, "Scroll offset: %d, Mode: %v, Diagram type: %s\n", e.diagramScrollOffset, e.mode, e.diagram.Type)
+		fmt.Fprintf(f, "Total nodes: %d\n", len(e.diagram.Nodes))
+		f.Close()
+	}
+	
 	labelIndex := 0
 	
-	// Assign labels to nodes
+	// Assign labels only to visible nodes
 	for _, node := range e.diagram.Nodes {
-		if labelIndex < len(jumpChars) {
-			e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
-			labelIndex++
-		} else {
+		if labelIndex >= len(jumpChars) {
 			break
+		}
+
+		isVisible := e.isNodeVisible(node.ID)
+		if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			pos, hasPos := e.nodePositions[node.ID]
+			if hasPos {
+				fmt.Fprintf(f, "  Node %d: pos.Y=%d, visible=%v, labelIndex=%d\n", node.ID, pos.Y, isVisible, labelIndex)
+			} else {
+				fmt.Fprintf(f, "  Node %d: no position, visible=%v, labelIndex=%d\n", node.ID, isVisible, labelIndex)
+			}
+			f.Close()
+		}
+
+		if isVisible {
+			e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
+			if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "    -> Assigned label '%c' to node %d\n", jumpChars[labelIndex], node.ID)
+				f.Close()
+			}
+			labelIndex++
 		}
 	}
 	
-	// If in delete, edit, or hint mode, also assign labels to connections
+	// If in delete, edit, or hint mode, also assign labels to visible connections
 	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
+		if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Starting connection labeling at labelIndex=%d\n", labelIndex)
+			f.Close()
+		}
+
 		// Use index-based iteration to ensure consistent ordering
 		for i := 0; i < len(e.diagram.Connections); i++ {
-			if labelIndex < len(jumpChars) {
-				e.connectionLabels[i] = rune(jumpChars[labelIndex])
-				labelIndex++
-			} else {
+			if labelIndex >= len(jumpChars) {
 				break
 			}
+
+			isVisible := e.isConnectionVisible(i)
+			if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "  Connection %d: visible=%v, labelIndex=%d\n", i, isVisible, labelIndex)
+				f.Close()
+			}
+
+			if isVisible {
+				e.connectionLabels[i] = rune(jumpChars[labelIndex])
+				if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "    -> Assigned label '%c' to connection %d\n", jumpChars[labelIndex], i)
+					f.Close()
+				}
+				labelIndex++
+			}
 		}
+	}
+	
+	// Log final labels assigned
+	if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "Final jump labels assigned: %d nodes, %d connections\n", len(e.jumpLabels), len(e.connectionLabels))
+		for nodeID, label := range e.jumpLabels {
+			fmt.Fprintf(f, "  Node %d -> '%c'\n", nodeID, label)
+		}
+		f.Close()
 	}
 }
 // getJumpLabel returns the jump label for a node ID
@@ -1207,6 +1344,11 @@ func (e *TUIEditor) HandleNewlineKey() {
 func (e *TUIEditor) GetMode() Mode {
 	return e.mode
 }
+
+// GetDiagramScrollOffset returns the current diagram scroll offset
+func (e *TUIEditor) GetDiagramScrollOffset() int {
+	return e.diagramScrollOffset
+}
 // GetEddFrame returns Ed's current animation frame
 func (e *TUIEditor) GetEddFrame() string {
 	return e.edd.GetFrame(e.mode)
@@ -1364,6 +1506,31 @@ func (e *TUIEditor) GetNodeCount() int {
 // GetConnectionCount returns the number of connections
 func (e *TUIEditor) GetConnectionCount() int {
 	return len(e.diagram.Connections)
+}
+
+// TransformToViewport converts diagram Y coordinate to viewport Y coordinate
+// This consolidates all coordinate transformation logic in one place
+func (e *TUIEditor) TransformToViewport(diagramY int, hasScrollIndicator bool) int {
+	scrollIndicatorLines := 0
+	if hasScrollIndicator {
+		scrollIndicatorLines = 1
+	}
+
+	// For sequence diagrams with sticky headers
+	if e.diagram.Type == "sequence" && e.diagramScrollOffset > 7 {
+		if diagramY < 7 {
+			// Participant in sticky header area
+			// Extra padding lines are added, so box appears at Y+2
+			return diagramY + 2 + scrollIndicatorLines
+		} else {
+			// Content below headers
+			headerLines := 8 // 7 for header + 1 for separator
+			return headerLines + 1 + scrollIndicatorLines + (diagramY - e.diagramScrollOffset)
+		}
+	}
+
+	// Normal scrolling (no sticky headers)
+	return diagramY - e.diagramScrollOffset + 1 + scrollIndicatorLines
 }
 
 // ============================================
@@ -1618,26 +1785,26 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 			e.startJump(JumpActionHint)
 		}
 		
-	case 'j': // Toggle JSON view
+	case 'J': // Toggle JSON view (capital J)
 		e.SetMode(ModeJSON)
 		e.jsonScrollOffset = 0  // Reset scroll when entering JSON mode
 		
-	case 'J': // Scroll down (capital J)
+	case 'j': // Scroll down one line (vim-style j)
 		// Debug log
 		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "J pressed (scroll down), current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			fmt.Fprintf(f, "j pressed (scroll down line), current offset: %d\n", e.diagramScrollOffset)
 			f.Close()
 		}
-		e.diagramScrollOffset += e.height / 2
+		e.diagramScrollOffset += 3  // Scroll by a few lines for smoother movement
 		// The maximum will be clamped when rendering
 		
-	case 'K': // Scroll up (capital K)
+	case 'k': // Scroll up one line (vim-style k)
 		// Debug log
 		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "K pressed (scroll up), current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
+			fmt.Fprintf(f, "k pressed (scroll up line), current offset: %d\n", e.diagramScrollOffset)
 			f.Close()
 		}
-		e.diagramScrollOffset -= e.height / 2
+		e.diagramScrollOffset -= 3  // Scroll by a few lines for smoother movement
 		if e.diagramScrollOffset < 0 {
 			e.diagramScrollOffset = 0
 		}
@@ -1674,7 +1841,7 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 18: // Ctrl+R for redo
 		e.Redo()
 		
-	case '?', 'h': // Help
+	case '?': // Help
 		e.SetMode(ModeHelp)
 		
 	case ':': // Command mode
@@ -2041,7 +2208,7 @@ func (e *TUIEditor) handleHelpKey(key rune) bool {
 // handleJSONKey processes keys in JSON view mode
 func (e *TUIEditor) handleJSONKey(key rune) bool {
 	switch key {
-	case 27, 'q', 'j': // ESC, q, or j to return to diagram view
+	case 27, 'q', 'J': // ESC, q, or J to return to diagram view
 		e.SetMode(ModeNormal)
 		
 	case 'E': // Edit in external editor (also works from JSON view)
@@ -2051,7 +2218,7 @@ func (e *TUIEditor) handleJSONKey(key rune) bool {
 	case 'k', 'K': // vim-style up
 		e.ScrollJSON(-1)
 		
-	case 'J': // vim-style down (capital J since j exits)
+	case 'j': // vim-style down
 		e.ScrollJSON(1)
 		
 	case 'u', 21: // Page up (Ctrl+U in vim)
@@ -2511,6 +2678,9 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		}
 	}
 	
+	// Build menu content
+	var menuLines []string
+	
 	// Different menu for sequence diagrams
 	if e.diagram.Type == string(diagram.DiagramTypeSequence) {
 		boxStyle := "rounded"
@@ -2528,21 +2698,44 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 			lifelineColor = c
 		}
 		
-		return "\n" +
-			"Participant: " + nodeText + " | box=" + boxStyle + "/" + color + " | lifeline=" + lifelineStyle + "/" + lifelineColor + "\n" +
-			"Box: [a]Round [b]Sharp [c]Double [d]Thick | [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
-			"Line: [A]Solid [B]Dash [C]Dot [D]Double | [R]Red [G]Green [Y]Yellow [U]Blue [M]Magenta [N]Cyan [W]Clear\n" +
-			"[ESC]Back [Enter]Done"
+		menuLines = []string{
+			"Participant: " + nodeText + " | box=" + boxStyle + "/" + color + " | lifeline=" + lifelineStyle + "/" + lifelineColor,
+			"Box: [a]Round [b]Sharp [c]Double [d]Thick | [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear",
+			"Line: [A]Solid [B]Dash [C]Dot [D]Double | [R]Red [G]Green [Y]Yellow [U]Blue [M]Magenta [N]Cyan [W]Clear",
+			"[ESC]Back [Enter]Done",
+		}
+	} else {
+		// Full menu for flowcharts
+		menuLines = []string{
+			"Node: " + nodeText + " | style=" + style + ", color=" + color,
+			"Style: [a]Rounded [b]Sharp [c]Double [d]Thick | Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear",
+			"Text: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [t]Center(" + textAlign + ") | Shadow: [z]Add [x]Remove [l]Density",
+			"Position: [1-9]Grid [0]Auto | [ESC]Back [Enter]Done",
+		}
 	}
 	
-	// Full menu for flowcharts
-	return "\n" +
-		"Node: " + nodeText + " | style=" + style + ", color=" + color + "\n" +
-		"Style: [a]Rounded [b]Sharp [c]Double [d]Thick | " +
-		"Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
-		"Text: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [t]Center(" + textAlign + ") | " +
-		"Shadow: [z]Add [x]Remove [l]Density\n" +
-		"Position: [1-9]Grid [0]Auto | [ESC]Back [Enter]Done"
+	// Use absolute positioning to draw menu at bottom of screen
+	var output strings.Builder
+	
+	// Move to bottom of screen (leave 5 lines for menu)
+	startLine := e.height - len(menuLines) - 1
+	
+	// Clear the menu area and draw menu
+	for i, line := range menuLines {
+		// Move to position and clear line
+		output.WriteString(fmt.Sprintf("\033[%d;1H\033[K", startLine+i))
+		// Draw menu line with background color for visibility
+		output.WriteString("\033[44m") // Blue background
+		output.WriteString(line)
+		// Pad to full width
+		padding := e.width - len(line)
+		if padding > 0 {
+			output.WriteString(strings.Repeat(" ", padding))
+		}
+		output.WriteString("\033[0m") // Reset color
+	}
+	
+	return output.String()
 }
 // getConnectionHintMenuDisplay returns the hint menu display for a connection
 func (e *TUIEditor) getConnectionHintMenuDisplay() string {
@@ -2595,18 +2788,45 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 		}
 	}
 	
+	// Build menu content
+	var menuLines []string
+	
 	// Different menu for sequence diagrams
 	if e.diagram.Type == string(diagram.DiagramTypeSequence) {
-		return "\n" +
-			"Message: " + fromText + " → " + toText + " | style=" + style + ", color=" + color + "\n" +
-			"Style: [a]Solid [b]Dashed [c]Dotted | Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
-			"Text: [o]Bold(" + bold + ") [i]Italic(" + italic + ") | [ESC]Back [Enter]Done"
+		menuLines = []string{
+			"Message: " + fromText + " → " + toText + " | style=" + style + ", color=" + color,
+			"Style: [a]Solid [b]Dashed [c]Dotted | Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear",
+			"Text: [o]Bold(" + bold + ") [i]Italic(" + italic + ") | [ESC]Back [Enter]Done",
+		}
+	} else {
+		// Full menu for flowcharts
+		menuLines = []string{
+			"Connection: " + fromText + " → " + toText + " | style=" + style + ", color=" + color,
+			"Style: [a]Solid [b]Dashed [c]Dotted [d]Double | Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear",
+			"Options: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [f]Flow(" + flow + ") | [ESC]Back [Enter]Done",
+		}
 	}
 	
-	// Full menu for flowcharts
-	return "\n" +
-		"Connection: " + fromText + " → " + toText + " | style=" + style + ", color=" + color + "\n" +
-		"Style: [a]Solid [b]Dashed [c]Dotted [d]Double | " +
-		"Color: [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear\n" +
-		"Options: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [f]Flow(" + flow + ") | [ESC]Back [Enter]Done"
+	// Use absolute positioning to draw menu at bottom of screen
+	var output strings.Builder
+	
+	// Move to bottom of screen (leave space for menu)
+	startLine := e.height - len(menuLines) - 1
+	
+	// Clear the menu area and draw menu
+	for i, line := range menuLines {
+		// Move to position and clear line
+		output.WriteString(fmt.Sprintf("\033[%d;1H\033[K", startLine+i))
+		// Draw menu line with background color for visibility
+		output.WriteString("\033[44m") // Blue background
+		output.WriteString(line)
+		// Pad to full width
+		padding := e.width - len(line)
+		if padding > 0 {
+			output.WriteString(strings.Repeat(" ", padding))
+		}
+		output.WriteString("\033[0m") // Reset color
+	}
+	
+	return output.String()
 }
