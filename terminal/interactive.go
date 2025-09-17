@@ -391,35 +391,41 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 
 	// Main render loop
 	var buf bytes.Buffer
-	
-	for {
-		// Update terminal size on each iteration (handles resize)
+	var lastOutput string
+	needsFullRedraw := true
+	lastWidth, lastHeight := getTerminalSize()
+
+	// Helper function to do a full redraw
+	fullRedraw := func() {
+		// Update terminal size
 		width, height := getTerminalSize()
 		tui.SetTerminalSize(width, height)
-		
+		lastWidth, lastHeight = width, height
+
 		// Buffer all output to reduce flicker
 		buf.Reset()
-		
+
 		// Clear and move to home - this prevents artifacts
 		buf.WriteString("\033[H\033[2J")
-		
+
 		// Render current state
 		output := tui.Render()
+		lastOutput = output
 		buf.WriteString(output)
-		
+
 		// Write main content first
 		fmt.Print(buf.String())
-		
+
 		// Now draw overlays directly (these use absolute positioning)
 		// Draw jump labels if in jump mode (but not in JSON mode)
 		if tui.GetMode() == editor.ModeJump {
-			drawJumpLabels(tui, output)
+			drawJumpLabels(tui, lastOutput)
 			// Also draw connection labels if in delete, edit, or hint mode
 			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit || tui.GetJumpAction() == editor.JumpActionHint {
 				drawConnectionLabels(tui)
 			}
 		}
-		
+
 		// Draw hint menu if in hint mode
 		if tui.GetMode() == editor.ModeHintMenu {
 			hintDisplay := tui.GetHintMenuDisplay()
@@ -442,6 +448,19 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 			fmt.Print("\033[?25l")
 		}
 
+		needsFullRedraw = false
+	}
+
+	// Initial render
+	fullRedraw()
+
+	for {
+		// Check for terminal resize
+		width, height := getTerminalSize()
+		if width != lastWidth || height != lastHeight {
+			needsFullRedraw = true
+		}
+
 		// Handle input or animation
 		select {
 		case keyEvent := <-keyChan:
@@ -456,26 +475,45 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 					continue
 				}
 			}
-			
+
 			// Stop demo if playing
 			if demoPlayer.IsPlaying() && keyEvent.Rune == 27 { // ESC
 				demoPlayer.Stop()
 				continue
 			}
-			
+
 			// Normal key handling
 			handleKeyEvent(tui, keyEvent, &filename, demoPlayer)
 			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
 				return nil // Exit requested
 			}
-			
+
+			// Key press requires full redraw
+			needsFullRedraw = true
+
 		case demoKeyEvent := <-demoChan:
 			// Handle demo input just like real input
 			handleKeyEvent(tui, demoKeyEvent, &filename, demoPlayer)
+			needsFullRedraw = true
 
 		case <-animTicker.C:
 			// Animate Ed
 			tui.AnimateEd()
+			// Only update Ed and status line, not the whole screen
+			if tui.GetMode() != editor.ModeJSON {
+				// Redraw status line (Ed's state might have changed)
+				showStatusLine(tui, filename, demoPlayer)
+				// Draw Ed at new position
+				drawEd(tui)
+			}
+
+		default:
+			// Non-blocking - allows us to check for resize and redraw
+			if needsFullRedraw {
+				fullRedraw()
+			}
+			// Small sleep to prevent CPU spinning
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
