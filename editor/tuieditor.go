@@ -783,15 +783,31 @@ func (e *TUIEditor) isNodeVisible(nodeID int) bool {
 	return nodeBottom >= visibleStart && nodeTop < visibleEnd
 }
 
-// isConnectionVisible checks if a connection has at least one visible endpoint
+// isConnectionVisible checks if a connection arrow is actually visible in the viewport
 func (e *TUIEditor) isConnectionVisible(connIndex int) bool {
 	if connIndex >= len(e.diagram.Connections) {
 		return false
 	}
 
-	conn := e.diagram.Connections[connIndex]
-	// Connection is visible if either endpoint is visible
-	return e.isNodeVisible(conn.From) || e.isNodeVisible(conn.To)
+	// Check if we have the path for this connection
+	path, hasPath := e.connectionPaths[connIndex]
+	if !hasPath || len(path.Points) == 0 {
+		// If no path info, fall back to checking endpoints
+		conn := e.diagram.Connections[connIndex]
+		return e.isNodeVisible(conn.From) || e.isNodeVisible(conn.To)
+	}
+
+	// Get the middle point of the path (where the label would be placed)
+	midPoint := path.Points[len(path.Points)/2]
+
+	// Convert to viewport coordinates
+	viewportY := e.TransformToViewport(midPoint.Y, false)
+
+	// Check if this Y position is within the visible area
+	// Terminal height minus status lines (4 lines reserved)
+	visibleBottom := e.height - 4
+
+	return viewportY >= 1 && viewportY <= visibleBottom
 }
 
 // assignJumpLabels assigns single-character labels to visible nodes and connections
