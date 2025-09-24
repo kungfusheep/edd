@@ -810,8 +810,8 @@ func (e *TUIEditor) HandleArrowKey(direction rune) {
 // Methods from jump.go
 // ============================================
 
-// Jump label characters in alphabetical order for predictable label assignment
-const jumpChars = "abcdefghijklmnopqrstuvwxyz"
+// Jump label characters in ergonomic order - home row first, then upper row, then lower row
+const jumpChars = "asdfjklghqwertyuiopzxcvbnm"
 
 // startJump initiates jump mode with labels
 func (e *TUIEditor) startJump(action JumpAction) {

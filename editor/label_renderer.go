@@ -26,12 +26,15 @@ func (e *TUIEditor) CalculateLabelPositions(hasScrollIndicator bool) []LabelPosi
 
 			// Adjust X position based on diagram type
 			if e.diagram.Type == "sequence" && pos.Y < 7 {
-				// For sequence diagram participants, place label at the left edge of the box
-				// The box extends a bit to the left of the text position
-				viewportX = pos.X - 1
+				// For sequence diagram participants, place label inside the box at left edge
+				// The box starts at pos.X, so we place the label at pos.X + 1
+				viewportX = pos.X + 1
 			} else if e.diagram.Type == "box" {
 				// For regular box diagrams, place inside the box corner
 				viewportX = pos.X + 2
+			} else {
+				// For sequence diagram elements below participants, use default position
+				viewportX = pos.X + 1
 			}
 
 			// Calculate Y position using consolidated transformation logic
