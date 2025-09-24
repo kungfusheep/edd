@@ -268,13 +268,25 @@ func setupTerminal() error {
 }
 
 func restoreTerminal() {
-	// Restore terminal to cooked mode with echo
-	cmd := exec.Command("sh", "-c", "stty echo cooked < /dev/tty")
+	// Restore terminal to sane state (like stty sane)
+	cmd := exec.Command("stty", "sane")
+	cmd.Stdin = os.Stdin
 	cmd.Run()
 
-	// Also ensure cursor is visible and colors are reset
+	// Ensure cursor is visible
 	fmt.Print("\033[?25h") // Show cursor
+
+	// Reset all attributes and colors
 	fmt.Print("\033[0m")   // Reset all attributes
+
+	// Clear any remaining formatting
+	fmt.Print("\033[m")    // Another reset variant
+
+	// Move to start of line and clear
+	fmt.Print("\r\033[K")  // Carriage return and clear line
+
+	// Flush output
+	os.Stdout.Sync()
 }
 
 // clearStdinBuffer reads and discards any pending input

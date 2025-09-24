@@ -829,8 +829,17 @@ func (e *TUIEditor) HandleArrowKey(direction rune) {
 // Methods from jump.go
 // ============================================
 
-// Jump label characters in ergonomic order - home row first, then upper row, then lower row
-const jumpChars = "asdfjklghqwertyuiopzxcvbnm"
+// Jump label characters in ergonomic order:
+// - Home row (most comfortable): asdfjklgh
+// - Upper row: qwertyuiop
+// - Lower row: zxcvbnm
+// - Numbers: 1234567890
+// - Capitals (home row): ASDFJKLGH
+// - Capitals (upper row): QWERTYUIOP
+// - Capitals (lower row): ZXCVBNM
+// - Number row shift chars: !@#$%^&*()
+// Total: 69 characters
+const jumpChars = "asdfjklghqwertyuiopzxcvbnm1234567890ASDFJKLGHQWERTYUIOPZXCVBNM!@#$%^&*()"
 
 // startJump initiates jump mode with labels
 func (e *TUIEditor) startJump(action JumpAction) {

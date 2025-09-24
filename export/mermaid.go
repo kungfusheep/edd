@@ -68,10 +68,56 @@ func (e *MermaidExporter) exportSequence(d *diagram.Diagram) (string, error) {
 
 		// Determine arrow type based on hints
 		arrow := "->>" // Default to solid line with arrow
+		arrowType := "normal"
 		if hints := conn.Hints; hints != nil {
+			// Check for line style
 			if style := hints["style"]; style == "dashed" {
 				arrow = "-->>" // Dashed line with arrow
 			}
+
+			// Check for arrow type
+			if aType := hints["arrow-type"]; aType != "" {
+				arrowType = aType
+			}
+
+			// Map arrow types to Mermaid syntax
+			switch arrowType {
+			case "async":
+				if hints["style"] == "dashed" {
+					arrow = "--)" // Dashed async
+				} else {
+					arrow = "-)" // Solid async
+				}
+			case "reply":
+				if hints["style"] == "dashed" {
+					arrow = "-->>>" // Dashed reply (dotted in Mermaid)
+				} else {
+					arrow = "->>" // Solid reply (same as normal)
+				}
+			case "cross":
+				if hints["style"] == "dashed" {
+					arrow = "--x" // Dashed with cross
+				} else {
+					arrow = "-x" // Solid with cross
+				}
+			}
+		}
+
+		// Check for activation hint
+		activateTarget := false
+		deactivateSource := false
+		if hints := conn.Hints; hints != nil {
+			if hints["activate"] == "true" {
+				activateTarget = true
+			}
+			if hints["deactivate"] == "true" {
+				deactivateSource = true
+			}
+		}
+
+		// Add deactivate if needed (before the message)
+		if deactivateSource {
+			sb.WriteString(fmt.Sprintf("    deactivate %s\n", fromID))
 		}
 
 		// Handle self-loops
@@ -87,6 +133,11 @@ func (e *MermaidExporter) exportSequence(d *diagram.Diagram) (string, error) {
 			} else {
 				sb.WriteString(fmt.Sprintf("    %s%s%s: \n", fromID, arrow, toID))
 			}
+		}
+
+		// Add activate if needed (after the message)
+		if activateTarget {
+			sb.WriteString(fmt.Sprintf("    activate %s\n", toID))
 		}
 	}
 
@@ -147,6 +198,38 @@ func (e *MermaidExporter) exportFlowchart(d *diagram.Diagram) (string, error) {
 			sb.WriteString(fmt.Sprintf("    %s %s|%s| %s\n", fromID, connStyle, conn.Label, toID))
 		} else {
 			sb.WriteString(fmt.Sprintf("    %s %s %s\n", fromID, connStyle, toID))
+		}
+	}
+
+	// Add color class definitions if any nodes have color hints (flowchart only)
+	if d.Type == "box" {
+		colorClasses := make(map[string]bool)
+		var nodeClasses []string
+
+		for _, node := range d.Nodes {
+			if node.Hints != nil && node.Hints["color"] != "" {
+				color := node.Hints["color"]
+				className := e.getColorClassName(color)
+				if !colorClasses[className] {
+					colorClasses[className] = true
+				}
+				nodeID := fmt.Sprintf("N%d", node.ID)
+				nodeClasses = append(nodeClasses, fmt.Sprintf("    class %s %s", nodeID, className))
+			}
+		}
+
+		// Add class definitions
+		if len(colorClasses) > 0 {
+			sb.WriteString("\n")
+			for className := range colorClasses {
+				sb.WriteString(e.getClassDefinition(className))
+				sb.WriteString("\n")
+			}
+			// Apply classes to nodes
+			for _, classAssignment := range nodeClasses {
+				sb.WriteString(classAssignment)
+				sb.WriteString("\n")
+			}
 		}
 	}
 
@@ -240,4 +323,37 @@ func (e *MermaidExporter) GetFileExtension() string {
 // GetFormatName returns the format name
 func (e *MermaidExporter) GetFormatName() string {
 	return "Mermaid"
+}
+
+// getColorClassName generates a class name for a color
+func (e *MermaidExporter) getColorClassName(color string) string {
+	// Simple mapping of our color names to class names
+	switch color {
+	case "red":
+		return "redStyle"
+	case "green":
+		return "greenStyle"
+	case "blue":
+		return "blueStyle"
+	case "yellow":
+		return "yellowStyle"
+	default:
+		return "defaultStyle"
+	}
+}
+
+// getClassDefinition returns the CSS class definition for a color
+func (e *MermaidExporter) getClassDefinition(className string) string {
+	switch className {
+	case "redStyle":
+		return "    classDef redStyle fill:#ffcccc,stroke:#ff0000,stroke-width:2px,color:#000"
+	case "greenStyle":
+		return "    classDef greenStyle fill:#ccffcc,stroke:#00ff00,stroke-width:2px,color:#000"
+	case "blueStyle":
+		return "    classDef blueStyle fill:#ccccff,stroke:#0000ff,stroke-width:2px,color:#000"
+	case "yellowStyle":
+		return "    classDef yellowStyle fill:#ffffcc,stroke:#ffcc00,stroke-width:2px,color:#000"
+	default:
+		return ""
+	}
 }
