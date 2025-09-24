@@ -59,6 +59,14 @@ type TUIEditor struct {
 
 	// Test-only field (not used in production)
 	connectFrom int // Used by test helpers for connection tracking
+
+	// Command mode results
+	commandResult   string // Result message from last command
+	exportFormat    string // Export format requested
+	exportFilename  string // Export filename requested
+	saveRequested   bool   // Save was requested
+	saveFilename    string // Filename for save (optional)
+	quitRequested   bool   // Quit was requested
 }
 
 // NewTUIEditor creates a new TUI editor instance
@@ -108,6 +116,38 @@ func (e *TUIEditor) SetDiagram(d *diagram.Diagram) {
 // GetDiagram returns the current diagram
 func (e *TUIEditor) GetDiagram() *diagram.Diagram {
 	return e.diagram
+}
+
+// GetCommandResult returns and clears the command result
+func (e *TUIEditor) GetCommandResult() string {
+	result := e.commandResult
+	e.commandResult = ""
+	return result
+}
+
+// GetExportRequest returns and clears any export request
+func (e *TUIEditor) GetExportRequest() (format, filename string) {
+	format = e.exportFormat
+	filename = e.exportFilename
+	e.exportFormat = ""
+	e.exportFilename = ""
+	return format, filename
+}
+
+// GetSaveRequest returns and clears any save request
+func (e *TUIEditor) GetSaveRequest() (bool, string) {
+	requested := e.saveRequested
+	filename := e.saveFilename
+	e.saveRequested = false
+	e.saveFilename = ""
+	return requested, filename
+}
+
+// GetQuitRequest returns and clears any quit request
+func (e *TUIEditor) GetQuitRequest() bool {
+	requested := e.quitRequested
+	e.quitRequested = false
+	return requested
 }
 
 // SetTerminalSize updates the terminal dimensions
@@ -333,7 +373,9 @@ func (e *TUIEditor) Render() string {
 					}
 				} else {
 					// Normal scrolling (not a sequence diagram or not scrolled past headers)
-					scrolledLines = lines[startLine:endLine]
+					if startLine < len(lines) && endLine <= len(lines) && startLine < endLine {
+						scrolledLines = lines[startLine:endLine]
+					}
 				}
 				output = strings.Join(scrolledLines, "\n")
 
@@ -1800,6 +1842,10 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'q', 3: // q or Ctrl+C to quit
 		return true
 
+	case ':': // Enter command mode
+		e.SetMode(ModeCommand)
+
+
 	case 'a': // Add node
 		e.StartAddNode()
 
@@ -1851,8 +1897,6 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'G': // Go to bottom
 		e.ScrollToBottom()
 
-	case ':': // Command mode
-		e.StartCommand()
 
 	case 27: // ESC - if we have a previous jump action, restart that jump mode
 		if e.previousJumpAction != 0 {
@@ -1976,6 +2020,59 @@ func (e *TUIEditor) handleCommandKey(key rune) bool {
 	}
 
 	return false
+}
+
+// executeCommand processes command mode commands
+func (e *TUIEditor) executeCommand(command string) {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return
+	}
+
+	switch parts[0] {
+	case "w", "write":
+		// Save command - handled by terminal layer
+		e.saveRequested = true
+		if len(parts) > 1 {
+			e.saveFilename = parts[1]
+		}
+		e.commandResult = "Saving..."
+	case "q", "quit":
+		// Quit command - handled by terminal layer
+		e.quitRequested = true
+		e.commandResult = "Quitting..."
+	case "wq":
+		// Save and quit
+		e.saveRequested = true
+		e.quitRequested = true
+		if len(parts) > 1 {
+			e.saveFilename = parts[1]
+		}
+		e.commandResult = "Saving and quitting..."
+	case "export":
+		// Export command
+		if len(parts) < 2 {
+			e.commandResult = "Usage: export <format> [filename]"
+			return
+		}
+		format := parts[1]
+		filename := ""
+		if len(parts) > 2 {
+			filename = parts[2]
+		}
+		e.exportDiagram(format, filename)
+	default:
+		e.commandResult = "Unknown command: " + parts[0]
+	}
+}
+
+// exportDiagram exports the diagram to the specified format
+func (e *TUIEditor) exportDiagram(format, filename string) {
+	// This will be implemented by the terminal layer
+	// Set a command result that the terminal layer can check
+	e.exportFormat = format
+	e.exportFilename = filename
+	e.commandResult = "Export requested: " + format
 }
 
 // handleJumpKey processes keys when jump labels are active
@@ -2103,48 +2200,6 @@ func (e *TUIEditor) commitText() {
 
 	// Update the node text with multiple lines
 	e.UpdateNodeText(e.selected, lines)
-}
-
-// executeCommand executes a command mode command
-func (e *TUIEditor) executeCommand(cmd string) {
-	parts := strings.Fields(cmd)
-	if len(parts) == 0 {
-		return
-	}
-
-	switch parts[0] {
-	case "q", "quit":
-		// TODO: Implement quit with save check
-
-	case "w", "write", "save":
-		// TODO: Implement save
-
-	case "wq":
-		// TODO: Save and quit
-
-	case "load", "open":
-		// TODO: Load diagram
-
-	case "new":
-		// Clear diagram
-		e.diagram = &diagram.Diagram{}
-		e.selected = -1
-
-	case "type":
-		// Change diagram type
-		if len(parts) > 1 {
-			switch parts[1] {
-			case "sequence", "seq":
-				e.diagram.Type = string(diagram.DiagramTypeSequence)
-				e.SaveHistory()
-			case "flowchart", "flow", "":
-				e.diagram.Type = string(diagram.DiagramTypeFlowchart) // Empty means flowchart
-				e.SaveHistory()
-			default:
-				// Unknown type, ignore
-			}
-		}
-	}
 }
 
 // executeJumpAction executes the pending action after jump selection

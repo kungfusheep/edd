@@ -6,6 +6,7 @@ import (
 	"edd/demo"
 	"edd/diagram"
 	"edd/editor"
+	"edd/export"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -483,9 +484,11 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 			}
 
 			// Normal key handling
-			handleKeyEvent(tui, keyEvent, &filename, demoPlayer)
+			if handleKeyEvent(tui, keyEvent, &filename, demoPlayer) {
+				return nil // Exit requested from command mode
+			}
 			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
-				return nil // Exit requested
+				return nil // Exit requested from normal mode
 			}
 
 			// Key press requires full redraw
@@ -493,7 +496,9 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 
 		case demoKeyEvent := <-demoChan:
 			// Handle demo input just like real input
-			handleKeyEvent(tui, demoKeyEvent, &filename, demoPlayer)
+			if handleKeyEvent(tui, demoKeyEvent, &filename, demoPlayer) {
+				return nil // Exit requested
+			}
 			needsFullRedraw = true
 
 		case <-animTicker.C:
@@ -519,7 +524,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 }
 
 // handleKeyEvent processes a key event from either real input or demo playback
-func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *string, demoPlayer *demo.Player) {
+// Returns true if quit was requested
+func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *string, demoPlayer *demo.Player) bool {
 	if keyEvent.IsSpecial() {
 		// Handle special keys (arrows, etc.)
 		switch tui.GetMode() {
@@ -538,13 +544,122 @@ func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *s
 		case editor.ModeJump:
 			handleJumpMode(tui, key)
 		case editor.ModeCommand:
-			handleCommandMode(tui, key, filename)
+			if handleCommandMode(tui, key, filename) {
+				return true // Quit requested
+			}
 		case editor.ModeJSON:
 			handleJSONMode(tui, key)
 		case editor.ModeHintMenu:
 			tui.HandleHintMenuInput(key)
 		}
 	}
+	return false
+}
+
+// handleCommandMode processes command mode input
+func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
+	// Let TUI handle the key
+	tui.HandleKey(key)
+
+	// Check for save/export/quit request after command execution
+	if key == 13 || key == 10 { // Enter was pressed
+		// Check for save request
+		saveRequested, saveFilename := tui.GetSaveRequest()
+		if saveRequested {
+			// Use provided filename or fall back to current filename
+			if saveFilename != "" {
+				*filename = saveFilename
+			}
+			if *filename != "" {
+				executeSave(tui, *filename)
+			} else {
+				fmt.Fprintf(os.Stderr, "\nNo filename specified for save\n")
+			}
+		}
+
+		// Check for export request
+		format, exportFilename := tui.GetExportRequest()
+		if format != "" {
+			// Execute the export
+			executeExport(tui, format, exportFilename)
+		}
+
+		// Check for quit request
+		if tui.GetQuitRequest() {
+			return true // Signal to quit
+		}
+
+		// Check for any command result message to display
+		if result := tui.GetCommandResult(); result != "" {
+			// The result will be shown in the status line
+			// Could add a message display here if needed
+		}
+	}
+
+	return false
+}
+
+// executeSave handles saving the diagram to a JSON file
+func executeSave(tui *editor.TUIEditor, filename string) {
+	// Get the diagram
+	d := tui.GetDiagram()
+
+	// Ensure unique connection IDs before saving
+	diagram.EnsureUniqueConnectionIDs(d)
+
+	// Marshal to JSON
+	data, err := json.MarshalIndent(d, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nError saving: %v", err)
+		return
+	}
+
+	// Write to file
+	err = ioutil.WriteFile(filename, data, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nError writing file: %v", err)
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "\nSaved to %s", filename)
+}
+
+// executeExport handles the actual export of the diagram
+func executeExport(tui *editor.TUIEditor, format, filename string) {
+	// Get the diagram
+	d := tui.GetDiagram()
+
+	// Parse the export format
+	exportFormat, err := export.ParseFormat(format)
+	if err != nil {
+		// Set error message - could be displayed to user
+		return
+	}
+
+	// Create the exporter
+	exporter, err := export.NewExporter(exportFormat)
+	if err != nil {
+		return
+	}
+
+	// Export the diagram
+	output, err := exporter.Export(d)
+	if err != nil {
+		return
+	}
+
+	// If no filename specified, generate one
+	if filename == "" {
+		filename = "diagram" + exporter.GetFileExtension()
+	}
+
+	// Write to file
+	err = ioutil.WriteFile(filename, []byte(output), 0644)
+	if err != nil {
+		return
+	}
+
+	// Success - could show a message to user
 }
 
 // playDemoFile loads and plays a demo script
@@ -1067,43 +1182,6 @@ func handleJSONMode(tui *editor.TUIEditor, key rune) {
 	tui.HandleJSONInput(key)
 }
 
-func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
-	if key == 13 || key == 10 { // Enter
-		cmd := tui.GetCommand()
-
-		// Parse command
-		parts := strings.Fields(cmd)
-		if len(parts) > 0 {
-			switch parts[0] {
-			case "w", "write", "save":
-				if *filename == "" && len(parts) > 1 {
-					*filename = parts[1]
-				}
-				if *filename != "" {
-					if err := saveDiagramFile(*filename, tui.GetDiagram()); err != nil {
-						fmt.Printf("\nError saving: %v", err)
-					} else {
-						fmt.Printf("\nSaved to %s", *filename)
-					}
-				}
-			case "q", "quit":
-				return true
-			case "wq":
-				if *filename != "" {
-					saveDiagramFile(*filename, tui.GetDiagram())
-				}
-				return true
-			}
-		}
-
-		tui.ClearCommand()
-		tui.SetMode(editor.ModeNormal)
-	} else {
-		tui.HandleCommandInput(key)
-	}
-
-	return false
-}
 
 // Terminal size constants for Darwin/macOS
 const TIOCGWINSZ = 0x40087468
