@@ -632,19 +632,50 @@ func executeExport(tui *editor.TUIEditor, format, filename string) {
 	// Parse the export format
 	exportFormat, err := export.ParseFormat(format)
 	if err != nil {
-		// Set error message - could be displayed to user
+		tui.SetCommandResult("Error: " + err.Error())
 		return
 	}
 
 	// Create the exporter
 	exporter, err := export.NewExporter(exportFormat)
 	if err != nil {
+		tui.SetCommandResult("Error: " + err.Error())
 		return
 	}
 
 	// Export the diagram
 	output, err := exporter.Export(d)
 	if err != nil {
+		tui.SetCommandResult("Export failed: " + err.Error())
+		return
+	}
+
+	// Check if we should export to clipboard
+	if filename == "clipboard" || filename == "clip" {
+		// Export to clipboard using pbcopy on macOS
+		cmd := exec.Command("pbcopy")
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			tui.SetCommandResult("Clipboard error: " + err.Error())
+			return
+		}
+
+		go func() {
+			defer stdin.Close()
+			stdin.Write([]byte(output))
+		}()
+
+		if err := cmd.Start(); err != nil {
+			tui.SetCommandResult("Clipboard error: " + err.Error())
+			return
+		}
+
+		if err := cmd.Wait(); err != nil {
+			tui.SetCommandResult("Clipboard error: " + err.Error())
+			return
+		}
+
+		tui.SetCommandResult(fmt.Sprintf("Exported %s to clipboard", format))
 		return
 	}
 
@@ -656,10 +687,11 @@ func executeExport(tui *editor.TUIEditor, format, filename string) {
 	// Write to file
 	err = ioutil.WriteFile(filename, []byte(output), 0644)
 	if err != nil {
+		tui.SetCommandResult("Write error: " + err.Error())
 		return
 	}
 
-	// Success - could show a message to user
+	tui.SetCommandResult(fmt.Sprintf("Exported to %s", filename))
 }
 
 // playDemoFile loads and plays a demo script

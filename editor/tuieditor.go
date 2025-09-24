@@ -125,6 +125,11 @@ func (e *TUIEditor) GetCommandResult() string {
 	return result
 }
 
+// SetCommandResult sets the command result message
+func (e *TUIEditor) SetCommandResult(result string) {
+	e.commandResult = result
+}
+
 // GetExportRequest returns and clears any export request
 func (e *TUIEditor) GetExportRequest() (format, filename string) {
 	format = e.exportFormat
@@ -2049,10 +2054,10 @@ func (e *TUIEditor) executeCommand(command string) {
 			e.saveFilename = parts[1]
 		}
 		e.commandResult = "Saving and quitting..."
-	case "export":
-		// Export command
+	case "export", "exp", "e":
+		// Export command - support various aliases
 		if len(parts) < 2 {
-			e.commandResult = "Usage: export <format> [filename]"
+			e.commandResult = "Usage: export <format> [filename|clipboard|clip]"
 			return
 		}
 		format := parts[1]
@@ -2068,6 +2073,16 @@ func (e *TUIEditor) executeCommand(command string) {
 
 // exportDiagram exports the diagram to the specified format
 func (e *TUIEditor) exportDiagram(format, filename string) {
+	// Support format shortcuts
+	switch format {
+	case "m":
+		format = "mermaid"
+	case "p":
+		format = "plantuml"
+	case "a":
+		format = "ascii"
+	}
+
 	// This will be implemented by the terminal layer
 	// Set a command result that the terminal layer can check
 	e.exportFormat = format
