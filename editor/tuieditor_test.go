@@ -2135,8 +2135,8 @@ func TestRestartConnectMode(t *testing.T) {
 	}
 	
 	// Make connection A -> B
-	tui.HandleKey('a') // Select A as FROM
-	tui.HandleKey('s') // Select B as TO
+	tui.HandleKey('a') // Select A as FROM (has label 'a')
+	tui.HandleKey('b') // Select B as TO (has label 'b')
 	
 	fmt.Printf("Created connection: %d -> %d\n", 
 		tui.diagram.Connections[0].From, tui.diagram.Connections[0].To)
@@ -2165,8 +2165,8 @@ func TestRestartConnectMode(t *testing.T) {
 	
 	// Try to make connection B -> C (adjacent nodes)
 	fmt.Println("\nTrying to connect B -> C:")
-	fmt.Println("Pressing 's' to select B as FROM")
-	tui.HandleKey('s') // Select B as FROM
+	fmt.Println("Pressing 'b' to select B as FROM")
+	tui.HandleKey('b') // Select B as FROM (has label 'b')
 	
 	fmt.Printf("After selecting B: selected=%d, jumpAction=%v\n", tui.selected, tui.jumpAction)
 	
@@ -2175,8 +2175,8 @@ func TestRestartConnectMode(t *testing.T) {
 		fmt.Printf("  Node %d -> '%c'\n", nodeID, label)
 	}
 	
-	fmt.Println("Pressing 'd' to select C as TO")
-	tui.HandleKey('d') // Select C as TO
+	fmt.Println("Pressing 'c' to select C as TO")
+	tui.HandleKey('c') // Select C as TO (has label 'c')
 	
 	fmt.Printf("After selecting C: selected=%d, jumpAction=%v\n", tui.selected, tui.jumpAction)
 	
@@ -2231,8 +2231,8 @@ func TestRestartAfterPartialConnection(t *testing.T) {
 	fmt.Printf("JumpAction after restart: %v\n", tui.jumpAction)
 	
 	// Try to make a connection
-	tui.HandleKey('a') // Select A as FROM
-	tui.HandleKey('s') // Select B as TO
+	tui.HandleKey('a') // Select A as FROM (has label 'a')
+	tui.HandleKey('b') // Select B as TO (has label 'b')
 	
 	if len(tui.diagram.Connections) != 1 {
 		t.Errorf("Expected 1 connection after restart, got %d", len(tui.diagram.Connections))

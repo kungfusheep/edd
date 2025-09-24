@@ -18,16 +18,16 @@ type TUIEditor struct {
 
 	// UI State (minimal!)
 	mode               Mode
-	selected           int            // Currently selected node ID (-1 for none)
-	selectedConnection int            // Currently selected connection index (-1 for none)
-	jumpLabels         map[int]rune   // Node ID -> jump label mapping
-	connectionLabels   map[int]rune   // Connection index -> jump label mapping
-	jumpAction         JumpAction     // What to do after jump selection
-	continuousConnect  bool           // Whether to continue connecting after each connection
-	continuousDelete   bool           // Whether to continue deleting after each deletion
-	editingHintConn    int            // Connection being edited for hints (-1 for none)
-	editingHintNode    int            // Node being edited for hints (-1 for none)
-	previousJumpAction JumpAction     // Remember the jump action for ESC handling
+	selected           int          // Currently selected node ID (-1 for none)
+	selectedConnection int          // Currently selected connection index (-1 for none)
+	jumpLabels         map[int]rune // Node ID -> jump label mapping
+	connectionLabels   map[int]rune // Connection index -> jump label mapping
+	jumpAction         JumpAction   // What to do after jump selection
+	continuousConnect  bool         // Whether to continue connecting after each connection
+	continuousDelete   bool         // Whether to continue deleting after each deletion
+	editingHintConn    int          // Connection being edited for hints (-1 for none)
+	editingHintNode    int          // Node being edited for hints (-1 for none)
+	previousJumpAction JumpAction   // Remember the jump action for ESC handling
 
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
@@ -42,56 +42,56 @@ type TUIEditor struct {
 	// Terminal state
 	width  int
 	height int
-	
+
 	// Positions from last layout (for jump label positioning)
-	nodePositions       map[int]diagram.Point // Node ID -> position from last render
-	connectionPaths     map[int]diagram.Path  // Connection index -> path from last render
-	
+	nodePositions   map[int]diagram.Point // Node ID -> position from last render
+	connectionPaths map[int]diagram.Path  // Connection index -> path from last render
+
 	// JSON view state
-	jsonScrollOffset    int  // Current scroll position in JSON view
-	
+	jsonScrollOffset int // Current scroll position in JSON view
+
 	// Diagram view state
 	diagramScrollOffset int  // Current vertical scroll position in diagram view
 	diagramChanged      bool // Track if diagram was modified since last render
-	
+
 	// History management
-	history            *StructHistory  // Undo/redo history (optimized struct-based)
-	
+	history *StructHistory // Undo/redo history (optimized struct-based)
+
 	// Test-only field (not used in production)
-	connectFrom        int            // Used by test helpers for connection tracking
+	connectFrom int // Used by test helpers for connection tracking
 }
 
 // NewTUIEditor creates a new TUI editor instance
 func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 	editor := &TUIEditor{
-		diagram:            &diagram.Diagram{Type: "box"},  // Default to box diagram
-		renderer:           renderer,
-		mode:               ModeNormal,
-		selected:           -1,
-		selectedConnection: -1,
-		jumpLabels:         make(map[int]rune),
-		connectionLabels:   make(map[int]rune),
-		textBuffer:         []rune{},
-		commandBuffer:      []rune{},
-		cursorPos:          0,
-		edd:                NewEddCharacter(),
-		width:              80,
-		height:             24,
-		nodePositions:      make(map[int]diagram.Point),
-		connectionPaths:    make(map[int]diagram.Path),
-		continuousConnect:  false,
-		continuousDelete:   false,
-		editingHintConn:    -1,  // Initialize to -1 (no connection being edited)
-		editingHintNode:    -1,  // Initialize to -1 (no node being edited)
-		jsonScrollOffset:   0,
-		diagramScrollOffset: 0,  // Initialize diagram scroll offset
-		history:            NewStructHistory(50), // 50 states max (optimized)
-		connectFrom:        -1,  // Initialize test-only field
+		diagram:             &diagram.Diagram{Type: "box"}, // Default to box diagram
+		renderer:            renderer,
+		mode:                ModeNormal,
+		selected:            -1,
+		selectedConnection:  -1,
+		jumpLabels:          make(map[int]rune),
+		connectionLabels:    make(map[int]rune),
+		textBuffer:          []rune{},
+		commandBuffer:       []rune{},
+		cursorPos:           0,
+		edd:                 NewEddCharacter(),
+		width:               80,
+		height:              24,
+		nodePositions:       make(map[int]diagram.Point),
+		connectionPaths:     make(map[int]diagram.Path),
+		continuousConnect:   false,
+		continuousDelete:    false,
+		editingHintConn:     -1, // Initialize to -1 (no connection being edited)
+		editingHintNode:     -1, // Initialize to -1 (no node being edited)
+		jsonScrollOffset:    0,
+		diagramScrollOffset: 0,                    // Initialize diagram scroll offset
+		history:             NewStructHistory(50), // 50 states max (optimized)
+		connectFrom:         -1,                   // Initialize test-only field
 	}
-	
+
 	// Save initial empty state
 	editor.history.SaveState(editor.diagram)
-	
+
 	return editor
 }
 
@@ -127,7 +127,7 @@ func (e *TUIEditor) ScrollDiagram(delta int) {
 	if e.diagramScrollOffset < 0 {
 		e.diagramScrollOffset = 0
 	}
-	
+
 	// If we're in jump mode, reassign labels for the new viewport
 	if e.mode == ModeJump {
 		e.assignJumpLabels()
@@ -138,7 +138,7 @@ func (e *TUIEditor) ScrollDiagram(delta int) {
 // ScrollToTop scrolls the diagram view to the top
 func (e *TUIEditor) ScrollToTop() {
 	e.diagramScrollOffset = 0
-	
+
 	// If we're in jump mode, reassign labels for the new viewport
 	if e.mode == ModeJump {
 		e.assignJumpLabels()
@@ -186,16 +186,19 @@ func (e *TUIEditor) Run() error {
 
 // Render produces the current display output
 func (e *TUIEditor) Render() string {
+	// Debug: Print a marker to see if we're being called recursively
+	// fmt.Fprintf(os.Stderr, "DEBUG: Render() called\n")
+
 	// If in JSON mode, render JSON instead
 	if e.mode == ModeJSON {
 		return e.renderJSON()
 	}
-	
+
 	// If in Help mode, render help text
 	if e.mode == ModeHelp {
 		return GetHelpText()
 	}
-	
+
 	// If we have a real renderer that can provide positions, use it
 	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
 		// Set edit state if we're editing or inserting
@@ -204,18 +207,18 @@ func (e *TUIEditor) Render() string {
 		} else {
 			realRenderer.SetEditState(-1, "", 0)
 		}
-		
+
 		positions, output, err := realRenderer.RenderWithPositions(e.diagram)
 		if err == nil && positions != nil {
 			// Store node positions and connection paths for jump label rendering
 			e.nodePositions = positions.Positions
 			e.connectionPaths = positions.ConnectionPaths
-			
+
 			// Apply scroll offset if needed
 			lines := strings.Split(output, "\n")
 			totalLines := len(lines)
 			visibleLines := e.height - 4 // Reserve space for status, Ed, etc. (reduced by 1 for extra line)
-			
+
 			// For sequence diagrams, find the header size (participant boxes)
 			headerLines := 0
 			if e.diagram.Type == "sequence" && len(lines) > 0 {
@@ -226,7 +229,7 @@ func (e *TUIEditor) Render() string {
 					if strings.Contains(line, "│") && i > 0 {
 						// Found a lifeline, headers include this line plus one more
 						// to show the complete bottom of the boxes and connection to lifelines
-						headerLines = i + 2  // Include the lifeline start and one more line
+						headerLines = i + 2 // Include the lifeline start and one more line
 						break
 					}
 					// Safety check - headers shouldn't be more than 12 lines
@@ -236,11 +239,11 @@ func (e *TUIEditor) Render() string {
 					}
 				}
 			}
-			
+
 			// Check if content exceeds screen height
 			if totalLines > visibleLines {
 				maxScroll := totalLines - visibleLines
-				
+
 				// Auto-scroll to bottom if diagram changed (new content added)
 				if e.diagramChanged {
 					// Scroll to bottom to show new content
@@ -248,59 +251,107 @@ func (e *TUIEditor) Render() string {
 					// Clear the changed flag after handling it
 					e.diagramChanged = false
 				}
-				
+
 				// Clamp scroll offset to valid range
 				if e.diagramScrollOffset < 0 {
 					e.diagramScrollOffset = 0
 				} else if e.diagramScrollOffset > maxScroll {
 					e.diagramScrollOffset = maxScroll
 				}
-				
+
 				// Calculate visible window
 				startLine := e.diagramScrollOffset
 				endLine := startLine + visibleLines
 				if endLine > totalLines {
 					endLine = totalLines
 				}
-				
+
 				// Debug log
 				if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-					fmt.Fprintf(f, "Scroll: offset=%d, total=%d, visible=%d, max=%d, start=%d, end=%d, headers=%d\n", 
+					fmt.Fprintf(f, "Scroll: offset=%d, total=%d, visible=%d, max=%d, start=%d, end=%d, headers=%d\n",
 						e.diagramScrollOffset, totalLines, visibleLines, maxScroll, startLine, endLine, headerLines)
 					f.Close()
 				}
-				
+
 				// Extract visible portion with sticky headers for sequence diagrams
 				var scrolledLines []string
-				if e.diagram.Type == "sequence" && headerLines > 0 && startLine > headerLines {
-					// We're scrolled past the headers - make them sticky
-					// Include the header lines at the top
-					scrolledLines = lines[:headerLines]
-					
-					// Add a separator line to show we're in sticky header mode
-					scrolledLines = append(scrolledLines, "─────────────────────────────────────────────────────────────────────────────")
-					
-					// Then add the scrolled content (adjust for header lines we're adding)
-					remainingSpace := visibleLines - headerLines - 1 // -1 for separator
-					actualStart := startLine
-					actualEnd := actualStart + remainingSpace
-					if actualEnd > totalLines {
-						actualEnd = totalLines
+				if e.diagram.Type == "sequence" && headerLines > 0 && e.diagramScrollOffset > 0 {
+					// Sticky headers are needed
+					// Step 1: Include the header lines at the top
+					// IMPORTANT: Make a copy to avoid modifying the original
+					scrolledLines = make([]string, headerLines)
+					copy(scrolledLines, lines[:headerLines])
+
+					// Debug: Log what we have so far
+					if false { // Set to true for debugging
+						fmt.Fprintf(os.Stderr, "DEBUG: headerLines=%d, lines[:headerLines] has %d lines\n", headerLines, len(scrolledLines))
+						for i, line := range scrolledLines {
+							fmt.Fprintf(os.Stderr, "  %d: [%.60s...]\n", i, line)
+						}
 					}
-					scrolledLines = append(scrolledLines, lines[actualStart:actualEnd]...)
+
+					// Step 2: Add ONE separator line (but check if we already have one)
+					needSeparator := true
+					if len(scrolledLines) > 0 {
+						lastLine := scrolledLines[len(scrolledLines)-1]
+						// Check if the last line is already a pure separator (not a box border)
+						// A pure separator would be mostly dashes with no box drawing corners
+						trimmed := strings.TrimSpace(lastLine)
+						if len(trimmed) > 0 && !strings.Contains(trimmed, "╰") && !strings.Contains(trimmed, "╯") &&
+							strings.Count(trimmed, "─") == len([]rune(trimmed)) {
+							needSeparator = false
+						}
+					}
+
+					if needSeparator {
+						// Make it slightly shorter than terminal width to avoid wrapping issues
+						sepWidth := e.width - 1
+						if sepWidth < 1 {
+							sepWidth = 1
+						}
+						separator := strings.Repeat("─", sepWidth)
+						scrolledLines = append(scrolledLines, separator)
+					}
+
+					// Step 3: Add the scrolled content, starting AFTER the headers
+					// to avoid showing them twice
+					contentStart := headerLines
+					if startLine > headerLines {
+						contentStart = startLine // We've scrolled past headers
+					}
+
+					// Calculate how much space we have left after headers and separator
+					remainingSpace := visibleLines - headerLines - 1 // -1 for separator
+					contentEnd := contentStart + remainingSpace
+					if contentEnd > totalLines {
+						contentEnd = totalLines
+					}
+
+					// Append the content
+					if contentStart < contentEnd && contentStart < len(lines) {
+						scrolledLines = append(scrolledLines, lines[contentStart:contentEnd]...)
+					}
 				} else {
 					// Normal scrolling (not a sequence diagram or not scrolled past headers)
 					scrolledLines = lines[startLine:endLine]
 				}
 				output = strings.Join(scrolledLines, "\n")
-				
+
 				// Add scroll indicators
-				if e.diagram.Type == "sequence" && headerLines > 0 && startLine > headerLines {
+				if e.diagram.Type == "sequence" && headerLines > 0 && e.diagramScrollOffset > 0 {
 					// For sticky headers, adjust the indicators
-					output = fmt.Sprintf("[↑ %d more lines above (headers pinned)]\n", startLine-headerLines) + output
-					
-					// Check if there are more lines below (accounting for sticky header space)
-					actualEnd := startLine + (visibleLines - headerLines - 1)
+					// Count lines hidden above (everything before the displayed content)
+					actualStart := startLine
+					if actualStart < headerLines {
+						actualStart = headerLines
+					}
+					scrollHiddenLines := actualStart - headerLines // Don't count the headers themselves
+					if scrollHiddenLines > 0 {
+						output = fmt.Sprintf("[↑ %d more lines above (headers pinned)]\n", scrollHiddenLines) + output
+					}
+
+					// Check if there are more lines below
+					actualEnd := actualStart + (visibleLines - headerLines - 1)
 					if actualEnd < totalLines {
 						output = output + fmt.Sprintf("\n[↓ %d more lines below]", totalLines-actualEnd)
 					}
@@ -318,7 +369,7 @@ func (e *TUIEditor) Render() string {
 				e.diagramScrollOffset = 0
 				e.diagramChanged = false
 			}
-			
+
 			return output
 		}
 		// If there was an error, fall through to simple rendering
@@ -326,7 +377,7 @@ func (e *TUIEditor) Render() string {
 			return fmt.Sprintf("Render error: %v\n", err)
 		}
 	}
-	
+
 	// Fall back to simple rendering
 	state := e.GetState()
 	return RenderTUIWithRenderer(state, e.renderer)
@@ -419,13 +470,13 @@ func (e *TUIEditor) AddNode(text []string) int {
 	}
 
 	e.diagram.Nodes = append(e.diagram.Nodes, newNode)
-	
+
 	// Mark diagram as changed to trigger auto-scroll
 	e.diagramChanged = true
-	
+
 	// Save to history after modification
 	e.SaveHistory()
-	
+
 	return newNode.ID
 }
 
@@ -447,7 +498,7 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 		}
 	}
 	e.diagram.Connections = newConnections
-	
+
 	// Save to history after modification
 	e.SaveHistory()
 }
@@ -466,18 +517,18 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 			}
 		}
 	}
-	
+
 	// Generate a unique ID for the new connection
 	// Use the index as the ID (connections.length will be the new index)
 	connID := len(e.diagram.Connections)
-	
+
 	// Make sure this ID isn't already used
 	for _, existing := range e.diagram.Connections {
 		if existing.ID >= connID {
 			connID = existing.ID + 1
 		}
 	}
-	
+
 	conn := diagram.Connection{
 		ID:    connID,
 		From:  from,
@@ -485,10 +536,10 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		Label: label,
 	}
 	e.diagram.Connections = append(e.diagram.Connections, conn)
-	
+
 	// Mark diagram as changed to trigger auto-scroll
 	e.diagramChanged = true
-	
+
 	// Save to history after modification
 	e.SaveHistory()
 }
@@ -500,7 +551,7 @@ func (e *TUIEditor) DeleteConnection(index int) {
 			e.diagram.Connections[:index],
 			e.diagram.Connections[index+1:]...,
 		)
-		
+
 		// Save to history after modification
 		e.SaveHistory()
 	}
@@ -514,7 +565,7 @@ func (e *TUIEditor) UpdateNodeText(nodeID int, text []string) {
 			break
 		}
 	}
-	
+
 	// Save to history after modification
 	e.SaveHistory()
 }
@@ -524,12 +575,12 @@ func (e *TUIEditor) StartEditingConnection(connIndex int) {
 	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
 		e.selectedConnection = connIndex
 		e.selected = -1 // Clear node selection
-		
+
 		// Load current connection label into text buffer
 		currentLabel := e.diagram.Connections[connIndex].Label
 		e.textBuffer = []rune(currentLabel)
 		e.cursorPos = len(e.textBuffer)
-		
+
 		// Clear jump labels and enter edit mode
 		e.clearJumpLabels()
 		e.SetMode(ModeEdit)
@@ -540,7 +591,7 @@ func (e *TUIEditor) StartEditingConnection(connIndex int) {
 func (e *TUIEditor) UpdateConnectionLabel(connIndex int, label string) {
 	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
 		e.diagram.Connections[connIndex].Label = label
-		
+
 		// Save to history after modification
 		e.SaveHistory()
 	}
@@ -558,16 +609,16 @@ func (e *TUIEditor) renderJSON() string {
 	if err != nil {
 		return fmt.Sprintf("Error rendering JSON: %v", err)
 	}
-	
+
 	// Split into lines for scrolling
 	lines := strings.Split(string(jsonBytes), "\n")
-	
+
 	// Calculate visible lines (leave room for status)
 	visibleLines := e.height - 2
 	if visibleLines < 1 {
 		visibleLines = 1
 	}
-	
+
 	// Adjust scroll offset if needed
 	maxOffset := len(lines) - visibleLines
 	if maxOffset < 0 {
@@ -579,21 +630,21 @@ func (e *TUIEditor) renderJSON() string {
 	if e.jsonScrollOffset < 0 {
 		e.jsonScrollOffset = 0
 	}
-	
+
 	// Build output
 	var output strings.Builder
-	
+
 	// Show line numbers and content
 	endLine := e.jsonScrollOffset + visibleLines
 	if endLine > len(lines) {
 		endLine = len(lines)
 	}
-	
+
 	for i := e.jsonScrollOffset; i < endLine; i++ {
 		// Add line number in gray
 		output.WriteString(fmt.Sprintf("\033[90m%4d │\033[0m %s\n", i+1, lines[i]))
 	}
-	
+
 	// Add scroll indicator if there's more content
 	if len(lines) > visibleLines {
 		scrollPercent := 0
@@ -603,7 +654,7 @@ func (e *TUIEditor) renderJSON() string {
 		output.WriteString(fmt.Sprintf("\n\033[90m[Line %d-%d of %d | %d%%]\033[0m",
 			e.jsonScrollOffset+1, endLine, len(lines), scrollPercent))
 	}
-	
+
 	return output.String()
 }
 
@@ -655,13 +706,13 @@ func (e *TUIEditor) GetHistoryStats() (current, total int) {
 func (e *TUIEditor) HandleKey(key rune) bool {
 	// In production, the TUI package handles keys directly
 	// This is only used by tests, delegate to appropriate handler
-	
+
 	// Check mode to determine which handler to use
 	if len(e.jumpLabels) > 0 {
 		// In jump mode
 		return e.handleJumpKey(key)
 	}
-	
+
 	switch e.mode {
 	case ModeNormal:
 		return e.handleNormalKey(key)
@@ -677,7 +728,7 @@ func (e *TUIEditor) HandleKey(key rune) bool {
 		e.HandleHintMenuInput(key)
 		return false
 	}
-	
+
 	return false
 }
 
@@ -691,7 +742,7 @@ func (e *TUIEditor) HandleArrowKey(direction rune) {
 	if e.mode != ModeEdit && e.mode != ModeInsert {
 		return
 	}
-	
+
 	switch direction {
 	case 'U': // Arrow Up
 		e.moveCursorUp()
@@ -730,6 +781,7 @@ func (e *TUIEditor) startJump(action JumpAction) {
 	e.assignJumpLabels()
 	e.SetMode(ModeJump)
 }
+
 // isNodeVisible checks if a node is visible in the current viewport
 func (e *TUIEditor) isNodeVisible(nodeID int) bool {
 	pos, exists := e.nodePositions[nodeID]
@@ -746,7 +798,7 @@ func (e *TUIEditor) isNodeVisible(nodeID int) bool {
 	visibleEnd := e.diagramScrollOffset + e.height - 4 // Account for UI elements
 
 	// Special handling for sequence diagrams with sticky headers
-	if e.diagram.Type == "sequence" && e.diagramScrollOffset > 7 {
+	if e.diagram.Type == "sequence" && e.diagramScrollOffset > 0 {
 		// When sticky headers are active, participants in the header area
 		// remain visible until we've scrolled way past them
 		if pos.Y < 7 {
@@ -815,7 +867,7 @@ func (e *TUIEditor) isConnectionVisible(connIndex int) bool {
 func (e *TUIEditor) assignJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
 	e.connectionLabels = make(map[int]rune)
-	
+
 	// Debug logging
 	if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 		fmt.Fprintf(f, "\n=== assignJumpLabels called ===\n")
@@ -823,9 +875,9 @@ func (e *TUIEditor) assignJumpLabels() {
 		fmt.Fprintf(f, "Total nodes: %d\n", len(e.diagram.Nodes))
 		f.Close()
 	}
-	
+
 	labelIndex := 0
-	
+
 	// Assign labels only to visible nodes
 	for _, node := range e.diagram.Nodes {
 		if labelIndex >= len(jumpChars) {
@@ -852,7 +904,7 @@ func (e *TUIEditor) assignJumpLabels() {
 			labelIndex++
 		}
 	}
-	
+
 	// If in delete, edit, or hint mode, also assign labels to visible connections
 	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
 		if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
@@ -882,7 +934,7 @@ func (e *TUIEditor) assignJumpLabels() {
 			}
 		}
 	}
-	
+
 	// Log final labels assigned
 	if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
 		fmt.Fprintf(f, "Final jump labels assigned: %d nodes, %d connections\n", len(e.jumpLabels), len(e.connectionLabels))
@@ -892,6 +944,7 @@ func (e *TUIEditor) assignJumpLabels() {
 		f.Close()
 	}
 }
+
 // getJumpLabel returns the jump label for a node ID
 func (e *TUIEditor) getJumpLabel(nodeID int) string {
 	if label, ok := e.jumpLabels[nodeID]; ok {
@@ -899,6 +952,7 @@ func (e *TUIEditor) getJumpLabel(nodeID int) string {
 	}
 	return ""
 }
+
 // clearJumpLabels clears all jump labels
 func (e *TUIEditor) clearJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
@@ -914,14 +968,14 @@ func (e *TUIEditor) clearJumpLabels() {
 type Mode int
 
 const (
-	ModeNormal  Mode = iota // Normal navigation mode
-	ModeInsert              // Inserting new nodes
-	ModeEdit                // Editing existing node text
-	ModeCommand             // Command input mode
-	ModeJump                // Jump selection active
-	ModeJSON                // JSON view mode
-	ModeHintMenu            // Editing connection hints
-	ModeHelp                // Help display mode
+	ModeNormal   Mode = iota // Normal navigation mode
+	ModeInsert               // Inserting new nodes
+	ModeEdit                 // Editing existing node text
+	ModeCommand              // Command input mode
+	ModeJump                 // Jump selection active
+	ModeJSON                 // JSON view mode
+	ModeHintMenu             // Editing connection hints
+	ModeHelp                 // Help display mode
 )
 
 // String returns the mode name for display
@@ -947,11 +1001,12 @@ func (m Mode) String() string {
 		return "UNKNOWN"
 	}
 }
+
 // JumpAction represents what to do after a jump selection
 type JumpAction int
 
 const (
-	JumpActionSelect     JumpAction = iota // Just select the node
+	JumpActionSelect      JumpAction = iota // Just select the node
 	JumpActionEdit                          // Edit the selected node
 	JumpActionDelete                        // Delete the selected node
 	JumpActionConnectFrom                   // Start connection from this node
@@ -962,19 +1017,19 @@ const (
 // SetMode changes the editor mode
 func (e *TUIEditor) SetMode(mode Mode) {
 	e.mode = mode
-	
+
 	// Clear jump labels when leaving jump mode
 	if mode != ModeJump {
 		e.jumpLabels = make(map[int]rune)
 	}
-	
+
 	// Clear text buffer when entering text modes
 	if mode == ModeInsert || mode == ModeEdit {
 		e.textBuffer = []rune{}
 		e.cursorPos = 0
 		e.cursorLine = 0
 		e.cursorCol = 0
-		
+
 		// If editing existing node, load its text (support multi-line)
 		if mode == ModeEdit && e.selected >= 0 {
 			for _, node := range e.diagram.Nodes {
@@ -987,7 +1042,7 @@ func (e *TUIEditor) SetMode(mode Mode) {
 				}
 			}
 		}
-		
+
 		// If editing existing connection, load its label
 		if mode == ModeEdit && e.selectedConnection >= 0 && e.selectedConnection < len(e.diagram.Connections) {
 			e.textBuffer = []rune(e.diagram.Connections[e.selectedConnection].Label)
@@ -1005,31 +1060,33 @@ func (e *TUIEditor) moveCursorToBeginningOfLine() {
 	if e.cursorPos == 0 {
 		return
 	}
-	
+
 	// Find the start of the current line
 	newPos := e.cursorPos
 	for newPos > 0 && e.textBuffer[newPos-1] != '\n' {
 		newPos--
 	}
-	
+
 	e.cursorPos = newPos
 	e.updateCursorPosition()
 }
+
 // moveCursorToEndOfLine moves cursor to the end of the current line (Ctrl+E)
 func (e *TUIEditor) moveCursorToEndOfLine() {
 	if e.cursorPos >= len(e.textBuffer) {
 		return
 	}
-	
+
 	// Find the end of the current line
 	newPos := e.cursorPos
 	for newPos < len(e.textBuffer) && e.textBuffer[newPos] != '\n' {
 		newPos++
 	}
-	
+
 	e.cursorPos = newPos
 	e.updateCursorPosition()
 }
+
 // moveCursorForward moves cursor forward one character (Ctrl+F)
 func (e *TUIEditor) moveCursorForward() {
 	if e.cursorPos < len(e.textBuffer) {
@@ -1037,6 +1094,7 @@ func (e *TUIEditor) moveCursorForward() {
 		e.updateCursorPosition()
 	}
 }
+
 // moveCursorBackward moves cursor backward one character (Ctrl+B)
 func (e *TUIEditor) moveCursorBackward() {
 	if e.cursorPos > 0 {
@@ -1044,6 +1102,7 @@ func (e *TUIEditor) moveCursorBackward() {
 		e.updateCursorPosition()
 	}
 }
+
 // Additional useful cursor movements
 
 // moveCursorWordForward moves cursor to the beginning of the next word (Alt+F in terminals)
@@ -1051,44 +1110,47 @@ func (e *TUIEditor) moveCursorWordForward() {
 	if e.cursorPos >= len(e.textBuffer) {
 		return
 	}
-	
+
 	// Skip current word
 	for e.cursorPos < len(e.textBuffer) && e.textBuffer[e.cursorPos] != ' ' && e.textBuffer[e.cursorPos] != '\n' {
 		e.cursorPos++
 	}
-	
+
 	// Skip spaces
 	for e.cursorPos < len(e.textBuffer) && e.textBuffer[e.cursorPos] == ' ' {
 		e.cursorPos++
 	}
-	
+
 	e.updateCursorPosition()
 }
+
 // moveCursorWordBackward moves cursor to the beginning of the previous word (Alt+B in terminals)
 func (e *TUIEditor) moveCursorWordBackward() {
 	if e.cursorPos == 0 {
 		return
 	}
-	
+
 	// Move back one position
 	e.cursorPos--
-	
+
 	// Skip spaces
 	for e.cursorPos > 0 && e.textBuffer[e.cursorPos] == ' ' {
 		e.cursorPos--
 	}
-	
+
 	// Find beginning of word
 	for e.cursorPos > 0 && e.textBuffer[e.cursorPos-1] != ' ' && e.textBuffer[e.cursorPos-1] != '\n' {
 		e.cursorPos--
 	}
-	
+
 	e.updateCursorPosition()
 }
+
 // moveCursorUp moves cursor up one line (Arrow Up)
 func (e *TUIEditor) moveCursorUp() {
 	e.moveUp()
 }
+
 // moveCursorDown moves cursor down one line (Arrow Down)
 func (e *TUIEditor) moveCursorDown() {
 	e.moveDown()
@@ -1103,23 +1165,23 @@ func (e *TUIEditor) deleteWordBackward() {
 	if e.cursorPos == 0 {
 		return
 	}
-	
+
 	// Find the start of the previous word
 	startPos := e.cursorPos - 1
-	
+
 	// Skip any trailing spaces
 	for startPos >= 0 && e.textBuffer[startPos] == ' ' {
 		startPos--
 	}
-	
+
 	// Skip the word itself (non-space characters)
 	for startPos >= 0 && e.textBuffer[startPos] != ' ' && e.textBuffer[startPos] != '\n' {
 		startPos--
 	}
-	
+
 	// startPos is now one position before the word start
 	startPos++
-	
+
 	// Delete from startPos to cursorPos
 	if startPos < e.cursorPos {
 		e.textBuffer = append(e.textBuffer[:startPos], e.textBuffer[e.cursorPos:]...)
@@ -1127,18 +1189,19 @@ func (e *TUIEditor) deleteWordBackward() {
 		e.updateCursorPosition()
 	}
 }
+
 // deleteToBeginningOfLine deletes from cursor to beginning of current line (Ctrl+U)
 func (e *TUIEditor) deleteToBeginningOfLine() {
 	if e.cursorPos == 0 {
 		return
 	}
-	
+
 	// Find the start of the current line
 	lineStart := e.cursorPos
 	for lineStart > 0 && e.textBuffer[lineStart-1] != '\n' {
 		lineStart--
 	}
-	
+
 	// Delete from lineStart to cursorPos
 	if lineStart < e.cursorPos {
 		e.textBuffer = append(e.textBuffer[:lineStart], e.textBuffer[e.cursorPos:]...)
@@ -1146,18 +1209,19 @@ func (e *TUIEditor) deleteToBeginningOfLine() {
 		e.updateCursorPosition()
 	}
 }
+
 // deleteToEndOfLine deletes from cursor to end of current line (Ctrl+K)
 func (e *TUIEditor) deleteToEndOfLine() {
 	if e.cursorPos >= len(e.textBuffer) {
 		return
 	}
-	
+
 	// Find the end of the current line
 	lineEnd := e.cursorPos
 	for lineEnd < len(e.textBuffer) && e.textBuffer[lineEnd] != '\n' {
 		lineEnd++
 	}
-	
+
 	// Delete from cursorPos to lineEnd
 	if lineEnd > e.cursorPos {
 		e.textBuffer = append(e.textBuffer[:e.cursorPos], e.textBuffer[lineEnd:]...)
@@ -1165,24 +1229,25 @@ func (e *TUIEditor) deleteToEndOfLine() {
 		e.updateCursorPosition()
 	}
 }
+
 // deleteWord deletes the word at cursor position (for future use)
 func (e *TUIEditor) deleteWord() {
 	if e.cursorPos >= len(e.textBuffer) {
 		return
 	}
-	
+
 	endPos := e.cursorPos
-	
+
 	// Skip any leading spaces
 	for endPos < len(e.textBuffer) && e.textBuffer[endPos] == ' ' {
 		endPos++
 	}
-	
+
 	// Skip the word itself
 	for endPos < len(e.textBuffer) && e.textBuffer[endPos] != ' ' && e.textBuffer[endPos] != '\n' {
 		endPos++
 	}
-	
+
 	// Delete from cursorPos to endPos
 	if endPos > e.cursorPos {
 		e.textBuffer = append(e.textBuffer[:e.cursorPos], e.textBuffer[endPos:]...)
@@ -1190,6 +1255,7 @@ func (e *TUIEditor) deleteWord() {
 		e.updateCursorPosition()
 	}
 }
+
 // Helper to check if a rune is a word boundary
 func isWordBoundary(r rune) bool {
 	return unicode.IsSpace(r) || unicode.IsPunct(r)
@@ -1204,10 +1270,10 @@ func (e *TUIEditor) splitIntoLines() [][]rune {
 	if len(e.textBuffer) == 0 {
 		return [][]rune{{}}
 	}
-	
+
 	lines := [][]rune{}
 	currentLine := []rune{}
-	
+
 	for _, r := range e.textBuffer {
 		if r == '\n' {
 			lines = append(lines, currentLine)
@@ -1216,11 +1282,12 @@ func (e *TUIEditor) splitIntoLines() [][]rune {
 			currentLine = append(currentLine, r)
 		}
 	}
-	
+
 	// Add the last line
 	lines = append(lines, currentLine)
 	return lines
 }
+
 // updateCursorPosition updates line and column based on cursorPos
 func (e *TUIEditor) updateCursorPosition() {
 	if len(e.textBuffer) == 0 {
@@ -1228,10 +1295,10 @@ func (e *TUIEditor) updateCursorPosition() {
 		e.cursorCol = 0
 		return
 	}
-	
+
 	line := 0
 	col := 0
-	
+
 	for i := 0; i < e.cursorPos && i < len(e.textBuffer); i++ {
 		if e.textBuffer[i] == '\n' {
 			line++
@@ -1240,21 +1307,22 @@ func (e *TUIEditor) updateCursorPosition() {
 			col++
 		}
 	}
-	
+
 	e.cursorLine = line
 	e.cursorCol = col
 }
+
 // getCursorPosFromLineCol calculates buffer position from line/column
 func (e *TUIEditor) getCursorPosFromLineCol(line, col int) int {
 	pos := 0
 	currentLine := 0
 	currentCol := 0
-	
+
 	for i, r := range e.textBuffer {
 		if currentLine == line && currentCol == col {
 			return i
 		}
-		
+
 		if r == '\n' {
 			if currentLine == line {
 				// We're past the end of the target line
@@ -1267,13 +1335,14 @@ func (e *TUIEditor) getCursorPosFromLineCol(line, col int) int {
 		}
 		pos = i + 1
 	}
-	
+
 	return pos
 }
+
 // moveUp moves cursor up one line
 func (e *TUIEditor) moveUp() {
 	lines := e.splitIntoLines()
-	
+
 	if e.cursorLine > 0 {
 		e.cursorLine--
 		// Try to maintain column position
@@ -1283,10 +1352,11 @@ func (e *TUIEditor) moveUp() {
 		e.cursorPos = e.getCursorPosFromLineCol(e.cursorLine, e.cursorCol)
 	}
 }
+
 // moveDown moves cursor down one line
 func (e *TUIEditor) moveDown() {
 	lines := e.splitIntoLines()
-	
+
 	if e.cursorLine < len(lines)-1 {
 		e.cursorLine++
 		// Try to maintain column position
@@ -1296,6 +1366,7 @@ func (e *TUIEditor) moveDown() {
 		e.cursorPos = e.getCursorPosFromLineCol(e.cursorLine, e.cursorCol)
 	}
 }
+
 // insertNewline inserts a newline at cursor position
 func (e *TUIEditor) insertNewline() {
 	e.textBuffer = append(
@@ -1305,22 +1376,24 @@ func (e *TUIEditor) insertNewline() {
 	e.cursorPos++
 	e.updateCursorPosition()
 }
+
 // GetTextAsLines returns the current text buffer as lines
 func (e *TUIEditor) GetTextAsLines() []string {
 	if len(e.textBuffer) == 0 {
 		return []string{""}
 	}
-	
+
 	text := string(e.textBuffer)
 	lines := strings.Split(text, "\n")
-	
+
 	// Ensure at least one line
 	if len(lines) == 0 {
 		return []string{""}
 	}
-	
+
 	return lines
 }
+
 // SetTextFromLines sets the text buffer from lines
 func (e *TUIEditor) SetTextFromLines(lines []string) {
 	if len(lines) == 0 {
@@ -1330,22 +1403,25 @@ func (e *TUIEditor) SetTextFromLines(lines []string) {
 		e.cursorCol = 0
 		return
 	}
-	
+
 	text := strings.Join(lines, "\n")
 	e.textBuffer = []rune(text)
 	e.cursorPos = len(e.textBuffer)
 	e.updateCursorPosition()
 }
+
 // GetCursorInfo returns current cursor position info
 func (e *TUIEditor) GetCursorInfo() (line, col int, lines []string) {
 	return e.cursorLine, e.cursorCol, e.GetTextAsLines()
 }
+
 // IsMultilineEditKey checks if we should insert a newline (for future: Shift+Enter support)
 func (e *TUIEditor) IsMultilineEditKey(key rune) bool {
 	// For now, we'll use Alt+Enter (key code 30) or Ctrl+J (key code 10 with modifier)
 	// In the future, we could detect Shift+Enter if the terminal supports it
 	return false // Disabled for now - use explicit newline key binding
 }
+
 // HandleNewlineKey explicitly handles newline insertion
 func (e *TUIEditor) HandleNewlineKey() {
 	if e.mode == ModeEdit || e.mode == ModeInsert {
@@ -1366,46 +1442,57 @@ func (e *TUIEditor) GetMode() Mode {
 func (e *TUIEditor) GetDiagramScrollOffset() int {
 	return e.diagramScrollOffset
 }
+
 // GetEddFrame returns Ed's current animation frame
 func (e *TUIEditor) GetEddFrame() string {
 	return e.edd.GetFrame(e.mode)
 }
+
 // GetJumpLabels returns the current jump labels
 func (e *TUIEditor) GetJumpLabels() map[int]rune {
 	return e.jumpLabels
 }
+
 // GetConnectionLabels returns the current connection jump labels
 func (e *TUIEditor) GetConnectionLabels() map[int]rune {
 	return e.connectionLabels
 }
+
 // GetJumpAction returns the current jump action
 func (e *TUIEditor) GetJumpAction() JumpAction {
 	return e.jumpAction
 }
+
 // GetSelectedNode returns the currently selected node ID
 func (e *TUIEditor) GetSelectedNode() int {
 	return e.selected
 }
+
 // GetNodePositions returns the last rendered node positions
 func (e *TUIEditor) GetNodePositions() map[int]diagram.Point {
 	return e.nodePositions
 }
+
 // GetConnectionPaths returns the last rendered connection paths
 func (e *TUIEditor) GetConnectionPaths() map[int]diagram.Path {
 	return e.connectionPaths
 }
+
 // GetTextBuffer returns the current text buffer (for display purposes)
 func (e *TUIEditor) GetTextBuffer() []rune {
 	return e.textBuffer
 }
+
 // IsContinuousConnect returns whether we're in continuous connection mode
 func (e *TUIEditor) IsContinuousConnect() bool {
 	return e.continuousConnect
 }
+
 // IsContinuousDelete returns whether we're in continuous delete mode
 func (e *TUIEditor) IsContinuousDelete() bool {
 	return e.continuousDelete
 }
+
 // StartAddNode begins adding a new node
 func (e *TUIEditor) StartAddNode() {
 	e.SetMode(ModeInsert)
@@ -1414,6 +1501,7 @@ func (e *TUIEditor) StartAddNode() {
 	e.textBuffer = []rune{}
 	e.cursorPos = 0
 }
+
 // StartConnect begins connection mode (single connection)
 func (e *TUIEditor) StartConnect() {
 	if len(e.diagram.Nodes) >= 2 {
@@ -1421,6 +1509,7 @@ func (e *TUIEditor) StartConnect() {
 		e.startJump(JumpActionConnectFrom)
 	}
 }
+
 // StartContinuousConnect begins continuous connection mode (multiple connections)
 func (e *TUIEditor) StartContinuousConnect() {
 	if len(e.diagram.Nodes) >= 2 {
@@ -1428,6 +1517,7 @@ func (e *TUIEditor) StartContinuousConnect() {
 		e.startJump(JumpActionConnectFrom)
 	}
 }
+
 // StartDelete begins delete mode (single deletion)
 func (e *TUIEditor) StartDelete() {
 	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
@@ -1435,6 +1525,7 @@ func (e *TUIEditor) StartDelete() {
 		e.startJump(JumpActionDelete)
 	}
 }
+
 // StartContinuousDelete begins continuous delete mode (multiple deletions)
 func (e *TUIEditor) StartContinuousDelete() {
 	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
@@ -1442,28 +1533,33 @@ func (e *TUIEditor) StartContinuousDelete() {
 		e.startJump(JumpActionDelete)
 	}
 }
+
 // StartEdit begins edit mode
 func (e *TUIEditor) StartEdit() {
 	if len(e.diagram.Nodes) > 0 {
 		e.startJump(JumpActionEdit)
 	}
 }
+
 // StartCommand enters command mode
 func (e *TUIEditor) StartCommand() {
 	e.SetMode(ModeCommand)
 	e.commandBuffer = []rune{}
 }
+
 // StartHintEdit starts hint editing mode for nodes and connections
 func (e *TUIEditor) StartHintEdit() {
 	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
 		e.startJump(JumpActionHint)
 	}
 }
+
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
 	// Delegate to the actual text handler
 	e.handleTextKey(key)
 }
+
 // ToggleDiagramType switches between sequence and box diagram types
 func (e *TUIEditor) ToggleDiagramType() {
 	e.history.SaveState(e.diagram)
@@ -1471,24 +1567,27 @@ func (e *TUIEditor) ToggleDiagramType() {
 	if currentType == "" {
 		currentType = "box"
 	}
-	
+
 	if currentType == "sequence" {
 		e.diagram.Type = "box"
 	} else {
 		e.diagram.Type = "sequence"
 	}
 }
+
 // HandleJumpInput processes jump label selection for both nodes and connections
 func (e *TUIEditor) HandleJumpInput(key rune) {
 	// This is the public method that should handle both nodes and connections
 	// It delegates to the internal handleJumpKey which has the full logic
 	e.handleJumpKey(key)
 }
+
 // HandleJSONInput processes JSON view mode input
 func (e *TUIEditor) HandleJSONInput(key rune) {
 	// Delegate to the internal handler
 	e.handleJSONKey(key)
 }
+
 // HandleCommandInput processes command mode input
 func (e *TUIEditor) HandleCommandInput(key rune) {
 	switch key {
@@ -1504,22 +1603,27 @@ func (e *TUIEditor) HandleCommandInput(key rune) {
 		}
 	}
 }
+
 // GetCommand returns the current command buffer
 func (e *TUIEditor) GetCommand() string {
 	return string(e.commandBuffer)
 }
+
 // ClearCommand clears the command buffer
 func (e *TUIEditor) ClearCommand() {
 	e.commandBuffer = []rune{}
 }
+
 // AnimateEd advances Ed's animation
 func (e *TUIEditor) AnimateEd() {
 	e.edd.NextFrame()
 }
+
 // GetNodeCount returns the number of nodes
 func (e *TUIEditor) GetNodeCount() int {
 	return len(e.diagram.Nodes)
 }
+
 // GetConnectionCount returns the number of connections
 func (e *TUIEditor) GetConnectionCount() int {
 	return len(e.diagram.Connections)
@@ -1534,7 +1638,7 @@ func (e *TUIEditor) TransformToViewport(diagramY int, hasScrollIndicator bool) i
 	}
 
 	// For sequence diagrams with sticky headers
-	if e.diagram.Type == "sequence" && e.diagramScrollOffset > 7 {
+	if e.diagram.Type == "sequence" && e.diagramScrollOffset > 0 {
 		if diagramY < 7 {
 			// Participant in sticky header area
 			// Extra padding lines are added, so box appears at Y+2
@@ -1557,7 +1661,7 @@ func (e *TUIEditor) TransformToViewport(diagramY int, hasScrollIndicator bool) i
 // Available node styles in cycle order
 var nodeStyles = []string{"rounded", "sharp", "double", "thick"}
 
-// Available node colors in cycle order  
+// Available node colors in cycle order
 var nodeColors = []string{"", "red", "green", "yellow", "blue", "magenta", "cyan"}
 
 // cycleNodeStyle cycles through available node styles
@@ -1570,22 +1674,22 @@ func (e *TUIEditor) cycleNodeStyle(nodeID int) {
 			break
 		}
 	}
-	
+
 	if node == nil {
 		return
 	}
-	
+
 	// Save state for undo
 	e.history.SaveState(e.diagram)
-	
+
 	// Initialize hints if needed
 	if node.Hints == nil {
 		node.Hints = make(map[string]string)
 	}
-	
+
 	// Get current style
 	currentStyle := node.Hints["style"]
-	
+
 	// Find current index
 	currentIndex := -1
 	for i, style := range nodeStyles {
@@ -1594,11 +1698,11 @@ func (e *TUIEditor) cycleNodeStyle(nodeID int) {
 			break
 		}
 	}
-	
+
 	// Cycle to next style
 	nextIndex := (currentIndex + 1) % len(nodeStyles)
 	node.Hints["style"] = nodeStyles[nextIndex]
-	
+
 	// If it's the default (first) style and no other hints, remove the hints map
 	if nodeStyles[nextIndex] == nodeStyles[0] && len(node.Hints) == 1 {
 		delete(node.Hints, "style")
@@ -1607,6 +1711,7 @@ func (e *TUIEditor) cycleNodeStyle(nodeID int) {
 		}
 	}
 }
+
 // cycleNodeColor cycles through available node colors
 func (e *TUIEditor) cycleNodeColor(nodeID int) {
 	// Find the node
@@ -1617,22 +1722,22 @@ func (e *TUIEditor) cycleNodeColor(nodeID int) {
 			break
 		}
 	}
-	
+
 	if node == nil {
 		return
 	}
-	
+
 	// Save state for undo
 	e.history.SaveState(e.diagram)
-	
+
 	// Initialize hints if needed
 	if node.Hints == nil {
 		node.Hints = make(map[string]string)
 	}
-	
+
 	// Get current color
 	currentColor := node.Hints["color"]
-	
+
 	// Find current index
 	currentIndex := 0 // Default to no color (empty string)
 	for i, color := range nodeColors {
@@ -1641,10 +1746,10 @@ func (e *TUIEditor) cycleNodeColor(nodeID int) {
 			break
 		}
 	}
-	
+
 	// Cycle to next color
 	nextIndex := (currentIndex + 1) % len(nodeColors)
-	
+
 	if nodeColors[nextIndex] == "" {
 		// Remove color hint
 		delete(node.Hints, "color")
@@ -1655,6 +1760,7 @@ func (e *TUIEditor) cycleNodeColor(nodeID int) {
 		node.Hints["color"] = nodeColors[nextIndex]
 	}
 }
+
 // getNodeStyle returns the style hint for a node
 func (e *TUIEditor) getNodeStyle(nodeID int) string {
 	for _, node := range e.diagram.Nodes {
@@ -1667,6 +1773,7 @@ func (e *TUIEditor) getNodeStyle(nodeID int) string {
 	}
 	return ""
 }
+
 // getNodeColor returns the color hint for a node
 func (e *TUIEditor) getNodeColor(nodeID int) string {
 	for _, node := range e.diagram.Nodes {
@@ -1686,188 +1793,78 @@ func (e *TUIEditor) getNodeColor(nodeID int) string {
 
 // handleNormalKey processes keys in normal mode
 func (e *TUIEditor) handleNormalKey(key rune) bool {
-	// Debug logging - log ALL keys including control codes
-	if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		if key < 32 {
-			fmt.Fprintf(f, "Normal mode CONTROL key pressed: Ctrl+%c (code %d), current diagram type: %s\n", key+64, key, e.diagram.Type)
-		} else {
-			fmt.Fprintf(f, "Normal mode key pressed: %c (%d), current diagram type: %s\n", key, key, e.diagram.Type)
-		}
-		f.Close()
-	}
-	
-	// Test logging - log EVERY key before switch
-	if f, err := os.OpenFile("/tmp/edd_all_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "About to switch on key: %c (%d)\n", key, key)
-		f.Close()
-	}
-	
+	// This is the SINGLE source of truth for normal mode key handling
+	// Used by both the interactive loop and tests
+
 	switch key {
 	case 'q', 3: // q or Ctrl+C to quit
 		return true
-		
-	case 21: // Ctrl+U - scroll up half page (check before 'u' for undo)
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "Ctrl+U pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
-			f.Close()
-		}
-		e.diagramScrollOffset -= e.height / 2
-		if e.diagramScrollOffset < 0 {
-			e.diagramScrollOffset = 0
-		}
-		return false
-		
-	case 4: // Ctrl+D - scroll down half page (check before 'd' for delete)
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "Ctrl+D pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
-			f.Close()
-		}
-		e.diagramScrollOffset += e.height / 2
-		// The maximum will be clamped when rendering
-		return false
-		
-	case 6: // Ctrl+F - scroll down (forward) - alternative to Ctrl+D
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "Ctrl+F pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
-			f.Close()
-		}
-		e.diagramScrollOffset += e.height / 2
-		return false
-		
-	case 2: // Ctrl+B - scroll up (backward) - alternative to Ctrl+U
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "Ctrl+B pressed, current offset: %d, height: %d\n", e.diagramScrollOffset, e.height)
-			f.Close()
-		}
-		e.diagramScrollOffset -= e.height / 2
-		if e.diagramScrollOffset < 0 {
-			e.diagramScrollOffset = 0
-		}
-		return false
-		
+
+	case 'a': // Add node
+		e.StartAddNode()
+
+	case 'c': // Connect (single)
+		e.StartConnect()
+
+	case 'C': // Connect (continuous)
+		e.StartContinuousConnect()
+
+	case 'd': // Delete (single)
+		e.StartDelete()
+
+	case 'D': // Delete (continuous)
+		e.StartContinuousDelete()
+
+	case 'e': // Edit
+		e.StartEdit()
+
+	case 'H': // Edit connection hints
+		e.StartHintEdit()
+
+	case 'J': // JSON view (capital J)
+		e.SetMode(ModeJSON)
+
+	case 't': // Toggle diagram type
+		e.ToggleDiagramType()
+
+	case 'u': // Undo
+		e.Undo()
+
+	case 18: // Ctrl+R for redo
+		e.Redo()
+
+	case 'j': // Scroll down line (vim-style)
+		e.ScrollDiagram(5)
+
+	case 'k': // Scroll up line (vim-style)
+		e.ScrollDiagram(-5)
+
+	case 21: // Ctrl+U - scroll up half page
+		e.ScrollDiagram(-e.height / 2)
+
+	case 4: // Ctrl+D - scroll down half page
+		e.ScrollDiagram(e.height / 2)
+
+	case 'g': // Go to top
+		e.ScrollToTop()
+
+	case 'G': // Go to bottom
+		e.ScrollToBottom()
+
+	case ':': // Command mode
+		e.StartCommand()
+
 	case 27: // ESC - if we have a previous jump action, restart that jump mode
 		if e.previousJumpAction != 0 {
 			action := e.previousJumpAction
-			e.previousJumpAction = 0  // Clear it
-			e.startJump(action)  // Restart jump mode with the same action
+			e.previousJumpAction = 0 // Clear it
+			e.startJump(action)      // Restart jump mode with the same action
 		}
-		
-	case 'a', 'A': // Add new node (A is same as a since we're already in INSERT mode with continuation)
-		e.previousJumpAction = 0  // Clear any previous jump action
-		e.SetMode(ModeInsert)
-		nodeID := e.AddNode([]string{""})
-		e.selected = nodeID
-		
-	case 'c': // Connect nodes (single)
-		if len(e.diagram.Nodes) >= 2 {
-			e.continuousConnect = false
-			e.selected = -1 // Clear any previous selection
-			e.startJump(JumpActionConnectFrom)
-		}
-		
-	case 'C': // Connect nodes (continuous)
-		if len(e.diagram.Nodes) >= 2 {
-			e.continuousConnect = true
-			e.selected = -1 // Clear any previous selection
-			e.startJump(JumpActionConnectFrom)
-		}
-		
-	case 'd': // Delete node/connection (single)
-		if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
-			e.continuousDelete = false
-			e.startJump(JumpActionDelete)
-		}
-		
-	case 'D': // Delete node/connection (continuous)
-		if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
-			e.continuousDelete = true
-			e.startJump(JumpActionDelete)
-		}
-		
-	case 'e': // Edit node
-		if len(e.diagram.Nodes) > 0 {
-			e.startJump(JumpActionEdit)
-		}
-		
-	case 'E': // Edit in external editor
-		// This will be handled by the main loop since it needs file system access
-		return false
-		
-	case 'H': // Edit hints for nodes and connections
-		if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
-			e.startJump(JumpActionHint)
-		}
-		
-	case 'J': // Toggle JSON view (capital J)
-		e.SetMode(ModeJSON)
-		e.jsonScrollOffset = 0  // Reset scroll when entering JSON mode
-		
-	case 'j': // Scroll down one line (vim-style j)
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "j pressed (scroll down line), current offset: %d\n", e.diagramScrollOffset)
-			f.Close()
-		}
-		e.diagramScrollOffset += 3  // Scroll by a few lines for smoother movement
-		// The maximum will be clamped when rendering
-		
-	case 'k': // Scroll up one line (vim-style k)
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_scroll.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "k pressed (scroll up line), current offset: %d\n", e.diagramScrollOffset)
-			f.Close()
-		}
-		e.diagramScrollOffset -= 3  // Scroll by a few lines for smoother movement
-		if e.diagramScrollOffset < 0 {
-			e.diagramScrollOffset = 0
-		}
-		
-	case 't': // Toggle diagram type
-		// Debug log
-		if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "t key matched! Current type: %s\n", e.diagram.Type)
-			f.Close()
-		}
-		
-		e.history.SaveState(e.diagram)  // Save current state for undo
-		// Handle empty type as "box" (default)
-		currentType := e.diagram.Type
-		if currentType == "" {
-			currentType = "box"
-		}
-		
-		if currentType == "sequence" {
-			e.diagram.Type = "box"
-		} else {
-			e.diagram.Type = "sequence"
-		}
-		
-		// Debug log after change
-		if f, err := os.OpenFile("/tmp/edd_keys.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "After toggle, new type: %s\n", e.diagram.Type)
-			f.Close()
-		}
-		
-	case 'u': // Undo
-		e.Undo()
-		
-	case 18: // Ctrl+R for redo
-		e.Redo()
-		
-	case '?': // Help
-		e.SetMode(ModeHelp)
-		
-	case ':': // Command mode
-		e.SetMode(ModeCommand)
-		e.commandBuffer = []rune{}  // Start with empty, : is shown in prompt
 	}
-	
+
 	return false
 }
+
 // handleTextKey processes keys in text input modes (Insert/Edit)
 func (e *TUIEditor) handleTextKey(key rune) bool {
 	switch key {
@@ -1875,12 +1872,12 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 		e.commitText()
 		if e.previousJumpAction != 0 {
 			action := e.previousJumpAction
-			e.previousJumpAction = 0  // Clear it
-			e.startJump(action)  // Restart jump mode with the same action
+			e.previousJumpAction = 0 // Clear it
+			e.startJump(action)      // Restart jump mode with the same action
 		} else {
 			e.SetMode(ModeNormal)
 		}
-		
+
 	case 127, 8: // Backspace
 		if e.cursorPos > 0 {
 			e.textBuffer = append(
@@ -1890,43 +1887,43 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 			e.cursorPos--
 			e.updateCursorPosition()
 		}
-		
+
 	case 14: // Ctrl+N - insert newline for multi-line editing
 		e.insertNewline()
-	
+
 	case 23: // Ctrl+W - delete word backward
 		e.deleteWordBackward()
-	
+
 	case 21: // Ctrl+U - delete to beginning of line
 		e.deleteToBeginningOfLine()
-	
+
 	case 11: // Ctrl+K - delete to end of line
 		e.deleteToEndOfLine()
-	
+
 	case 1: // Ctrl+A - move to beginning of line
 		e.moveCursorToBeginningOfLine()
-	
+
 	case 5: // Ctrl+E - move to end of line
 		e.moveCursorToEndOfLine()
-	
+
 	case 6: // Ctrl+F - move forward one character
 		e.moveCursorForward()
-	
+
 	case 2: // Ctrl+B - move backward one character
 		e.moveCursorBackward()
-	
+
 	case 16: // Ctrl+P - move up one line (previous)
 		e.moveCursorUp()
-	
+
 	case 22: // Ctrl+V - move down one line (since Ctrl+N is for newline)
 		e.moveCursorDown()
-		
+
 	case 13, 10: // Enter - commit text
 		// Save the mode before committing (in case commit changes it)
 		wasInsertMode := e.mode == ModeInsert
-		
+
 		e.commitText()
-		
+
 		// In INSERT mode, immediately start adding another node
 		if wasInsertMode {
 			// Create a new node and continue in insert mode
@@ -1940,7 +1937,7 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 			// In EDIT mode, return to normal
 			e.SetMode(ModeNormal)
 		}
-		
+
 	default:
 		// Insert printable characters
 		if unicode.IsPrint(key) {
@@ -1952,33 +1949,35 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 			e.updateCursorPosition()
 		}
 	}
-	
+
 	return false
 }
+
 // handleCommandKey processes keys in command mode
 func (e *TUIEditor) handleCommandKey(key rune) bool {
 	switch key {
 	case 27: // ESC - cancel command
 		e.SetMode(ModeNormal)
-		
+
 	case 127, 8: // Backspace
 		if len(e.commandBuffer) > 0 {
 			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
 		}
-		
+
 	case 13, 10: // Enter - execute command
 		e.executeCommand(string(e.commandBuffer))
 		e.SetMode(ModeNormal)
-		
+
 	default:
 		// Add to command buffer
 		if unicode.IsPrint(key) {
 			e.commandBuffer = append(e.commandBuffer, key)
 		}
 	}
-	
+
 	return false
 }
+
 // handleJumpKey processes keys when jump labels are active
 func (e *TUIEditor) handleJumpKey(key rune) bool {
 	// ESC cancels jump
@@ -1987,11 +1986,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		e.continuousConnect = false // Exit continuous connect mode
 		e.continuousDelete = false  // Exit continuous delete mode
 		e.previousJumpAction = 0    // Clear the previous action since we're canceling
-		e.selected = -1            // Clear selected node
+		e.selected = -1             // Clear selected node
 		e.SetMode(ModeNormal)
 		return false
 	}
-	
+
 	// Look for matching node jump label
 	for nodeID, label := range e.jumpLabels {
 		if label == key {
@@ -2000,7 +1999,7 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 			return false
 		}
 	}
-	
+
 	// Look for matching connection jump label (in delete, edit, or hint mode)
 	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
 		// Log to file
@@ -2018,7 +2017,7 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 				if e.jumpAction == JumpActionDelete {
 					// Delete the connection
 					e.DeleteConnection(connIndex)
-					
+
 					// If in continuous delete mode, start another delete
 					if e.continuousDelete && (len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0) {
 						e.clearJumpLabels()
@@ -2031,11 +2030,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 					}
 				} else if e.jumpAction == JumpActionEdit {
 					// Edit the connection label
-					e.previousJumpAction = e.jumpAction  // Save the action for ESC handling
+					e.previousJumpAction = e.jumpAction // Save the action for ESC handling
 					e.StartEditingConnection(connIndex)
 				} else if e.jumpAction == JumpActionHint {
 					// Enter hint menu for this connection
-					e.previousJumpAction = e.jumpAction  // Save the action for ESC handling
+					e.previousJumpAction = e.jumpAction // Save the action for ESC handling
 					e.editingHintConn = connIndex
 					// Log to file
 					if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
@@ -2049,7 +2048,7 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 			}
 		}
 	}
-	
+
 	// No match - handle based on current state
 	if e.continuousConnect {
 		// In continuous connect mode - just ignore invalid keys
@@ -2060,12 +2059,13 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		// In continuous delete mode - just ignore invalid keys
 		return false
 	}
-	
+
 	// For single-action modes, cancel jump on invalid key
 	e.clearJumpLabels()
 	e.SetMode(ModeNormal)
 	return false
 }
+
 // commitText saves the current text buffer to the selected node or connection
 func (e *TUIEditor) commitText() {
 	// Check if we're editing a connection
@@ -2077,58 +2077,59 @@ func (e *TUIEditor) commitText() {
 		e.selectedConnection = -1
 		return
 	}
-	
+
 	// Otherwise we're editing a node - support multi-line
 	if e.selected < 0 {
 		return
 	}
-	
+
 	// Get text as lines for multi-line support
 	lines := e.GetTextAsLines()
-	
+
 	// Trim empty lines at the end
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
-	
+
 	// In INSERT mode, we allow empty text (user might just press Enter to create empty nodes)
 	if len(lines) == 0 && e.mode != ModeInsert {
 		return
 	}
-	
+
 	// If completely empty, use a single empty line
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
-	
+
 	// Update the node text with multiple lines
 	e.UpdateNodeText(e.selected, lines)
 }
+
 // executeCommand executes a command mode command
 func (e *TUIEditor) executeCommand(cmd string) {
 	parts := strings.Fields(cmd)
 	if len(parts) == 0 {
 		return
 	}
-	
+
 	switch parts[0] {
 	case "q", "quit":
 		// TODO: Implement quit with save check
-		
+
 	case "w", "write", "save":
 		// TODO: Implement save
-		
+
 	case "wq":
 		// TODO: Save and quit
-		
+
 	case "load", "open":
 		// TODO: Load diagram
-		
+
 	case "new":
 		// Clear diagram
 		e.diagram = &diagram.Diagram{}
 		e.selected = -1
-		
+
 	case "type":
 		// Change diagram type
 		if len(parts) > 1 {
@@ -2137,7 +2138,7 @@ func (e *TUIEditor) executeCommand(cmd string) {
 				e.diagram.Type = string(diagram.DiagramTypeSequence)
 				e.SaveHistory()
 			case "flowchart", "flow", "":
-				e.diagram.Type = string(diagram.DiagramTypeFlowchart)  // Empty means flowchart
+				e.diagram.Type = string(diagram.DiagramTypeFlowchart) // Empty means flowchart
 				e.SaveHistory()
 			default:
 				// Unknown type, ignore
@@ -2145,29 +2146,30 @@ func (e *TUIEditor) executeCommand(cmd string) {
 		}
 	}
 }
+
 // executeJumpAction executes the pending action after jump selection
 func (e *TUIEditor) executeJumpAction(nodeID int) {
 	// Save the action type before executing
 	e.previousJumpAction = e.jumpAction
-	
+
 	switch e.jumpAction {
 	case JumpActionSelect:
 		e.selected = nodeID
 		e.clearJumpLabels()
 		e.SetMode(ModeNormal)
-		
+
 	case JumpActionEdit:
 		e.selected = nodeID
 		e.clearJumpLabels()
 		e.SetMode(ModeEdit)
 		return // Don't reset to normal mode
-		
+
 	case JumpActionDelete:
 		e.DeleteNode(nodeID)
 		if e.selected == nodeID {
 			e.selected = -1
 		}
-		
+
 		// If in continuous delete mode, start another delete
 		if e.continuousDelete && (len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0) {
 			e.clearJumpLabels()
@@ -2178,18 +2180,18 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 			e.clearJumpLabels()
 			e.SetMode(ModeNormal)
 		}
-		
+
 	case JumpActionConnectFrom:
 		e.selected = nodeID
 		// Start second jump for target
 		e.startJump(JumpActionConnectTo)
 		return // Don't clear jump labels yet
-		
+
 	case JumpActionConnectTo:
 		if e.selected >= 0 {
 			e.AddConnection(e.selected, nodeID, "")
 		}
-		
+
 		// If in continuous connect mode, behavior depends on diagram type
 		if e.continuousConnect {
 			if e.diagram.Type == string(diagram.DiagramTypeSequence) {
@@ -2208,7 +2210,7 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 			e.clearJumpLabels()
 			e.SetMode(ModeNormal)
 		}
-		
+
 	case JumpActionHint:
 		// Enter hint menu for this node
 		e.editingHintNode = nodeID
@@ -2216,41 +2218,43 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		e.SetMode(ModeHintMenu)
 	}
 }
+
 // handleHelpKey processes keys in help mode
 func (e *TUIEditor) handleHelpKey(key rune) bool {
 	// Any key exits help mode
 	e.SetMode(ModeNormal)
 	return false
 }
+
 // handleJSONKey processes keys in JSON view mode
 func (e *TUIEditor) handleJSONKey(key rune) bool {
 	switch key {
 	case 27, 'q', 'J': // ESC, q, or J to return to diagram view
 		e.SetMode(ModeNormal)
-		
+
 	case 'E': // Edit in external editor (also works from JSON view)
 		// This will be handled by the main loop
 		return false
-		
+
 	case 'k', 'K': // vim-style up
 		e.ScrollJSON(-1)
-		
+
 	case 'j': // vim-style down
 		e.ScrollJSON(1)
-		
+
 	case 'u', 21: // Page up (Ctrl+U in vim)
 		e.ScrollJSON(-(e.height / 2))
-		
+
 	case 'd', 4: // Page down (Ctrl+D in vim)
 		e.ScrollJSON(e.height / 2)
-		
+
 	case 'g': // Go to top
 		e.jsonScrollOffset = 0
-		
+
 	case 'G': // Go to bottom
 		e.jsonScrollOffset = 999999 // Will be clamped in renderJSON
 	}
-	
+
 	return false
 }
 
@@ -2270,6 +2274,7 @@ func (e *TUIEditor) HandleHintMenuInput(key rune) {
 		e.SetMode(ModeNormal)
 	}
 }
+
 // handleNodeHintInput handles hint menu input for nodes
 func (e *TUIEditor) handleNodeHintInput(key rune) {
 	// Find the node
@@ -2280,20 +2285,20 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			break
 		}
 	}
-	
+
 	if node == nil {
 		e.editingHintNode = -1
 		e.SetMode(ModeNormal)
 		return
 	}
-	
+
 	// Initialize hints map if needed
 	if node.Hints == nil {
 		node.Hints = make(map[string]string)
 	}
-	
+
 	isSequence := e.diagram.Type == string(diagram.DiagramTypeSequence)
-	
+
 	switch key {
 	// Style options for nodes/boxes
 	case 'a': // Rounded (default) for flowcharts, Box style for sequence
@@ -2324,7 +2329,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			node.Hints["box-style"] = "thick"
 		}
 		e.SaveHistory()
-		
+
 	// Color options
 	case 'r': // Red
 		node.Hints["color"] = "red"
@@ -2347,7 +2352,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 	case 'w': // Default (no color)
 		delete(node.Hints, "color")
 		e.SaveHistory()
-		
+
 	// Text style options (only for flowcharts)
 	case 'o': // Toggle bold
 		if !isSequence {
@@ -2376,7 +2381,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			}
 			e.SaveHistory()
 		}
-		
+
 	// Shadow options (only for flowcharts)
 	case 'z': // Shadow southeast
 		if !isSequence {
@@ -2401,7 +2406,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			}
 			e.SaveHistory()
 		}
-	
+
 	// Lifeline style options (uppercase for sequence diagrams)
 	case 'A': // Solid lifeline (default)
 		if isSequence {
@@ -2423,7 +2428,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			node.Hints["lifeline-style"] = "double"
 			e.SaveHistory()
 		}
-	
+
 	// Lifeline color options (uppercase for sequence diagrams)
 	case 'R': // Red lifeline
 		if isSequence {
@@ -2460,7 +2465,7 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			delete(node.Hints, "lifeline-color")
 			e.SaveHistory()
 		}
-		
+
 	// Layout position hints (only for flowcharts)
 	case '1': // Top-left
 		if !isSequence {
@@ -2512,22 +2517,23 @@ func (e *TUIEditor) handleNodeHintInput(key rune) {
 			delete(node.Hints, "position")
 			e.SaveHistory()
 		}
-		
+
 	case 27: // ESC - exit to normal mode or back to jump mode
 		e.editingHintNode = -1
 		if e.previousJumpAction != 0 {
 			action := e.previousJumpAction
-			e.previousJumpAction = 0  // Clear it
-			e.startJump(action)  // Restart jump mode with the same action
+			e.previousJumpAction = 0 // Clear it
+			e.startJump(action)      // Restart jump mode with the same action
 		} else {
 			e.SetMode(ModeNormal)
 		}
 	case 13, 10: // Enter - exit to normal mode
 		e.editingHintNode = -1
-		e.previousJumpAction = 0  // Clear the previous action
+		e.previousJumpAction = 0 // Clear the previous action
 		e.SetMode(ModeNormal)
 	}
 }
+
 // handleConnectionHintInput handles hint menu input for connections
 func (e *TUIEditor) handleConnectionHintInput(key rune) {
 	if e.editingHintConn < 0 || e.editingHintConn >= len(e.diagram.Connections) {
@@ -2536,16 +2542,16 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 		e.SetMode(ModeNormal)
 		return
 	}
-	
+
 	conn := &e.diagram.Connections[e.editingHintConn]
-	
+
 	// Initialize hints map if needed
 	if conn.Hints == nil {
 		conn.Hints = make(map[string]string)
 	}
-	
+
 	isSequence := e.diagram.Type == string(diagram.DiagramTypeSequence)
-	
+
 	switch key {
 	// Style options for connections
 	case 'a': // Solid (default)
@@ -2562,7 +2568,7 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 			conn.Hints["style"] = "double"
 			e.SaveHistory()
 		}
-		
+
 	// Color options
 	case 'r': // Red
 		conn.Hints["color"] = "red"
@@ -2585,7 +2591,7 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 	case 'w': // White/default
 		delete(conn.Hints, "color") // Remove to use default
 		e.SaveHistory()
-		
+
 	// Text style options
 	case 'o': // Toggle bold
 		if conn.Hints["bold"] == "true" {
@@ -2601,7 +2607,7 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 			conn.Hints["italic"] = "true"
 		}
 		e.SaveHistory()
-		
+
 	// Flow direction hints (only for flowcharts)
 	case 'f': // Cycle through flow directions
 		if !isSequence {
@@ -2620,22 +2626,23 @@ func (e *TUIEditor) handleConnectionHintInput(key rune) {
 			}
 			e.SaveHistory()
 		}
-		
+
 	case 27: // ESC - exit to normal mode or back to jump mode
 		e.editingHintConn = -1
 		if e.previousJumpAction != 0 {
 			action := e.previousJumpAction
-			e.previousJumpAction = 0  // Clear it
-			e.startJump(action)  // Restart jump mode with the same action
+			e.previousJumpAction = 0 // Clear it
+			e.startJump(action)      // Restart jump mode with the same action
 		} else {
 			e.SetMode(ModeNormal)
 		}
 	case 13, 10: // Enter - exit to normal mode
 		e.editingHintConn = -1
-		e.previousJumpAction = 0  // Clear the previous action
+		e.previousJumpAction = 0 // Clear the previous action
 		e.SetMode(ModeNormal)
 	}
 }
+
 // GetHintMenuDisplay returns the display string for hint menu
 func (e *TUIEditor) GetHintMenuDisplay() string {
 	if e.editingHintNode >= 0 {
@@ -2645,6 +2652,7 @@ func (e *TUIEditor) GetHintMenuDisplay() string {
 	}
 	return ""
 }
+
 // getNodeHintMenuDisplay returns the hint menu display for a node
 func (e *TUIEditor) getNodeHintMenuDisplay() string {
 	// Find the node
@@ -2655,37 +2663,37 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 			break
 		}
 	}
-	
+
 	if node == nil {
 		return ""
 	}
-	
+
 	// Get current style, color, and shadow
 	style := "rounded"
 	if s, ok := node.Hints["style"]; ok {
 		style = s
 	}
-	
+
 	color := "default"
 	if c, ok := node.Hints["color"]; ok {
 		color = c
 	}
-	
+
 	bold := "off"
 	if b, ok := node.Hints["bold"]; ok && b == "true" {
 		bold = "on"
 	}
-	
+
 	italic := "off"
 	if i, ok := node.Hints["italic"]; ok && i == "true" {
 		italic = "on"
 	}
-	
+
 	textAlign := "left"
 	if a, ok := node.Hints["text-align"]; ok && a == "center" {
 		textAlign = "center"
 	}
-	
+
 	// Get node text
 	nodeText := "Node"
 	if len(node.Text) > 0 {
@@ -2694,27 +2702,27 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 			nodeText = nodeText[:20] + "..."
 		}
 	}
-	
+
 	// Build menu content
 	var menuLines []string
-	
+
 	// Different menu for sequence diagrams
 	if e.diagram.Type == string(diagram.DiagramTypeSequence) {
 		boxStyle := "rounded"
 		if s, ok := node.Hints["box-style"]; ok {
 			boxStyle = s
 		}
-		
+
 		lifelineStyle := "solid"
 		if s, ok := node.Hints["lifeline-style"]; ok {
 			lifelineStyle = s
 		}
-		
+
 		lifelineColor := "default"
 		if c, ok := node.Hints["lifeline-color"]; ok {
 			lifelineColor = c
 		}
-		
+
 		menuLines = []string{
 			"Participant: " + nodeText + " | box=" + boxStyle + "/" + color + " | lifeline=" + lifelineStyle + "/" + lifelineColor,
 			"Box: [a]Round [b]Sharp [c]Double [d]Thick | [r]Red [g]Green [y]Yellow [u]Blue [m]Magenta [n]Cyan [w]Clear",
@@ -2730,13 +2738,13 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 			"Position: [1-9]Grid [0]Auto | [ESC]Back [Enter]Done",
 		}
 	}
-	
+
 	// Use absolute positioning to draw menu at bottom of screen
 	var output strings.Builder
-	
+
 	// Move to bottom of screen (leave 5 lines for menu)
 	startLine := e.height - len(menuLines) - 1
-	
+
 	// Clear the menu area and draw menu
 	for i, line := range menuLines {
 		// Move to position and clear line
@@ -2751,43 +2759,44 @@ func (e *TUIEditor) getNodeHintMenuDisplay() string {
 		}
 		output.WriteString("\033[0m") // Reset color
 	}
-	
+
 	return output.String()
 }
+
 // getConnectionHintMenuDisplay returns the hint menu display for a connection
 func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 	if e.editingHintConn < 0 || e.editingHintConn >= len(e.diagram.Connections) {
 		return ""
 	}
-	
+
 	conn := &e.diagram.Connections[e.editingHintConn]
-	
+
 	// Get current style, color, and bold
 	style := "solid"
 	if s, ok := conn.Hints["style"]; ok {
 		style = s
 	}
-	
+
 	color := "default"
 	if c, ok := conn.Hints["color"]; ok {
 		color = c
 	}
-	
+
 	bold := "off"
 	if b, ok := conn.Hints["bold"]; ok && b == "true" {
 		bold = "on"
 	}
-	
+
 	italic := "off"
 	if i, ok := conn.Hints["italic"]; ok && i == "true" {
 		italic = "on"
 	}
-	
+
 	flow := "auto"
 	if f, ok := conn.Hints["flow"]; ok {
 		flow = f
 	}
-	
+
 	// Find connection info
 	var fromText, toText string
 	for _, node := range e.diagram.Nodes {
@@ -2804,10 +2813,10 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 			}
 		}
 	}
-	
+
 	// Build menu content
 	var menuLines []string
-	
+
 	// Different menu for sequence diagrams
 	if e.diagram.Type == string(diagram.DiagramTypeSequence) {
 		menuLines = []string{
@@ -2823,13 +2832,13 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 			"Options: [o]Bold(" + bold + ") [i]Italic(" + italic + ") [f]Flow(" + flow + ") | [ESC]Back [Enter]Done",
 		}
 	}
-	
+
 	// Use absolute positioning to draw menu at bottom of screen
 	var output strings.Builder
-	
+
 	// Move to bottom of screen (leave space for menu)
 	startLine := e.height - len(menuLines) - 1
-	
+
 	// Clear the menu area and draw menu
 	for i, line := range menuLines {
 		// Move to position and clear line
@@ -2844,6 +2853,6 @@ func (e *TUIEditor) getConnectionHintMenuDisplay() string {
 		}
 		output.WriteString("\033[0m") // Reset color
 	}
-	
+
 	return output.String()
 }

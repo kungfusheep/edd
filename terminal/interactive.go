@@ -3,8 +3,8 @@ package terminal
 import (
 	"bufio"
 	"bytes"
-	"edd/diagram"
 	"edd/demo"
+	"edd/diagram"
 	"edd/editor"
 	"encoding/json"
 	"errors"
@@ -34,7 +34,7 @@ func RunTUILoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettin
 	if err := setupTerminal(); err != nil {
 		return fmt.Errorf("failed to setup terminal: %w", err)
 	}
-	
+
 	// Ensure terminal is restored even on panic
 	defer func() {
 		restoreTerminal()
@@ -137,10 +137,10 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
-	
+
 	// Add newline at end of file (some editors expect this)
 	tmpFile.Write([]byte("\n"))
-	
+
 	// Ensure all data is written to disk
 	if err := tmpFile.Sync(); err != nil {
 		tmpFile.Close()
@@ -157,23 +157,23 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 	// First, completely clean the terminal state
 	// Exit alternate screen
 	fmt.Print("\033[?1049l")
-	
+
 	// Clear screen and reset cursor
-	fmt.Print("\033[2J")       // Clear entire screen
-	fmt.Print("\033[H")        // Move cursor to home
-	fmt.Print("\033[0m")       // Reset all attributes
-	fmt.Print("\033[?25h")     // Show cursor
-	
+	fmt.Print("\033[2J")   // Clear entire screen
+	fmt.Print("\033[H")    // Move cursor to home
+	fmt.Print("\033[0m")   // Reset all attributes
+	fmt.Print("\033[?25h") // Show cursor
+
 	// Restore terminal settings
 	restoreTerminal()
-	
+
 	// Ensure everything is flushed
 	os.Stdout.Sync()
-	
+
 	// Clear any pending input from stdin
 	// This prevents vim from receiving stray characters
 	clearStdinBuffer()
-	
+
 	// Small delay for terminal to process
 	time.Sleep(50 * time.Millisecond)
 
@@ -222,7 +222,7 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 
 	// Trim any trailing whitespace that might cause issues
 	editedData = bytes.TrimSpace(editedData)
-	
+
 	// If the file is empty after trimming, user cleared it - ignore
 	if len(editedData) == 0 {
 		return nil
@@ -234,7 +234,7 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 		// Save the invalid JSON for debugging
 		debugFile := filepath.Join(os.TempDir(), "edd-invalid.json")
 		ioutil.WriteFile(debugFile, editedData, 0644)
-		
+
 		// Try to provide more helpful error message
 		var syntaxErr *json.SyntaxError
 		if errors.As(err, &syntaxErr) {
@@ -242,7 +242,7 @@ func launchExternalEditor(tui *editor.TUIEditor) error {
 			lines := bytes.Split(editedData[:syntaxErr.Offset], []byte("\n"))
 			line := len(lines)
 			col := len(lines[line-1]) + 1
-			return fmt.Errorf("JSON syntax error at line %d, column %d: %v (saved to %s)", 
+			return fmt.Errorf("JSON syntax error at line %d, column %d: %v (saved to %s)",
 				line, col, err, debugFile)
 		}
 		return fmt.Errorf("invalid JSON after editing: %w (saved to %s)", err, debugFile)
@@ -270,7 +270,7 @@ func restoreTerminal() {
 	// Restore terminal to cooked mode with echo
 	cmd := exec.Command("sh", "-c", "stty echo cooked < /dev/tty")
 	cmd.Run()
-	
+
 	// Also ensure cursor is visible and colors are reset
 	fmt.Print("\033[?25h") // Show cursor
 	fmt.Print("\033[0m")   // Reset all attributes
@@ -282,13 +282,13 @@ func clearStdinBuffer() {
 	// This is more effective than trying to read pending bytes
 	cmd := exec.Command("stty", "-F", "/dev/tty", "sane")
 	cmd.Run()
-	
+
 	// Alternative approach: read with timeout
 	// Set non-blocking read with very short timeout
 	cmd = exec.Command("stty", "-icanon", "min", "0", "time", "1")
 	cmd.Stdin = os.Stdin
 	cmd.Run()
-	
+
 	// Read and discard any pending bytes
 	var discard [256]byte
 	for i := 0; i < 3; i++ { // Try a few times
@@ -308,14 +308,14 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 	}
 
 	// Switch to alternate screen buffer and hide cursor
-	fmt.Print("\033[?1049h") // Enter alternate screen
+	fmt.Print("\033[?1049h")            // Enter alternate screen
 	fmt.Print("\033[2J\033[H\033[?25l") // Clear and hide cursor
-	
+
 	// Ensure we restore on exit
 	defer func() {
 		fmt.Print("\033[?25h")   // Show cursor
 		fmt.Print("\033[?1049l") // Exit alternate screen
-		fmt.Print("\033[0m")      // Reset colors
+		fmt.Print("\033[0m")     // Reset colors
 	}()
 
 	// Get terminal size
@@ -324,10 +324,10 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 
 	// Create a channel for keyboard input with support for special keys
 	keyChan := make(chan editor.KeyEvent)
-	
+
 	// Create demo channel for demo playback
 	demoChan := make(chan editor.KeyEvent, 10)
-	
+
 	if demoSettings != nil {
 		// Demo mode - read from stdin with randomized timing
 		go func() {
@@ -348,7 +348,7 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 				time.Sleep(time.Duration(demoSettings.LineDelay) * time.Millisecond)
 			}
 		}()
-		
+
 		// Also read from keyboard (/dev/tty) to allow ESC to stop demo
 		tty, err := os.Open("/dev/tty")
 		if err == nil {
@@ -372,7 +372,7 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 			}
 		}()
 	}
-	
+
 	// Create demo player (for file-based demos)
 	demoPlayer := demo.NewPlayer(
 		func(r rune) { // onKey callback
@@ -525,7 +525,7 @@ func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *s
 		switch tui.GetMode() {
 		case editor.ModeInsert, editor.ModeEdit:
 			handleSpecialKeyInTextMode(tui, keyEvent.SpecialKey)
-		// Could add special key handling for other modes here
+			// Could add special key handling for other modes here
 		}
 	} else {
 		// Handle regular keys
@@ -559,11 +559,11 @@ func playDemoFile(player *demo.Player) error {
 			return fmt.Errorf("no demo.json found")
 		}
 	}
-	
+
 	if err := player.LoadScript(demoPath); err != nil {
 		return err
 	}
-	
+
 	return player.Play()
 }
 
@@ -586,24 +586,24 @@ func readSingleKey() rune {
 func readKeyWithMode(tui *editor.TUIEditor) editor.KeyEvent {
 	var b [1]byte
 	n, _ := os.Stdin.Read(b[:])
-	
+
 	if n == 0 {
 		return editor.KeyEvent{Rune: 0}
 	}
-	
+
 	// Only check for escape sequences in edit modes
 	mode := tui.GetMode()
 	if (mode == editor.ModeEdit || mode == editor.ModeInsert) && b[0] == 27 {
 		// In edit mode and got ESC - check for arrow keys
 		var seq [10]byte
 		seq[0] = b[0]
-		
+
 		// Set a very short timeout for reading the rest of the sequence
 		oldFlags, _ := fcntl(int(os.Stdin.Fd()), syscall.F_GETFL, 0)
 		syscall.SetNonblock(int(os.Stdin.Fd()), true)
 		n, _ := os.Stdin.Read(seq[1:])
 		fcntl(int(os.Stdin.Fd()), syscall.F_SETFL, oldFlags)
-		
+
 		if n > 0 {
 			// Parse escape sequence
 			return parseEscapeSequence(seq[:n+1])
@@ -611,7 +611,7 @@ func readKeyWithMode(tui *editor.TUIEditor) editor.KeyEvent {
 		// Just ESC
 		return editor.KeyEvent{Rune: 27}
 	}
-	
+
 	// Normal key
 	return editor.KeyEvent{Rune: rune(b[0])}
 }
@@ -629,11 +629,11 @@ func fcntl(fd int, cmd int, arg int) (int, error) {
 func readKeyWithEscape() editor.KeyEvent {
 	var b [1]byte
 	n, _ := os.Stdin.Read(b[:])
-	
+
 	if n == 0 {
 		return editor.KeyEvent{Rune: 0}
 	}
-	
+
 	// Just return the raw key - we'll handle escape sequences separately when needed
 	return editor.KeyEvent{Rune: rune(b[0])}
 }
@@ -642,24 +642,24 @@ func readKeyWithEscape() editor.KeyEvent {
 func readKeyWithArrowSupport() editor.KeyEvent {
 	var b [1]byte
 	n, _ := os.Stdin.Read(b[:])
-	
+
 	if n == 0 {
 		return editor.KeyEvent{Rune: 0}
 	}
-	
+
 	// Check for escape sequences
 	if b[0] == 27 { // ESC character
 		// Try to read more bytes for escape sequence
 		var seq [10]byte
 		seq[0] = b[0]
-		
+
 		// Use a select with a very short timeout to check if more data is immediately available
 		done := make(chan int)
 		go func() {
 			n, _ := os.Stdin.Read(seq[1:])
 			done <- n
 		}()
-		
+
 		select {
 		case n := <-done:
 			if n > 0 {
@@ -669,10 +669,10 @@ func readKeyWithArrowSupport() editor.KeyEvent {
 		case <-time.After(10 * time.Millisecond):
 			// No more bytes quickly available, it's just ESC
 		}
-		
+
 		return editor.KeyEvent{Rune: 27} // Just ESC
 	}
-	
+
 	return editor.KeyEvent{Rune: rune(b[0])}
 }
 
@@ -680,7 +680,7 @@ func readKeyWithArrowSupport() editor.KeyEvent {
 func parseEscapeSequence(seq []byte) editor.KeyEvent {
 	// Handle common escape sequences
 	seqStr := string(seq)
-	
+
 	// Arrow keys
 	if seqStr == "\033[A" || seqStr == "\033OA" {
 		return editor.KeyEvent{SpecialKey: editor.KeyArrowUp}
@@ -694,7 +694,7 @@ func parseEscapeSequence(seq []byte) editor.KeyEvent {
 	if seqStr == "\033[D" || seqStr == "\033OD" {
 		return editor.KeyEvent{SpecialKey: editor.KeyArrowLeft}
 	}
-	
+
 	// Home/End keys
 	if seqStr == "\033[H" || seqStr == "\033[1~" || seqStr == "\033OH" {
 		return editor.KeyEvent{SpecialKey: editor.KeyHome}
@@ -702,13 +702,13 @@ func parseEscapeSequence(seq []byte) editor.KeyEvent {
 	if seqStr == "\033[F" || seqStr == "\033[4~" || seqStr == "\033OF" {
 		return editor.KeyEvent{SpecialKey: editor.KeyEnd}
 	}
-	
+
 	// Alt+Backspace (word delete) - various terminals send different sequences
 	if len(seq) == 2 && seq[0] == 27 && seq[1] == 127 {
 		// Alt+Backspace - treat as Ctrl+W (delete word backward)
 		return editor.KeyEvent{Rune: 23} // Ctrl+W
 	}
-	
+
 	// If we don't recognize it, return ESC
 	return editor.KeyEvent{Rune: 27}
 }
@@ -729,10 +729,10 @@ func positionCursor(tui *editor.TUIEditor) {
 
 	// Get cursor position in text
 	state := tui.GetState()
-	
+
 	// Calculate actual cursor position on screen using line and column
 	// Node text starts at X+2, Y+1 (inside the box)
-	cursorX := pos.X + 2 + state.CursorCol + 1 // +1 for terminal indexing
+	cursorX := pos.X + 2 + state.CursorCol + 1  // +1 for terminal indexing
 	cursorY := pos.Y + 1 + state.CursorLine + 1 // +1 for terminal indexing
 
 	// Move cursor to position and show it
@@ -759,7 +759,6 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 	d := tui.GetDiagram()
 	termHeight := tui.GetTerminalHeight()
 
-
 	// Buffer all output to prevent flicker
 	var buf bytes.Buffer
 
@@ -775,7 +774,7 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 			if path, ok := connectionPaths[connIndex]; ok && len(path.Points) > 1 {
 				// Place label at different percentages for each connection
 				percentages := []float64{0.25, 0.40, 0.55, 0.70, 0.85}
-				percentage := percentages[connIndex % len(percentages)]
+				percentage := percentages[connIndex%len(percentages)]
 
 				labelIndex := int(float64(len(path.Points)) * percentage)
 				if labelIndex < 1 {
@@ -789,11 +788,11 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 
 				// Try to find a clear spot near this point
 				offsets := []struct{ dx, dy int }{
-					{0, 0},   // On the line (preferred - labels should be on arrows)
-					{1, 0},   // Right
-					{-1, 0},  // Left
-					{0, -1},  // Above
-					{0, 1},   // Below
+					{0, 0},  // On the line (preferred - labels should be on arrows)
+					{1, 0},  // Right
+					{-1, 0}, // Left
+					{0, -1}, // Above
+					{0, 1},  // Below
 				}
 
 				var labelX, labelY int
@@ -821,13 +820,13 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 				// The path points are in DIAGRAM coordinates, need viewport conversion
 				scrollOffset := tui.GetDiagramScrollOffset()
 				viewportY := 0
-				viewportX := labelX + 1  // X doesn't need scroll adjustment
+				viewportX := labelX + 1 // X doesn't need scroll adjustment
 
 				// Convert Y from diagram to viewport coordinates
-				if d.Type == "sequence" && scrollOffset > 7 {
+				if d.Type == "sequence" && scrollOffset > 0 {
 					// With sticky headers, content area starts after headers
 					// Headers take 8 lines total (not 9)
-					headerLines := 7  // Reduced from 8 to move labels up by 1
+					headerLines := 7 // Reduced from 8 to move labels up by 1
 					viewportY = headerLines + 1 + (labelY - scrollOffset)
 				} else {
 					// Normal scrolling
@@ -945,7 +944,7 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 
 	// Show node/connection count
 	d := tui.GetDiagram()
-	
+
 	// Check if we're editing a connection
 	if tui.GetMode() == editor.ModeEdit && tui.GetSelectedConnection() >= 0 {
 		connIdx := tui.GetSelectedConnection()
@@ -969,7 +968,7 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 	} else {
 		mode := tui.GetMode()
 		modeStr := mode.String()
-		
+
 		// Add indicator for continuous modes
 		if mode == editor.ModeJump && tui.GetJumpAction() == editor.JumpActionConnectFrom {
 			if tui.IsContinuousConnect() {
@@ -980,14 +979,14 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 				modeStr = "DELETE (continuous)"
 			}
 		}
-		
+
 		// Get history status
 		histCurrent, histTotal := tui.GetHistoryStats()
 		historyStr := ""
 		if histTotal > 1 {
 			historyStr = fmt.Sprintf(" | History: %d/%d", histCurrent, histTotal)
 		}
-		
+
 		fmt.Printf("Nodes: %d | Connections: %d | Mode: %s%s",
 			len(d.Nodes),
 			len(d.Connections),
@@ -997,66 +996,27 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 }
 
 func handleNormalMode(tui *editor.TUIEditor, key rune, filename *string) bool {
-	// Debug: Log key presses in normal mode
-	if f, err := os.OpenFile("/tmp/edd_startup.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "handleNormalMode: key='%c' (%d)\n", key, key)
-		f.Close()
-	}
-
+	// Special cases that need to be handled at the terminal level
 	switch key {
-	case 'q', 3: // q or Ctrl+C
-		return true // Exit
-	case 'a': // Add node
-		tui.StartAddNode()
-	case 'c': // Connect (single)
-		tui.StartConnect()
-	case 'C': // Connect (continuous)
-		tui.StartContinuousConnect()
-	case 'd': // Delete (single)
-		tui.StartDelete()
-	case 'D': // Delete (continuous)
-		tui.StartContinuousDelete()
-	case 'e': // Edit
-		tui.StartEdit()
-	case 'E': // Edit in external editor
+	case 'E': // Edit in external editor - needs file system access
 		// Show loading message
 		fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
 		fmt.Print("\033[93mLaunching external editor...\033[0m")
-		
-		if err := launchExternalEditor(tui); err != nil {
+		err := launchExternalEditor(tui)
+		if err != nil {
 			// Show error briefly
 			fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
 			fmt.Printf("\033[91mError: %v\033[0m", err)
 			time.Sleep(2 * time.Second)
 		}
-	case 'H': // Edit connection hints
-		tui.StartHintEdit()
-	case 'j': // JSON view
-		tui.SetMode(editor.ModeJSON)
-	case 't': // Toggle diagram type
-		tui.ToggleDiagramType()
-	case 'u': // Undo
-		tui.Undo()
-	case 18: // Ctrl+R for redo
-		tui.Redo()
-	case 'J': // Scroll down
-		tui.ScrollDiagram(tui.GetTerminalHeight() / 2)
-	case 'K': // Scroll up
-		tui.ScrollDiagram(-tui.GetTerminalHeight() / 2)
-	case 21: // Ctrl+U - scroll up half page
-		tui.ScrollDiagram(-tui.GetTerminalHeight() / 2)
-	case 4: // Ctrl+D - scroll down half page
-		tui.ScrollDiagram(tui.GetTerminalHeight() / 2)
-	case 'g': // Go to top
-		tui.ScrollToTop()
-	case 'G': // Go to bottom
-		tui.ScrollToBottom()
-	case ':': // Command mode
-		tui.StartCommand()
-	case '?', 'h': // Help
+		return false
+	case '?', 'h': // Help - terminal-specific display
 		showHelp()
+		return false
 	}
-	return false
+
+	// Delegate to the TUIEditor's single source of truth
+	return tui.HandleKey(key)
 }
 
 func handleTextMode(tui *editor.TUIEditor, key rune) {
@@ -1089,11 +1049,11 @@ func handleJSONMode(tui *editor.TUIEditor, key rune) {
 	if key == 'E' {
 		// Exit JSON mode first
 		tui.SetMode(editor.ModeNormal)
-		
+
 		// Show loading message
 		fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
 		fmt.Print("\033[93mLaunching external editor...\033[0m")
-		
+
 		if err := launchExternalEditor(tui); err != nil {
 			// Show error briefly
 			fmt.Print("\033[999;1H\033[K") // Go to bottom and clear line
@@ -1102,7 +1062,7 @@ func handleJSONMode(tui *editor.TUIEditor, key rune) {
 		}
 		return
 	}
-	
+
 	// The TUI editor handles other JSON mode keys internally
 	tui.HandleJSONInput(key)
 }
@@ -1213,13 +1173,13 @@ func showHelp() {
 	fmt.Println("  e     - Edit node/connection text")
 	fmt.Println("  E     - Edit JSON in $EDITOR")
 	fmt.Println("  H     - Edit connection hints (style/color)")
-	fmt.Println("  j     - Toggle JSON view")
+	fmt.Println("  J     - Toggle JSON view")
 	fmt.Println("  u     - Undo")
 	fmt.Println("  Ctrl+R - Redo")
 	fmt.Println()
 	fmt.Println("  Scrolling (for large diagrams):")
-	fmt.Println("  J     - Scroll down half page")
-	fmt.Println("  K     - Scroll up half page")
+	fmt.Println("  j     - Scroll down (vim-style)")
+	fmt.Println("  k     - Scroll up (vim-style)")
 	fmt.Println("  g     - Go to top")
 	fmt.Println("  G     - Go to bottom")
 	fmt.Println("  Ctrl+U - Scroll up half page")
@@ -1268,4 +1228,3 @@ func showHelp() {
 	// Clear screen completely after help is dismissed
 	fmt.Print("\033[2J\033[H")
 }
-
