@@ -93,7 +93,7 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		editingHintNode:     -1, // Initialize to -1 (no node being edited)
 		jsonScrollOffset:    0,
 		diagramScrollOffset: 0,                    // Initialize diagram scroll offset
-		history:             NewStructHistory(50), // 50 states max (optimized)
+		history:             NewStructHistory(500), // 500 states max for extensive editing
 		connectFrom:         -1,                   // Initialize test-only field
 	}
 
@@ -552,6 +552,15 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 
 // AddConnection adds a connection between two nodes
 func (e *TUIEditor) AddConnection(from, to int, label string) {
+	// Debug logging
+	if f, err := os.OpenFile("/tmp/edd_connections.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		fmt.Fprintf(f, "\n[%s] AddConnection called: from=%d, to=%d, label=%s\n",
+			time.Now().Format("15:04:05"), from, to, label)
+		fmt.Fprintf(f, "  Current connections count: %d\n", len(e.diagram.Connections))
+		fmt.Fprintf(f, "  Diagram type: %s\n", e.diagram.Type)
+		defer f.Close()
+	}
+
 	// In sequence diagrams, allow multiple messages between same participants
 	// In flowcharts, check for duplicate connections
 	if e.diagram.Type != string(diagram.DiagramTypeSequence) {
@@ -559,7 +568,9 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		for _, existing := range e.diagram.Connections {
 			if existing.From == from && existing.To == to {
 				// Connection already exists in this direction
-				// TODO: Consider providing feedback to user
+				if f, err := os.OpenFile("/tmp/edd_connections.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "  REJECTED: Duplicate connection in flowchart\n")
+				}
 				return
 			}
 		}
@@ -576,6 +587,10 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		}
 	}
 
+	if f, err := os.OpenFile("/tmp/edd_connections.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "  Generated ID: %d\n", connID)
+	}
+
 	conn := diagram.Connection{
 		ID:    connID,
 		From:  from,
@@ -583,6 +598,10 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		Label: label,
 	}
 	e.diagram.Connections = append(e.diagram.Connections, conn)
+
+	if f, err := os.OpenFile("/tmp/edd_connections.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "  SUCCESS: Connection added, new count: %d\n", len(e.diagram.Connections))
+	}
 
 	// Mark diagram as changed to trigger auto-scroll
 	e.diagramChanged = true
@@ -925,30 +944,48 @@ func (e *TUIEditor) assignJumpLabels() {
 
 	labelIndex := 0
 
-	// Assign labels only to visible nodes
-	for _, node := range e.diagram.Nodes {
-		if labelIndex >= len(jumpChars) {
-			break
-		}
-
-		isVisible := e.isNodeVisible(node.ID)
-		if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-			pos, hasPos := e.nodePositions[node.ID]
-			if hasPos {
-				fmt.Fprintf(f, "  Node %d: pos.Y=%d, visible=%v, labelIndex=%d\n", node.ID, pos.Y, isVisible, labelIndex)
-			} else {
-				fmt.Fprintf(f, "  Node %d: no position, visible=%v, labelIndex=%d\n", node.ID, isVisible, labelIndex)
+	// Special handling for sequence diagrams in connect mode
+	// Participants are always visible at the top (sticky header)
+	if e.diagram.Type == "sequence" &&
+	   (e.jumpAction == JumpActionConnectFrom || e.jumpAction == JumpActionConnectTo) {
+		// Always assign labels to all participants
+		for _, node := range e.diagram.Nodes {
+			if labelIndex >= len(jumpChars) {
+				break
 			}
-			f.Close()
-		}
-
-		if isVisible {
 			e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
 			if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-				fmt.Fprintf(f, "    -> Assigned label '%c' to node %d\n", jumpChars[labelIndex], node.ID)
+				fmt.Fprintf(f, "  Sequence participant %d -> label '%c' (always visible)\n", node.ID, jumpChars[labelIndex])
 				f.Close()
 			}
 			labelIndex++
+		}
+	} else {
+		// Original logic - assign labels only to visible nodes
+		for _, node := range e.diagram.Nodes {
+			if labelIndex >= len(jumpChars) {
+				break
+			}
+
+			isVisible := e.isNodeVisible(node.ID)
+			if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+				pos, hasPos := e.nodePositions[node.ID]
+				if hasPos {
+					fmt.Fprintf(f, "  Node %d: pos.Y=%d, visible=%v, labelIndex=%d\n", node.ID, pos.Y, isVisible, labelIndex)
+				} else {
+					fmt.Fprintf(f, "  Node %d: no position, visible=%v, labelIndex=%d\n", node.ID, isVisible, labelIndex)
+				}
+				f.Close()
+			}
+
+			if isVisible {
+				e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
+				if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "    -> Assigned label '%c' to node %d\n", jumpChars[labelIndex], node.ID)
+					f.Close()
+				}
+				labelIndex++
+			}
 		}
 	}
 
@@ -1551,9 +1588,18 @@ func (e *TUIEditor) StartAddNode() {
 
 // StartConnect begins connection mode (single connection)
 func (e *TUIEditor) StartConnect() {
+	if f, err := os.OpenFile("/tmp/edd_connect.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "  StartConnect called, nodes=%d\n", len(e.diagram.Nodes))
+		f.Close()
+	}
 	if len(e.diagram.Nodes) >= 2 {
 		e.continuousConnect = false
 		e.startJump(JumpActionConnectFrom)
+	} else {
+		if f, err := os.OpenFile("/tmp/edd_connect.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "  NOT ENOUGH NODES! Need >=2, have %d\n", len(e.diagram.Nodes))
+			f.Close()
+		}
 	}
 }
 
@@ -1855,9 +1901,19 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 		e.StartAddNode()
 
 	case 'c': // Connect (single)
+		if f, err := os.OpenFile("/tmp/edd_connect.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			fmt.Fprintf(f, "\n[%s] 'c' key pressed\n", time.Now().Format("15:04:05"))
+			fmt.Fprintf(f, "  Mode: %v, Nodes: %d, Connections: %d\n", e.mode, len(e.diagram.Nodes), len(e.diagram.Connections))
+			f.Close()
+		}
 		e.StartConnect()
 
 	case 'C': // Connect (continuous)
+		if f, err := os.OpenFile("/tmp/edd_connect.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			fmt.Fprintf(f, "\n[%s] 'C' key pressed\n", time.Now().Format("15:04:05"))
+			fmt.Fprintf(f, "  Mode: %v, Nodes: %d, Connections: %d\n", e.mode, len(e.diagram.Nodes), len(e.diagram.Connections))
+			f.Close()
+		}
 		e.StartContinuousConnect()
 
 	case 'd': // Delete (single)

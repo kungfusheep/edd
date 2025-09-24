@@ -14,7 +14,7 @@ type StructHistory struct {
 // NewStructHistory creates a new struct-based history manager
 func NewStructHistory(max int) *StructHistory {
 	if max <= 0 {
-		max = 50
+		max = 500
 	}
 	return &StructHistory{
 		states:  make([]*diagram.Diagram, 0, max),
