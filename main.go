@@ -25,6 +25,9 @@ func main() {
 		showObstacles = flag.Bool("show-obstacles", false, "Show virtual obstacles as dots in standard rendering")
 		help          = flag.Bool("help", false, "Show help")
 
+		// Diagram type flag
+		diagramType = flag.String("type", "", "Initial diagram type: sequence or box (default: box)")
+
 		// Export flags
 		format     = flag.String("format", "ascii", "Export format: ascii, mermaid, plantuml")
 		outputFile = flag.String("o", "", "Output file (default: stdout)")
@@ -80,7 +83,7 @@ func main() {
 			}
 		}
 
-		err := runInteractiveMode(filename, demoSettings)
+		err := runInteractiveMode(filename, *diagramType, demoSettings)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -219,7 +222,7 @@ func loadDiagram(filename string) (*diagram.Diagram, error) {
 
 // runInteractiveMode launches the TUI editor with optional demo mode
 // This is the main entry point for interactive editing
-func runInteractiveMode(filename string, demoSettings *terminal.DemoSettings) error {
+func runInteractiveMode(filename string, diagramType string, demoSettings *terminal.DemoSettings) error {
 	// Create the real renderer
 	renderer := editor.NewRealRenderer()
 
@@ -231,6 +234,18 @@ func runInteractiveMode(filename string, demoSettings *terminal.DemoSettings) er
 		d, err := loadInteractiveDiagram(filename)
 		if err != nil {
 			return fmt.Errorf("failed to load diagram: %w", err)
+		}
+		tui.SetDiagram(d)
+	} else if diagramType != "" {
+		// No file provided, but user specified a diagram type
+		d := &diagram.Diagram{
+			Type: diagramType,
+			Nodes: []diagram.Node{},
+			Connections: []diagram.Connection{},
+		}
+		// Validate the type
+		if diagramType != "sequence" && diagramType != "box" {
+			return fmt.Errorf("invalid diagram type: %s (must be 'sequence' or 'box')", diagramType)
 		}
 		tui.SetDiagram(d)
 	}
