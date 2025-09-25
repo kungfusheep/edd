@@ -191,18 +191,74 @@ func (r *SequenceRenderer) drawLifelines(d *diagram.Diagram, positions *layout.S
 	return nil
 }
 
-// drawMessages draws horizontal arrows between lifelines
+// ActivationPeriod represents when a participant is active
+type ActivationPeriod struct {
+	ParticipantID int
+	StartY        int
+	EndY          int
+	Depth         int // For nested activations
+}
+
+// drawMessages draws horizontal arrows between lifelines and manages activations
 func (r *SequenceRenderer) drawMessages(d *diagram.Diagram, positions *layout.SequencePositions, c Canvas) error {
+	// Track active participants and their activation start positions
+	activations := make(map[int][]int) // participantID -> stack of activation Y positions
+	var allActivations []ActivationPeriod
+
 	for _, msg := range positions.Messages {
 		// Find the connection to get its hints
+		var conn *diagram.Connection
 		var connHints map[string]string
-		for _, conn := range d.Connections {
-			if conn.ID == msg.ConnectionID {
+		for j := range d.Connections {
+			if d.Connections[j].ID == msg.ConnectionID {
+				conn = &d.Connections[j]
 				connHints = conn.Hints
 				break
 			}
 		}
-		
+
+		// Handle activation/deactivation based on hints
+		if conn != nil && connHints != nil {
+			// Check for activation of target
+			if connHints["activate"] == "true" {
+				// Start activation for the target participant
+				targetID := conn.To
+				if activations[targetID] == nil {
+					activations[targetID] = []int{}
+				}
+				activations[targetID] = append(activations[targetID], msg.Y)
+			}
+
+			// Check for activation of source (orchestrator pattern)
+			if connHints["activate_source"] == "true" {
+				// Start activation for the source participant (the orchestrator)
+				sourceID := conn.From
+				if activations[sourceID] == nil {
+					activations[sourceID] = []int{}
+				}
+				activations[sourceID] = append(activations[sourceID], msg.Y)
+			}
+
+			// Check for deactivation
+			if connHints["deactivate"] == "true" {
+				// End activation for the source participant
+				sourceID := conn.From
+				if stack, exists := activations[sourceID]; exists && len(stack) > 0 {
+					startY := stack[len(stack)-1]
+					// Pop from stack
+					activations[sourceID] = stack[:len(stack)-1]
+
+					// Record the activation period
+					allActivations = append(allActivations, ActivationPeriod{
+						ParticipantID: sourceID,
+						StartY:        startY,
+						EndY:          msg.Y + 1, // Extend slightly past the message
+						Depth:         len(stack) - 1,
+					})
+				}
+			}
+		}
+
 		// Draw the message arrow
 		if msg.FromX < msg.ToX {
 			// Left to right
@@ -215,8 +271,58 @@ func (r *SequenceRenderer) drawMessages(d *diagram.Diagram, positions *layout.Se
 			r.drawSelfMessage(c, msg.FromX, msg.Y, msg.Label, connHints)
 		}
 	}
-	
+
+	// Close any remaining open activations at the end
+	// But limit them to a reasonable height (not the entire diagram)
+	for participantID, stack := range activations {
+		for depth, startY := range stack {
+			// Find the last message Y position for this participant
+			lastY := startY + 10 // Default to 10 lines if no messages found
+			for _, msg := range positions.Messages {
+				if msg.Y > lastY && msg.Y < startY+100 { // Cap at 100 lines
+					lastY = msg.Y
+				}
+			}
+
+			allActivations = append(allActivations, ActivationPeriod{
+				ParticipantID: participantID,
+				StartY:        startY,
+				EndY:          lastY + 2, // Extend slightly past last message
+				Depth:         depth,
+			})
+		}
+	}
+
+	// Draw all activation boxes
+	r.drawActivationBoxes(allActivations, positions, c)
+
 	return nil
+}
+
+// drawActivationBoxes draws the activation boxes on the lifelines
+func (r *SequenceRenderer) drawActivationBoxes(activations []ActivationPeriod, positions *layout.SequencePositions, c Canvas) {
+	for _, activation := range activations {
+		// Get the participant's lifeline X position
+		participantPos, exists := positions.Participants[activation.ParticipantID]
+		if !exists {
+			continue
+		}
+
+		lifelineX := participantPos.LifelineX
+
+		// Sanity check the Y coordinates
+		if activation.StartY < 0 || activation.EndY > 1000 || activation.EndY <= activation.StartY {
+			continue // Skip invalid activations
+		}
+
+		// Draw activation as a box around the lifeline
+		for y := activation.StartY; y < activation.EndY && y < activation.StartY+50; y++ { // Cap at 50 lines max
+			// Draw a box around the lifeline for visibility
+			c.Set(diagram.Point{X: lifelineX - 1, Y: y}, '█') // Left side
+			c.Set(diagram.Point{X: lifelineX, Y: y}, '█')     // Center (overwrite lifeline)
+			c.Set(diagram.Point{X: lifelineX + 1, Y: y}, '█') // Right side
+		}
+	}
 }
 
 // mergeJunctionChar determines the correct junction character when lines meet

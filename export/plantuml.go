@@ -92,6 +92,10 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 			continue
 		}
 
+		// Check for activation/deactivation hints
+		activateTarget := false
+		deactivateSource := false
+
 		// Determine arrow type and color based on hints
 		arrowStyle := "-"
 		arrowHead := ">"
@@ -106,6 +110,18 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 			if color := hints["color"]; color != "" {
 				colorPart = fmt.Sprintf("[#%s]", e.mapColorToHex(color))
 			}
+			// Check activation hints
+			if hints["activate"] == "true" {
+				activateTarget = true
+			}
+			if hints["deactivate"] == "true" {
+				deactivateSource = true
+			}
+		}
+
+		// Add deactivate before the message if needed
+		if deactivateSource {
+			sb.WriteString(fmt.Sprintf("deactivate %s\n", fromID))
 		}
 
 		// Construct the full arrow with color in the middle
@@ -113,6 +129,7 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 
 		// Handle self-loops
 		if conn.From == conn.To {
+			// For self-calls with activation, PlantUML handles it automatically
 			if conn.Label != "" {
 				sb.WriteString(fmt.Sprintf("%s %s %s : %s\n", fromID, arrow, fromID, conn.Label))
 			} else {
@@ -124,6 +141,11 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 			} else {
 				sb.WriteString(fmt.Sprintf("%s %s %s\n", fromID, arrow, toID))
 			}
+		}
+
+		// Add activate after the message if needed
+		if activateTarget {
+			sb.WriteString(fmt.Sprintf("activate %s\n", toID))
 		}
 	}
 

@@ -552,6 +552,224 @@ func (e *TUIEditor) DeleteNode(nodeID int) {
 	e.SaveHistory()
 }
 
+// isReturnConnection checks if a connection from B to A is likely a return/response
+// to an earlier connection from A to B (for auto-applying dashed style in sequence diagrams)
+func (e *TUIEditor) isReturnConnection(from, to int) bool {
+	// Only apply this logic to sequence diagrams
+	if e.diagram.Type != "sequence" {
+		return false
+	}
+
+	// Look backwards through existing connections for an unreturned call from 'to' to 'from'
+	returnCount := 0
+	for i := len(e.diagram.Connections) - 1; i >= 0; i-- {
+		conn := e.diagram.Connections[i]
+
+		// Found a call from the node we're returning to
+		if conn.From == to && conn.To == from {
+			// Check if this call already has a return (is it dashed?)
+			if conn.Hints == nil || conn.Hints["style"] != "dashed" {
+				// This looks like a call that needs a return
+				return true
+			}
+		}
+
+		// If we see a return from 'from' to 'to', increment counter
+		// This helps handle multiple call-return pairs
+		if conn.From == from && conn.To == to {
+			if conn.Hints != nil && conn.Hints["style"] == "dashed" {
+				returnCount++
+			}
+		}
+	}
+
+	return false
+}
+
+// hasOpenCallFrom checks if 'to' has an open call from 'from' that hasn't been responded to
+func (e *TUIEditor) hasOpenCallFrom(from, to int) bool {
+	// Only for sequence diagrams
+	if e.diagram.Type != "sequence" {
+		return false
+	}
+
+	// Track open calls using a simple approach:
+	// Look through existing connections to see if 'to' has received from 'from'
+	// without responding back yet
+
+	callDepth := 0
+	for _, conn := range e.diagram.Connections {
+		if conn.From == from && conn.To == to {
+			// Found a call from 'from' to 'to'
+			callDepth++
+		} else if conn.From == to && conn.To == from {
+			// Found a response from 'to' back to 'from'
+			callDepth--
+		}
+	}
+
+	// If callDepth > 0, there are unanswered calls
+	return callDepth > 0
+}
+
+// detectActivation determines if a connection should trigger activation/deactivation
+// based on behavioral patterns (not keywords)
+// Returns (shouldActivateTarget, shouldDeactivateSource)
+func (e *TUIEditor) detectActivation(from, to int, label string) (bool, bool) {
+	// Only apply to sequence diagrams
+	if e.diagram.Type != "sequence" {
+		return false, false
+	}
+
+	// Debug logging
+	if f, err := os.OpenFile("/tmp/edd_activation.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		defer f.Close()
+		fmt.Fprintf(f, "\n[%s] detectActivation: from=%d, to=%d, label=%s\n",
+			time.Now().Format("15:04:05"), from, to, label)
+		fmt.Fprintf(f, "  Total connections: %d\n", len(e.diagram.Connections))
+	}
+
+	// Find the most recent unresponded incoming REQUEST to 'from'
+	// (not just any incoming message, but one that represents a request needing orchestration)
+	var hasUnrespondedIncoming bool
+	var incomingFrom int = -1
+	var incomingIndex int = -1
+
+	for i := len(e.diagram.Connections) - 1; i >= 0; i-- {
+		if e.diagram.Connections[i].To == from {
+			caller := e.diagram.Connections[i].From
+			// Check if we've already responded to this caller
+			hasResponded := false
+			for j := i + 1; j < len(e.diagram.Connections); j++ {
+				if e.diagram.Connections[j].From == from && e.diagram.Connections[j].To == caller {
+					hasResponded = true
+					break
+				}
+			}
+			if !hasResponded {
+				// Check if this is likely a request (not a response from a downstream call)
+				isLikelyRequest := false
+
+				// Special case: first node (Client) always makes requests, never responses
+				if caller == 0 {
+					isLikelyRequest = true
+				} else {
+					// Check if this is a response to an unresponded call from 'from' to 'caller'
+					// We count all calls and responses to match request-response pairs
+					hasUnrespondedCallBefore := false
+
+					// Count interactions: calls from 'from' to 'caller' and responses back
+					callCount := 0
+					responseCount := 0
+
+					// Count all calls and responses BEFORE this incoming at index i
+					for j := 0; j < i; j++ {
+						if e.diagram.Connections[j].From == from && e.diagram.Connections[j].To == caller {
+							callCount++
+						} else if e.diagram.Connections[j].From == caller && e.diagram.Connections[j].To == from {
+							responseCount++
+						}
+					}
+
+					// If there are more calls than responses, this incoming is likely completing a pair
+					if callCount > responseCount {
+						hasUnrespondedCallBefore = true
+						if f, err := os.OpenFile("/tmp/edd_activation.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+							fmt.Fprintf(f, "    Before index %d: %d calls from %d->%d, %d responses. This is a RESPONSE.\n",
+								i, callCount, from, caller, responseCount)
+							f.Close()
+						}
+					} else {
+						if f, err := os.OpenFile("/tmp/edd_activation.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+							fmt.Fprintf(f, "    Before index %d: %d calls from %d->%d, %d responses. This is a REQUEST.\n",
+								i, callCount, from, caller, responseCount)
+							f.Close()
+						}
+					}
+
+					// If we don't have an unresponded call before this, it's likely a request
+					if !hasUnrespondedCallBefore {
+						isLikelyRequest = true
+					}
+				}
+
+				if f, err := os.OpenFile("/tmp/edd_activation.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "    Incoming from %d: isLikelyRequest=%v\n",
+						caller, isLikelyRequest)
+					f.Close()
+				}
+
+				if isLikelyRequest {
+					hasUnrespondedIncoming = true
+					incomingFrom = caller
+					incomingIndex = i
+					break
+				}
+			}
+		}
+	}
+
+	// Count outgoing calls made AFTER receiving the unresponded incoming
+	// (these are the calls made while processing the request)
+	outgoingCallCount := 0
+	if hasUnrespondedIncoming && incomingIndex >= 0 {
+		for i := incomingIndex + 1; i < len(e.diagram.Connections); i++ {
+			conn := e.diagram.Connections[i]
+			if conn.From == from && conn.To != incomingFrom {
+				outgoingCallCount++
+			}
+		}
+	}
+
+	// Log the detection state
+	if f, err := os.OpenFile("/tmp/edd_activation.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "  Detection state: hasUnrespondedIncoming=%v, incomingFrom=%d, outgoingCallCount=%d\n",
+			hasUnrespondedIncoming, incomingFrom, outgoingCallCount)
+		fmt.Fprintf(f, "  Current target: to=%d, will be 2nd call=%v\n", to, (to != incomingFrom && outgoingCallCount == 1))
+		f.Close()
+	}
+
+	// If this connection will be the 2nd downstream call while having an unresponded incoming
+	if hasUnrespondedIncoming && to != incomingFrom && outgoingCallCount == 1 {
+		// Find the first outgoing call AFTER the incoming request and retroactively mark it for activation
+		for i := incomingIndex + 1; i < len(e.diagram.Connections); i++ {
+			if e.diagram.Connections[i].From == from && e.diagram.Connections[i].To != incomingFrom {
+				if e.diagram.Connections[i].Hints == nil {
+					e.diagram.Connections[i].Hints = make(map[string]string)
+				}
+				e.diagram.Connections[i].Hints["activate_source"] = "true"
+				if f, err := os.OpenFile("/tmp/edd_activation.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "  ACTIVATED: Marked connection %d for activation\n", i)
+					f.Close()
+				}
+				break
+			}
+		}
+		return false, false
+	}
+
+	// Check for deactivation: when 'from' responds back to someone who called it
+	// after having made 2+ downstream calls
+	if hasUnrespondedIncoming && to == incomingFrom {
+		// This is a response back to the caller
+		// Check if 'from' made 2+ downstream calls AFTER receiving the request
+		downstreamCalls := 0
+		for i := incomingIndex + 1; i < len(e.diagram.Connections); i++ {
+			conn := e.diagram.Connections[i]
+			if conn.From == from && conn.To != incomingFrom {
+				downstreamCalls++
+			}
+		}
+
+		if downstreamCalls >= 2 {
+			return false, true // Deactivate on this response
+		}
+	}
+
+	return false, false
+}
+
+
 // AddConnection adds a connection between two nodes
 func (e *TUIEditor) AddConnection(from, to int, label string) {
 	// Debug logging
@@ -598,7 +816,25 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 		From:  from,
 		To:    to,
 		Label: label,
+		Arrow: true, // Sequence diagrams always have arrows
+		Hints: make(map[string]string),
 	}
+
+	// Auto-detect and apply dashed style for return connections in sequence diagrams
+	if e.isReturnConnection(from, to) {
+		conn.Hints["style"] = "dashed"
+	}
+
+	// Auto-detect activation/deactivation
+	if activate, deactivate := e.detectActivation(from, to, label); activate || deactivate {
+		if activate {
+			conn.Hints["activate"] = "true"
+		}
+		if deactivate {
+			conn.Hints["deactivate"] = "true"
+		}
+	}
+
 	e.diagram.Connections = append(e.diagram.Connections, conn)
 
 	if f, err := os.OpenFile("/tmp/edd_connections.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
@@ -635,6 +871,23 @@ func (e *TUIEditor) InsertConnection(index int, from, to int, label string) {
 		From:  from,
 		To:    to,
 		Label: label,
+		Arrow: true, // Sequence diagrams always have arrows
+		Hints: make(map[string]string),
+	}
+
+	// Auto-detect and apply dashed style for return connections in sequence diagrams
+	if e.isReturnConnection(from, to) {
+		conn.Hints["style"] = "dashed"
+	}
+
+	// Auto-detect activation/deactivation
+	if activate, deactivate := e.detectActivation(from, to, label); activate || deactivate {
+		if activate {
+			conn.Hints["activate"] = "true"
+		}
+		if deactivate {
+			conn.Hints["deactivate"] = "true"
+		}
 	}
 
 	// Insert at the specified position
@@ -665,6 +918,48 @@ func (e *TUIEditor) DeleteConnection(index int) {
 		// Save to history after modification
 		e.SaveHistory()
 	}
+}
+
+// toggleConnectionActivation toggles the activation state for a connection
+func (e *TUIEditor) toggleConnectionActivation(index int) {
+	if index < 0 || index >= len(e.diagram.Connections) {
+		return
+	}
+
+	conn := &e.diagram.Connections[index]
+	if conn.Hints == nil {
+		conn.Hints = make(map[string]string)
+	}
+
+	// Toggle activation state
+	// Three states: not set -> activate=true -> activate=false -> not set
+	currentActivate := conn.Hints["activate"]
+	currentDeactivate := conn.Hints["deactivate"]
+
+	if currentActivate == "" && currentDeactivate == "" {
+		// Not set -> activate target
+		conn.Hints["activate"] = "true"
+	} else if currentActivate == "true" {
+		// Activate -> deactivate source instead
+		delete(conn.Hints, "activate")
+		conn.Hints["deactivate"] = "true"
+	} else if currentDeactivate == "true" {
+		// Deactivate -> both
+		conn.Hints["activate"] = "true"
+		// Keep deactivate
+	} else {
+		// Both -> clear all
+		delete(conn.Hints, "activate")
+		delete(conn.Hints, "deactivate")
+	}
+
+	// Clean up empty hints map
+	if len(conn.Hints) == 0 {
+		conn.Hints = nil
+	}
+
+	// Save to history after modification
+	e.SaveHistory()
 }
 
 // UpdateNodeText updates the text of a node
@@ -1014,7 +1309,8 @@ func (e *TUIEditor) assignJumpLabels() {
 			}
 			labelIndex++
 		}
-	} else {
+	} else if e.jumpAction != JumpActionActivation {
+		// For activation mode, we only want connection labels, not node labels
 		// Original logic - assign labels only to visible nodes
 		for _, node := range e.diagram.Nodes {
 			if labelIndex >= len(jumpChars) {
@@ -1043,8 +1339,9 @@ func (e *TUIEditor) assignJumpLabels() {
 		}
 	}
 
-	// If in delete, edit, or hint mode, also assign labels to visible connections
-	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
+	// If in delete, edit, hint, or activation mode, also assign labels to visible connections
+	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit ||
+	   e.jumpAction == JumpActionHint || e.jumpAction == JumpActionActivation {
 		if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
 			fmt.Fprintf(f, "Starting connection labeling at labelIndex=%d\n", labelIndex)
 			f.Close()
@@ -1176,6 +1473,7 @@ const (
 	JumpActionConnectTo                      // Complete connection to this node
 	JumpActionHint                           // Edit hints for nodes and connections
 	JumpActionInsertAt                       // Select insertion point for new connection
+	JumpActionActivation                     // Toggle activation on connections
 )
 
 // SetMode changes the editor mode
@@ -1755,6 +2053,14 @@ func (e *TUIEditor) StartContinuousInsert() {
 	}
 }
 
+// StartActivationToggle starts activation toggle mode for connections
+func (e *TUIEditor) StartActivationToggle() {
+	// Only available for sequence diagrams with connections
+	if e.diagram.Type == "sequence" && len(e.diagram.Connections) > 0 {
+		e.startJump(JumpActionActivation)
+	}
+}
+
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
 	// Delegate to the actual text handler
@@ -2042,6 +2348,9 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'I': // Insert connection (continuous)
 		e.StartContinuousInsert()
 
+	case 'v': // Toggle activation on connections
+		e.StartActivationToggle()
+
 	case 'J': // JSON view (capital J)
 		e.SetMode(ModeJSON)
 
@@ -2295,8 +2604,9 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		}
 	}
 
-	// Look for matching connection jump label (in delete, edit, or hint mode)
-	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit || e.jumpAction == JumpActionHint {
+	// Look for matching connection jump label (in delete, edit, hint, or activation mode)
+	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit ||
+	   e.jumpAction == JumpActionHint || e.jumpAction == JumpActionActivation {
 		// Log to file
 		if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			fmt.Fprintf(f, "\n[%s] Looking for key '%c' in connection labels: %v\n", time.Now().Format("15:04:05"), key, e.connectionLabels)
@@ -2338,6 +2648,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 					}
 					e.clearJumpLabels()
 					e.SetMode(ModeHintMenu)
+				} else if e.jumpAction == JumpActionActivation {
+					// Toggle activation for this connection
+					e.toggleConnectionActivation(connIndex)
+					e.clearJumpLabels()
+					e.SetMode(ModeNormal)
 				}
 				return false
 			}
@@ -2484,6 +2799,12 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		e.editingHintNode = nodeID
 		e.clearJumpLabels()
 		e.SetMode(ModeHintMenu)
+
+	case JumpActionActivation:
+		// This shouldn't be reached for nodes - activation is for connections
+		// Just return to normal mode
+		e.clearJumpLabels()
+		e.SetMode(ModeNormal)
 	}
 }
 

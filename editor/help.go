@@ -31,6 +31,8 @@ func GetHelpText() string {
 			Name: "Connection Operations",
 			Commands: []HelpCommand{
 				{"c/C", "Connect nodes (C for continuous)"},
+				{"i/I", "Insert connection (I for continuous)"},
+				{"v", "Toggle activation (sequence diagrams)"},
 			},
 		},
 		{

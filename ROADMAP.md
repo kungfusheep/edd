@@ -9,6 +9,8 @@ decision tree diagram graph
 
 more deterministic layouts 
 
+quicky annotate the diagram connections - enter in e mode takes you to the next one down in edit mode - 
+
 
 
 
