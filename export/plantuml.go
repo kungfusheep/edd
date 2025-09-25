@@ -81,6 +81,9 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 		sb.WriteString("\n")
 	}
 
+	// Track which participants are currently activated (stack for nested activations)
+	activationStack := []string{}
+
 	// Add connections as messages
 	for _, conn := range d.Connections {
 		fromID, ok := nodeMap[conn.From]
@@ -93,8 +96,10 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 		}
 
 		// Check for activation/deactivation hints
+		activateSource := false
 		activateTarget := false
 		deactivateSource := false
+		deactivateTarget := false
 
 		// Determine arrow type and color based on hints
 		arrowStyle := "-"
@@ -111,21 +116,36 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 				colorPart = fmt.Sprintf("[#%s]", e.mapColorToHex(color))
 			}
 			// Check activation hints
+			// activate_source means the FROM participant gets activated
+			if hints["activate_source"] == "true" {
+				activateSource = true
+			}
+			// activate means the TO participant gets activated
 			if hints["activate"] == "true" {
 				activateTarget = true
 			}
+			// deactivate means the FROM participant gets deactivated
 			if hints["deactivate"] == "true" {
 				deactivateSource = true
 			}
-		}
-
-		// Add deactivate before the message if needed
-		if deactivateSource {
-			sb.WriteString(fmt.Sprintf("deactivate %s\n", fromID))
+			// deactivate_target means the TO participant gets deactivated
+			if hints["deactivate_target"] == "true" {
+				deactivateTarget = true
+			}
 		}
 
 		// Construct the full arrow with color in the middle
 		arrow := fmt.Sprintf("%s%s%s", arrowStyle, colorPart, arrowHead)
+
+		// Add activate BEFORE the message if needed (PlantUML style)
+		if activateSource {
+			sb.WriteString(fmt.Sprintf("activate %s\n", fromID))
+			activationStack = append(activationStack, fromID)
+		}
+		if activateTarget {
+			sb.WriteString(fmt.Sprintf("activate %s\n", toID))
+			activationStack = append(activationStack, toID)
+		}
 
 		// Handle self-loops
 		if conn.From == conn.To {
@@ -143,9 +163,16 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 			}
 		}
 
-		// Add activate after the message if needed
-		if activateTarget {
-			sb.WriteString(fmt.Sprintf("activate %s\n", toID))
+		// Add deactivate AFTER the message that causes deactivation
+		// The deactivate hint means "deactivate the most recently activated participant"
+		if deactivateSource && len(activationStack) > 0 {
+			// Pop from stack and deactivate
+			lastActive := activationStack[len(activationStack)-1]
+			activationStack = activationStack[:len(activationStack)-1]
+			sb.WriteString(fmt.Sprintf("deactivate %s\n", lastActive))
+		}
+		if deactivateTarget {
+			sb.WriteString(fmt.Sprintf("deactivate %s\n", toID))
 		}
 	}
 

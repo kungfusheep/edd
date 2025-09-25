@@ -448,8 +448,10 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 		// Draw jump labels if in jump mode (but not in JSON mode)
 		if tui.GetMode() == editor.ModeJump {
 			drawJumpLabels(tui, lastOutput)
-			// Also draw connection labels if in delete, edit, or hint mode
-			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit || tui.GetJumpAction() == editor.JumpActionHint {
+			// Also draw connection labels if in delete, edit, hint, activation, or delete activation mode
+			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit ||
+			   tui.GetJumpAction() == editor.JumpActionHint || tui.GetJumpAction() == editor.JumpActionActivation ||
+			   tui.GetJumpAction() == editor.JumpActionDeleteActivation {
 				drawConnectionLabels(tui)
 			}
 			// Draw insertion labels if in insert mode
@@ -950,19 +952,28 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 	for connIndex := 0; connIndex < len(d.Connections); connIndex++ {
 		if label, hasLabel := labels[connIndex]; hasLabel {
 			if path, ok := connectionPaths[connIndex]; ok && len(path.Points) > 1 {
-				// Place label at different percentages for each connection
-				percentages := []float64{0.25, 0.40, 0.55, 0.70, 0.85}
-				percentage := percentages[connIndex%len(percentages)]
+				var labelPoint diagram.Point
 
-				labelIndex := int(float64(len(path.Points)) * percentage)
-				if labelIndex < 1 {
-					labelIndex = 1
-				}
-				if labelIndex >= len(path.Points) {
-					labelIndex = len(path.Points) - 1
-				}
+				// For activation modes, place labels at the source
+				if tui.GetJumpAction() == editor.JumpActionActivation ||
+				   tui.GetJumpAction() == editor.JumpActionDeleteActivation {
+					// Place at the beginning of the connection (source) for both activation modes
+					labelPoint = path.Points[0]
+				} else {
+					// For other modes, use varied placement
+					percentages := []float64{0.25, 0.40, 0.55, 0.70, 0.85}
+					percentage := percentages[connIndex%len(percentages)]
 
-				labelPoint := path.Points[labelIndex]
+					labelIndex := int(float64(len(path.Points)) * percentage)
+					if labelIndex < 1 {
+						labelIndex = 1
+					}
+					if labelIndex >= len(path.Points) {
+						labelIndex = len(path.Points) - 1
+					}
+
+					labelPoint = path.Points[labelIndex]
+				}
 
 				// Try to find a clear spot near this point
 				offsets := []struct{ dx, dy int }{
@@ -1027,9 +1038,15 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 				} else if jumpAction == editor.JumpActionHint {
 					// Magenta background for hint mode
 					fmt.Fprintf(&buf, "\033[45;97;1m %c \033[0m", label) // Magenta bg, white text
-				} else {
-					// Red background for delete mode
+				} else if jumpAction == editor.JumpActionActivation {
+					// Green background for activation mode
+					fmt.Fprintf(&buf, "\033[42;97;1m %c \033[0m", label) // Green bg, white text
+				} else if jumpAction == editor.JumpActionDelete || jumpAction == editor.JumpActionDeleteActivation {
+					// Red background for delete modes
 					fmt.Fprintf(&buf, "\033[41;97;1m %c \033[0m", label) // Red bg, white text
+				} else {
+					// Default: cyan background for other modes
+					fmt.Fprintf(&buf, "\033[46;30;1m %c \033[0m", label) // Cyan bg, black text
 				}
 			}
 		}
@@ -1131,7 +1148,15 @@ func drawEd(tui *editor.TUIEditor) {
 	case editor.ModeEdit:
 		color = "\033[33m" // Yellow
 	case editor.ModeJump:
-		color = "\033[35m" // Magenta
+		// Check jump action for special coloring
+		switch tui.GetJumpAction() {
+		case editor.JumpActionDelete, editor.JumpActionDeleteActivation:
+			color = "\033[31m" // Red for delete actions
+		case editor.JumpActionActivation:
+			color = "\033[32m" // Green for activation
+		default:
+			color = "\033[35m" // Magenta for other jump actions
+		}
 	case editor.ModeCommand:
 		color = "\033[34m" // Blue
 	default:
@@ -1238,9 +1263,19 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 			case editor.JumpActionDelete:
 				if tui.IsContinuousDelete() {
 					modeStr = "DELETE (continuous)"
+				} else {
+					modeStr = "DELETE"
 				}
 			case editor.JumpActionInsertAt:
 				modeStr = "INSERT: Select position"
+			case editor.JumpActionActivation:
+				if tui.GetActivationStartConn() >= 0 {
+					modeStr = "ACTIVATE: Select END"
+				} else {
+					modeStr = "ACTIVATE: Select START"
+				}
+			case editor.JumpActionDeleteActivation:
+				modeStr = "DELETE ACTIVATION"
 			}
 		}
 

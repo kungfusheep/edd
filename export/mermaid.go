@@ -55,6 +55,9 @@ func (e *MermaidExporter) exportSequence(d *diagram.Diagram) (string, error) {
 		sb.WriteString("\n")
 	}
 
+	// Track which participants are currently activated (stack for nested activations)
+	activationStack := []string{}
+
 	// Add connections as messages
 	for _, conn := range d.Connections {
 		fromID, ok := nodeMap[conn.From]
@@ -103,41 +106,73 @@ func (e *MermaidExporter) exportSequence(d *diagram.Diagram) (string, error) {
 			}
 		}
 
-		// Check for activation hint
+		// Check for activation hints
+		activateSource := false
 		activateTarget := false
 		deactivateSource := false
+		deactivateTarget := false
 		if hints := conn.Hints; hints != nil {
+			// activate_source means the FROM participant gets activated
+			if hints["activate_source"] == "true" {
+				activateSource = true
+			}
+			// activate means the TO participant gets activated
 			if hints["activate"] == "true" {
 				activateTarget = true
 			}
+			// deactivate means the FROM participant gets deactivated
 			if hints["deactivate"] == "true" {
 				deactivateSource = true
 			}
+			// deactivate_target means the TO participant gets deactivated
+			if hints["deactivate_target"] == "true" {
+				deactivateTarget = true
+			}
 		}
 
-		// Add deactivate if needed (before the message)
-		if deactivateSource {
-			sb.WriteString(fmt.Sprintf("    deactivate %s\n", fromID))
+		// In Mermaid, we can use ++ and -- suffixes for activation
+		// The suffix goes after the arrow and applies to the recipient
+		// For activateSource, we need to handle it differently
+		activationSuffix := ""
+		if activateTarget {
+			activationSuffix = "+"  // Will become ->>+ format (activates TO)
+			activationStack = append(activationStack, toID)
+		} else if deactivateTarget {
+			activationSuffix = "-"  // Will become ->>- format (deactivates TO)
+		}
+
+		// For source activation/deactivation, Mermaid uses explicit commands
+		// We handle those separately above
+
+		// Add explicit activate for source if needed
+		if activateSource {
+			sb.WriteString(fmt.Sprintf("    activate %s\n", fromID))
+			activationStack = append(activationStack, fromID)
 		}
 
 		// Handle self-loops
 		if conn.From == conn.To {
 			if conn.Label != "" {
-				sb.WriteString(fmt.Sprintf("    %s%s%s: %s\n", fromID, arrow, fromID, conn.Label))
+				sb.WriteString(fmt.Sprintf("    %s%s%s%s: %s\n", fromID, arrow, activationSuffix, fromID, conn.Label))
 			} else {
-				sb.WriteString(fmt.Sprintf("    %s%s%s: self\n", fromID, arrow, fromID))
+				sb.WriteString(fmt.Sprintf("    %s%s%s%s: self\n", fromID, arrow, activationSuffix, fromID))
 			}
 		} else {
+			// Format: From->>+To for activation, From-->-To for deactivation
 			if conn.Label != "" {
-				sb.WriteString(fmt.Sprintf("    %s%s%s: %s\n", fromID, arrow, toID, conn.Label))
+				sb.WriteString(fmt.Sprintf("    %s%s%s%s: %s\n", fromID, arrow, activationSuffix, toID, conn.Label))
 			} else {
-				sb.WriteString(fmt.Sprintf("    %s%s%s: \n", fromID, arrow, toID))
+				sb.WriteString(fmt.Sprintf("    %s%s%s%s: \n", fromID, arrow, activationSuffix, toID))
 			}
 		}
 
-		// Add activate if needed (after the message)
-		if activateTarget {
-			sb.WriteString(fmt.Sprintf("    activate %s\n", toID))
+		// Add explicit deactivate if needed
+		// The deactivate hint means "deactivate the most recently activated participant"
+		if deactivateSource && len(activationStack) > 0 {
+			// Pop from stack and deactivate
+			lastActive := activationStack[len(activationStack)-1]
+			activationStack = activationStack[:len(activationStack)-1]
+			sb.WriteString(fmt.Sprintf("    deactivate %s\n", lastActive))
 		}
 	}
 

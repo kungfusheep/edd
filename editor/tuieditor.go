@@ -31,6 +31,10 @@ type TUIEditor struct {
 	editingHintNode    int          // Node being edited for hints (-1 for none)
 	previousJumpAction JumpAction   // Remember the jump action for ESC handling
 
+	// Activation mode state
+	activationStartConn int         // Connection where activation starts (-1 for none)
+	activationStartFrom int         // Participant ID that will be activated
+
 	// Text input state
 	textBuffer    []rune // Unicode-aware text buffer for editing nodes
 	cursorPos     int    // Position in text buffer
@@ -81,6 +85,8 @@ func NewTUIEditor(renderer DiagramRenderer) *TUIEditor {
 		selectedConnection:  -1,
 		jumpLabels:          make(map[int]rune),
 		connectionLabels:    make(map[int]rune),
+		activationStartConn: -1,
+		activationStartFrom: -1,
 		textBuffer:          []rune{},
 		commandBuffer:       []rune{},
 		cursorPos:           0,
@@ -920,46 +926,135 @@ func (e *TUIEditor) DeleteConnection(index int) {
 	}
 }
 
-// toggleConnectionActivation toggles the activation state for a connection
-func (e *TUIEditor) toggleConnectionActivation(index int) {
-	if index < 0 || index >= len(e.diagram.Connections) {
+// handleActivationSelection handles the two-step activation selection process
+func (e *TUIEditor) handleActivationSelection(connIndex int) {
+	if connIndex < 0 || connIndex >= len(e.diagram.Connections) {
 		return
 	}
 
-	conn := &e.diagram.Connections[index]
-	if conn.Hints == nil {
-		conn.Hints = make(map[string]string)
-	}
+	if e.activationStartConn == -1 {
+		// First selection - this is the start of activation
+		e.activationStartConn = connIndex
+		e.activationStartFrom = e.diagram.Connections[connIndex].From
 
-	// Toggle activation state
-	// Three states: not set -> activate=true -> activate=false -> not set
-	currentActivate := conn.Hints["activate"]
-	currentDeactivate := conn.Hints["deactivate"]
-
-	if currentActivate == "" && currentDeactivate == "" {
-		// Not set -> activate target
-		conn.Hints["activate"] = "true"
-	} else if currentActivate == "true" {
-		// Activate -> deactivate source instead
-		delete(conn.Hints, "activate")
-		conn.Hints["deactivate"] = "true"
-	} else if currentDeactivate == "true" {
-		// Deactivate -> both
-		conn.Hints["activate"] = "true"
-		// Keep deactivate
+		// Re-assign labels to show only connections after this point
+		e.assignActivationEndLabels()
+		// Stay in jump mode to select the end point
 	} else {
-		// Both -> clear all
-		delete(conn.Hints, "activate")
-		delete(conn.Hints, "deactivate")
+		// Second selection - this is the end of activation
+		if connIndex > e.activationStartConn {
+			// Apply activation from start to end
+			e.applyActivation(e.activationStartConn, connIndex)
+		}
+		// Reset and exit
+		e.activationStartConn = -1
+		e.activationStartFrom = -1
+		e.clearJumpLabels()
+		e.SetMode(ModeNormal)
+		e.SaveHistory()
+	}
+}
+
+// assignActivationEndLabels assigns labels only to valid end points
+func (e *TUIEditor) assignActivationEndLabels() {
+	e.connectionLabels = make(map[int]rune)
+
+	// Jump label characters in order of preference
+	jumpChars := []rune("asdfjkl;ghqwertyuiopzxcvbnm,./1234567890")
+	labelIndex := 0
+
+	// Only assign labels to connections that:
+	// 1. Come after the start point
+	// 2. Are FROM the same participant that we're activating
+	for i := e.activationStartConn + 1; i < len(e.diagram.Connections) && labelIndex < len(jumpChars); i++ {
+		conn := e.diagram.Connections[i]
+		// Only connections FROM the participant we're activating are valid end points
+		if conn.From == e.activationStartFrom {
+			e.connectionLabels[i] = jumpChars[labelIndex]
+			labelIndex++
+		}
+	}
+}
+
+// deleteActivation removes all activation hints from a connection and its pair
+func (e *TUIEditor) deleteActivation(connIndex int) {
+	if connIndex < 0 || connIndex >= len(e.diagram.Connections) {
+		return
 	}
 
-	// Clean up empty hints map
-	if len(conn.Hints) == 0 {
-		conn.Hints = nil
+	conn := &e.diagram.Connections[connIndex]
+
+	// Identify what participant this activation is for
+	// activate_source means the To participant gets activated
+	// activate also means the To participant gets activated
+	// deactivate means the To participant gets deactivated
+	var participantID int
+	if conn.Hints != nil {
+		if conn.Hints["activate_source"] == "true" {
+			participantID = conn.To  // The recipient gets activated
+		} else if conn.Hints["activate"] == "true" {
+			participantID = conn.To  // The recipient gets activated
+		} else if conn.Hints["deactivate"] == "true" {
+			participantID = conn.To  // The recipient gets deactivated
+		}
 	}
 
-	// Save to history after modification
+	// Find and clear all activation hints for this participant
+	// This includes both the start (activate_source) and end (deactivate) of the activation
+	for i := range e.diagram.Connections {
+		if e.diagram.Connections[i].Hints != nil {
+			hints := e.diagram.Connections[i].Hints
+
+			// Check if this connection is part of the same activation
+			// All activation hints for the same participant should be cleared
+			shouldClear := false
+			if hints["activate_source"] == "true" && e.diagram.Connections[i].To == participantID {
+				shouldClear = true
+			}
+			if hints["activate"] == "true" && e.diagram.Connections[i].To == participantID {
+				shouldClear = true
+			}
+			if hints["deactivate"] == "true" && e.diagram.Connections[i].To == participantID {
+				shouldClear = true
+			}
+
+			if shouldClear {
+				// Remove activation-related hints
+				delete(hints, "activate_source")
+				delete(hints, "activate")
+				delete(hints, "deactivate")
+
+				// Clean up empty hints map
+				if len(hints) == 0 {
+					e.diagram.Connections[i].Hints = nil
+				}
+			}
+		}
+	}
+
+	// Save to history
 	e.SaveHistory()
+}
+
+// applyActivation applies activation hints between start and end connections
+func (e *TUIEditor) applyActivation(startIdx, endIdx int) {
+	if startIdx < 0 || endIdx >= len(e.diagram.Connections) || startIdx >= endIdx {
+		return
+	}
+
+	// Mark the start connection to activate the source
+	startConn := &e.diagram.Connections[startIdx]
+	if startConn.Hints == nil {
+		startConn.Hints = make(map[string]string)
+	}
+	startConn.Hints["activate_source"] = "true"
+
+	// Mark the end connection to deactivate
+	endConn := &e.diagram.Connections[endIdx]
+	if endConn.Hints == nil {
+		endConn.Hints = make(map[string]string)
+	}
+	endConn.Hints["deactivate"] = "true"
 }
 
 // UpdateNodeText updates the text of a node
@@ -1309,8 +1404,8 @@ func (e *TUIEditor) assignJumpLabels() {
 			}
 			labelIndex++
 		}
-	} else if e.jumpAction != JumpActionActivation {
-		// For activation mode, we only want connection labels, not node labels
+	} else if e.jumpAction != JumpActionActivation && e.jumpAction != JumpActionDeleteActivation {
+		// For activation modes, we only want connection labels, not node labels
 		// Original logic - assign labels only to visible nodes
 		for _, node := range e.diagram.Nodes {
 			if labelIndex >= len(jumpChars) {
@@ -1366,6 +1461,40 @@ func (e *TUIEditor) assignJumpLabels() {
 					f.Close()
 				}
 				labelIndex++
+			}
+		}
+	}
+
+	// For delete activation mode, show ONE label per activation span
+	if e.jumpAction == JumpActionDeleteActivation {
+		e.connectionLabels = make(map[int]rune)
+		labelIndex = 0
+
+		// Track which participants already have a label for their activation
+		participantLabeled := make(map[int]bool)
+
+		for i := 0; i < len(e.diagram.Connections) && labelIndex < len(jumpChars); i++ {
+			conn := e.diagram.Connections[i]
+
+			// Check if this connection starts an activation (activate_source or activate)
+			if conn.Hints != nil {
+				var participantID int
+				isActivationStart := false
+
+				if conn.Hints["activate_source"] == "true" {
+					participantID = conn.To  // The recipient gets activated
+					isActivationStart = true
+				} else if conn.Hints["activate"] == "true" {
+					participantID = conn.To  // The recipient gets activated
+					isActivationStart = true
+				}
+
+				// Only assign a label to the first activation start for each participant
+				if isActivationStart && !participantLabeled[participantID] && e.isConnectionVisible(i) {
+					e.connectionLabels[i] = rune(jumpChars[labelIndex])
+					participantLabeled[participantID] = true
+					labelIndex++
+				}
 			}
 		}
 	} else if e.jumpAction == JumpActionInsertAt {
@@ -1474,6 +1603,7 @@ const (
 	JumpActionHint                           // Edit hints for nodes and connections
 	JumpActionInsertAt                       // Select insertion point for new connection
 	JumpActionActivation                     // Toggle activation on connections
+	JumpActionDeleteActivation               // Delete activation from connections
 )
 
 // SetMode changes the editor mode
@@ -1935,6 +2065,11 @@ func (e *TUIEditor) GetJumpAction() JumpAction {
 	return e.jumpAction
 }
 
+// GetActivationStartConn returns the activation start connection index (-1 if not in activation mode)
+func (e *TUIEditor) GetActivationStartConn() int {
+	return e.activationStartConn
+}
+
 // GetSelectedNode returns the currently selected node ID
 func (e *TUIEditor) GetSelectedNode() int {
 	return e.selected
@@ -2057,7 +2192,18 @@ func (e *TUIEditor) StartContinuousInsert() {
 func (e *TUIEditor) StartActivationToggle() {
 	// Only available for sequence diagrams with connections
 	if e.diagram.Type == "sequence" && len(e.diagram.Connections) > 0 {
+		// Reset activation selection state
+		e.activationStartConn = -1
+		e.activationStartFrom = -1
 		e.startJump(JumpActionActivation)
+	}
+}
+
+// StartActivationDelete starts deletion mode for activations
+func (e *TUIEditor) StartActivationDelete() {
+	// Only available for sequence diagrams with connections
+	if e.diagram.Type == "sequence" && len(e.diagram.Connections) > 0 {
+		e.startJump(JumpActionDeleteActivation)
 	}
 }
 
@@ -2351,6 +2497,9 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'v': // Toggle activation on connections
 		e.StartActivationToggle()
 
+	case 'V': // Delete activations (shift+v)
+		e.StartActivationDelete()
+
 	case 'J': // JSON view (capital J)
 		e.SetMode(ModeJSON)
 
@@ -2579,7 +2728,18 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		e.previousJumpAction = 0    // Clear the previous action since we're canceling
 		e.selected = -1             // Clear selected node
 		e.insertionPoint = -1       // Clear insertion point
+		e.activationStartConn = -1  // Clear activation selection state
+		e.activationStartFrom = -1
 		e.SetMode(ModeNormal)
+		return false
+	}
+
+	// Special case: 'V' in activation mode switches to delete activation mode
+	if key == 'V' && e.jumpAction == JumpActionActivation {
+		e.clearJumpLabels()
+		e.activationStartConn = -1  // Clear activation selection state
+		e.activationStartFrom = -1
+		e.StartActivationDelete()
 		return false
 	}
 
@@ -2604,9 +2764,10 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		}
 	}
 
-	// Look for matching connection jump label (in delete, edit, hint, or activation mode)
+	// Look for matching connection jump label (in delete, edit, hint, activation, or delete activation mode)
 	if e.jumpAction == JumpActionDelete || e.jumpAction == JumpActionEdit ||
-	   e.jumpAction == JumpActionHint || e.jumpAction == JumpActionActivation {
+	   e.jumpAction == JumpActionHint || e.jumpAction == JumpActionActivation ||
+	   e.jumpAction == JumpActionDeleteActivation {
 		// Log to file
 		if f, err := os.OpenFile("/tmp/edd_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 			fmt.Fprintf(f, "\n[%s] Looking for key '%c' in connection labels: %v\n", time.Now().Format("15:04:05"), key, e.connectionLabels)
@@ -2649,8 +2810,11 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 					e.clearJumpLabels()
 					e.SetMode(ModeHintMenu)
 				} else if e.jumpAction == JumpActionActivation {
-					// Toggle activation for this connection
-					e.toggleConnectionActivation(connIndex)
+					// Handle two-step activation selection
+					e.handleActivationSelection(connIndex)
+				} else if e.jumpAction == JumpActionDeleteActivation {
+					// Delete activation from this connection
+					e.deleteActivation(connIndex)
 					e.clearJumpLabels()
 					e.SetMode(ModeNormal)
 				}
