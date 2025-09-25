@@ -7,7 +7,8 @@ import (
 
 func TestConnectionEditEnterAdvance(t *testing.T) {
 	// Create editor with real renderer
-	ed := NewTUIEditor(NewRealRenderer())
+	renderer := NewRealRenderer()
+	ed := NewTUIEditor(renderer)
 
 	// Create a simple diagram with connections
 	d := &diagram.Diagram{Type: "flowchart"}
@@ -111,5 +112,55 @@ func TestConnectionEditEnterAdvance(t *testing.T) {
 	}
 	if ed.selectedConnection != -1 {
 		t.Errorf("After third Enter, expected selectedConnection=-1, got %d", ed.selectedConnection)
+	}
+}
+
+func TestConnectionInlineEditing(t *testing.T) {
+	// Create editor with real renderer
+	renderer := NewRealRenderer()
+	ed := NewTUIEditor(renderer)
+
+	// Create a simple diagram with connections
+	d := &diagram.Diagram{Type: "flowchart"}
+	d.Nodes = []diagram.Node{
+		{ID: 1, Text: []string{"A"}},
+		{ID: 2, Text: []string{"B"}},
+	}
+	d.Connections = []diagram.Connection{
+		{ID: 0, From: 1, To: 2, Label: "original"},
+	}
+	ed.SetDiagram(d)
+
+	// Start editing the connection
+	ed.selectedConnection = 0
+	ed.SetMode(ModeEdit)
+
+	// Type some new text
+	for _, ch := range "new" {
+		ed.handleTextKey(ch)
+	}
+
+	// Render to trigger the edit state update
+	_ = ed.Render()
+
+	// Check that renderer has the correct edit state
+	if renderer.editingConnectionID != 0 {
+		t.Errorf("Expected editingConnectionID=0, got %d", renderer.editingConnectionID)
+	}
+	expectedText := "originalnew" // Original text plus what we typed
+	if renderer.editConnectionText != expectedText {
+		t.Errorf("Expected editConnectionText='%s', got '%s'", expectedText, renderer.editConnectionText)
+	}
+	if renderer.editConnectionCursorPos != 11 {
+		t.Errorf("Expected editConnectionCursorPos=11, got %d", renderer.editConnectionCursorPos)
+	}
+
+	// Render and check that the output shows inline editing
+	output := ed.Render()
+
+	// The output should show the editing text with cursor, not the original label
+	// Note: The exact format depends on the renderer implementation
+	if len(output) == 0 {
+		t.Error("Expected non-empty render output")
 	}
 }

@@ -439,6 +439,22 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 		// Render current state
 		output := tui.Render()
 		lastOutput = output
+
+		// Debug: Log if we're editing a connection and whether cursor is visible
+		if tui.GetMode() == editor.ModeEdit && tui.GetSelectedConnection() >= 0 {
+			if f, err := os.OpenFile("/tmp/edd_cursor_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "Editing connection %d, output contains cursor: %v\n", tui.GetSelectedConnection(), strings.Contains(output, "█"))
+				// Log a sample of the output
+				lines := strings.Split(output, "\n")
+				for i, line := range lines {
+					if strings.Contains(line, "[") || strings.Contains(line, "█") {
+						fmt.Fprintf(f, "  Line %d: %s\n", i, line)
+					}
+				}
+				f.Close()
+			}
+		}
+
 		buf.WriteString(output)
 
 		// Write main content first
@@ -524,6 +540,11 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 
 			// Key press requires full redraw
 			needsFullRedraw = true
+			// Redraw immediately for edit modes to show live typing
+			if tui.GetMode() == editor.ModeEdit || tui.GetMode() == editor.ModeInsert {
+				fullRedraw()
+				needsFullRedraw = false
+			}
 
 		case demoKeyEvent := <-demoChan:
 			// Handle demo input just like real input
@@ -892,6 +913,16 @@ func parseEscapeSequence(seq []byte) editor.KeyEvent {
 }
 
 func positionCursor(tui *editor.TUIEditor) {
+	// Check if we're editing a connection
+	selectedConn := tui.GetSelectedConnection()
+	if selectedConn >= 0 {
+		// For connections, the cursor is rendered inline in the diagram
+		// We don't need to position a terminal cursor
+		// Just hide the terminal cursor since it's shown in the diagram
+		fmt.Print("\033[?25l") // Hide cursor
+		return
+	}
+
 	// Get the node being edited
 	selectedNode := tui.GetSelectedNode()
 	if selectedNode < 0 {
@@ -1194,7 +1225,7 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 	// Show node/connection count
 	d := tui.GetDiagram()
 
-	// Check if we're editing a connection
+	// Check if we're editing a connection - DON'T show text in status line
 	if tui.GetMode() == editor.ModeEdit && tui.GetSelectedConnection() >= 0 {
 		connIdx := tui.GetSelectedConnection()
 		if connIdx < len(d.Connections) {
@@ -1209,10 +1240,8 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 					toName = node.Text[0]
 				}
 			}
-			fmt.Printf("Editing connection: %s → %s | Label: ", fromName, toName)
-			// Show the current text being edited
-			fmt.Print(string(tui.GetTextBuffer()))
-			fmt.Print("│") // Show cursor
+			// Only show which connection is being edited, NOT the text
+			fmt.Printf("Editing connection: %s → %s (look at diagram for cursor)", fromName, toName)
 		}
 	} else {
 		mode := tui.GetMode()

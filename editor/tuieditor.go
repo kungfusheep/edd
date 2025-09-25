@@ -248,11 +248,21 @@ func (e *TUIEditor) Render() string {
 
 	// If we have a real renderer that can provide positions, use it
 	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
-		// Set edit state if we're editing or inserting
+		// Set edit state based on what we're editing
 		if e.mode == ModeEdit || e.mode == ModeInsert {
-			realRenderer.SetEditState(e.selected, string(e.textBuffer), e.cursorPos)
+			if e.selectedConnection >= 0 {
+				// Editing a connection label
+				realRenderer.SetEditState(-1, "", 0) // Clear node edit state
+				realRenderer.SetConnectionEditState(e.selectedConnection, string(e.textBuffer), e.cursorPos)
+			} else {
+				// Editing a node
+				realRenderer.SetEditState(e.selected, string(e.textBuffer), e.cursorPos)
+				realRenderer.SetConnectionEditState(-1, "", 0) // Clear connection edit state
+			}
 		} else {
+			// Not editing anything
 			realRenderer.SetEditState(-1, "", 0)
+			realRenderer.SetConnectionEditState(-1, "", 0)
 		}
 
 		positions, output, err := realRenderer.RenderWithPositions(e.diagram)
