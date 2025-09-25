@@ -87,6 +87,7 @@ func GetHelpText() string {
 	b.WriteString("╠════════════════════════════════════════════════════╣\n")
 	b.WriteString("║ In JUMP mode: Press labeled key to select target  ║\n")
 	b.WriteString("║ In EDIT mode: Ctrl+N for newline, Enter to save   ║\n")
+	b.WriteString("║   Connections: Enter/Tab=next, Shift+Tab=previous ║\n")
 	b.WriteString("╚════════════════════════════════════════════════════╝\n")
 	
 	return b.String()
