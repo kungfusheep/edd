@@ -1,8 +1,18 @@
 # edd `◉‿ ◉`
 
-A terminal-based diagram editor for creating sequence diagrams and flowcharts.
+Fast, keyboard-driven diagram editing in your terminal. Create sequence diagrams and flowcharts with vim-like efficiency.
+
+## Why edd?
+
+- **Built for speed** - Every action optimized for minimal keystrokes
+- **Jump navigation** - Navigate and edit with single-key jumps (like EasyMotion for diagrams)
+- **Format agnostic** - Import Mermaid, PlantUML, Graphviz, D2 - edit them all the same way
+- **Terminal-native** - No browser, no mouse, just your keyboard
 
 ## Features
+
+### Instant Navigation with Jump Mode
+Press any action key (connect, delete, edit) and jump labels appear on every element. Hit a single key to select - no arrow keys, no counting, no searching.
 
 ### Diagram Types
 - **Sequence diagrams** - Show interactions between participants over time
@@ -12,48 +22,43 @@ A terminal-based diagram editor for creating sequence diagrams and flowcharts.
 <img width="1400" height="346" alt="image" src="https://github.com/user-attachments/assets/14feb915-c53c-46ab-8380-c1472f33e99d" />
 
 
+### Universal Format Support
+Edit any diagram format with the same fast interface. Import from one format, export to another - edd speaks them all.
+
+#### Supported Formats
+- **Import**: Mermaid, PlantUML, Graphviz DOT, D2, JSON
+- **Export**: ASCII/Unicode, Mermaid, PlantUML, JSON
+- **Convert**: Any importable format to any exportable format in one command
+
 ### Editor Modes
-- **Interactive TUI** - Vim-like modal editing in the terminal
-- **Command-line** - Render diagrams directly from JSON files
-- **Import/Export** - Convert between multiple diagram formats
+- **Interactive TUI** - Vim-like modal editing with jump navigation
+- **Command-line** - Render diagrams directly or convert between formats
+- **Batch processing** - Convert entire directories of diagrams
 
-### TUI Editor Commands
+### Speed-Focused Commands
 
-#### Normal Mode
-- `c` - Connect nodes
-- `C` - Connect nodes (continuous mode)
-- `d` - Delete node/connection
-- `D` - Delete (continuous mode)
-- `e` - Edit selected item
+Every command designed for efficiency - no mouse needed, minimal keystrokes required.
+
+#### Core Operations (with Jump Mode)
+- `c` / `C` - Connect nodes (single/continuous)
+- `d` / `D` - Delete elements (single/continuous)
+- `e` - Edit any element
+- `i` / `I` - Insert connections (single/continuous)
+
+#### Instant Actions
 - `u` - Undo
 - `Ctrl+r` - Redo
 - `t` - Toggle diagram type
-- `i` - Insert connection at position (sequence diagrams)
-- `I` - Insert connection (continuous mode)
 - `H` - Edit style hints
-- `?` - Show help
-- `:` - Enter command mode
+- `?` - Help
+- `:` - Command mode
 
-#### Command Mode
-- `:w [filename]` - Save diagram
+#### Vim-style Commands
+- `:w [filename]` - Save
 - `:wq` - Save and quit
 - `:q` - Quit
-- `:export format [filename]` - Export to format (mermaid, plantuml, ascii)
+- `:export format [file]` - Export to any format
 
-### Import/Export Formats
-
-#### Import Support
-- **Mermaid** (.mmd, .mermaid) - Basic sequence diagrams and flowcharts
-- **PlantUML** (.puml, .plantuml) - Basic sequence diagrams
-- **Graphviz DOT** (.dot, .gv) - Basic directed graphs
-- **D2** (.d2) - Basic diagrams
-- **JSON** (.json) - Native edd format
-
-#### Export Support
-- **ASCII/Unicode** - Box-drawing characters for terminal/text files
-- **Mermaid** - Markdown-compatible diagram syntax
-- **PlantUML** - Text-based UML diagrams
-- **JSON** - Native edd format for storage
 
 ## Installation
 
@@ -63,46 +68,46 @@ go install github.com/kungfusheep/edd@latest
 
 ## Usage
 
-### Interactive Editing
+### Quick Start
 ```bash
-# Start new diagram
+# Launch interactive editor
 edd
 
-# Edit existing diagram
-edd -i diagram.json
-
-# Start with specific type
-edd -type sequence
-```
-
-### Import/Export
-```bash
-# Render imported Mermaid to terminal
-edd diagram.mmd
-
-# Edit imported Mermaid in TUI
+# Edit any diagram format
 edd -i diagram.mmd
-
-# Import with explicit format and render
-edd -import mermaid diagram.txt
-
-# Export to different format
-edd -format plantuml diagram.json
-
-# Convert between formats
-edd -format mermaid sequence.puml
+edd -i flowchart.puml
+edd -i graph.dot
 ```
 
-### Command-line Rendering
+### Format Conversion - Your Universal Diagram Translator
 ```bash
-# Render to stdout
-edd diagram.json
+# Mermaid to PlantUML
+edd -format plantuml diagram.mmd
 
-# Save to file
-edd -o output.txt diagram.json
+# PlantUML to ASCII art
+edd -format ascii sequence.puml
 
-# Debug mode with layout information
-edd -debug diagram.json
+# Graphviz to Mermaid
+edd -format mermaid graph.dot
+
+# Any format to terminal display
+edd diagram.mmd
+edd flowchart.puml
+edd graph.d2
+```
+
+### Workflow Examples
+```bash
+# Edit a Mermaid diagram from your markdown docs
+edd -i README.mmd
+
+# Convert your team's PlantUML diagrams to Mermaid
+for file in *.puml; do
+  edd -format mermaid "$file" > "${file%.puml}.mmd"
+done
+
+# Quick ASCII diagram for documentation
+edd -format ascii design.json > diagram.txt
 ```
 
 ## Diagram Format
@@ -123,18 +128,21 @@ Diagrams are stored as JSON:
 }
 ```
 
-## Keyboard Controls
+## How Jump Mode Works
 
-### Jump Mode
-When entering commands like connect or delete, jump labels appear:
-- Single letters appear on nodes/connections
-- Press the letter to select that item
-- ESC to cancel
+The key to edd's speed - no arrow keys, no searching, just single-key selection:
 
-### Text Editing
-- Standard text input in edit/insert modes
-- ESC saves and exits to normal mode (no separate confirm key)
-- Backspace/Delete to remove characters
+1. Press an action key (`c` for connect, `d` for delete, `e` for edit)
+2. Every selectable element gets a unique letter label
+3. Press that letter to instantly select the element
+4. For two-target operations (like connect), repeat for the second element
+
+Example: To connect two nodes, just type `c`, then two letters. Three keystrokes total.
+
+### Text Input
+- Direct typing in edit mode - no special insert command needed
+- ESC instantly saves and returns to normal mode
+- No confirmation dialogs to slow you down
 
 ## Limitations
 
