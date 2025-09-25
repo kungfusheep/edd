@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -31,16 +32,30 @@ type DemoSettings struct {
 // RunTUILoop runs the terminal UI loop with an already-configured TUI editor
 // This is called from main.go after setting up the editor
 func RunTUILoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettings) error {
+	// Setup signal handler for clean exit
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	// Setup terminal
 	if err := setupTerminal(); err != nil {
 		return fmt.Errorf("failed to setup terminal: %w", err)
 	}
 
-	// Ensure terminal is restored even on panic
+	// Ensure terminal is restored even on panic or signal
 	defer func() {
+		signal.Stop(sigChan) // Stop receiving signals
 		restoreTerminal()
 		// Extra safety - ensure cursor is visible
 		fmt.Print("\033[?25h")
+	}()
+
+	// Handle signals in background
+	go func() {
+		<-sigChan
+		// Restore terminal and exit cleanly
+		restoreTerminal()
+		fmt.Print("\033[?25h")
+		os.Exit(0)
 	}()
 
 	// Run the interactive loop
@@ -436,6 +451,10 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 			// Also draw connection labels if in delete, edit, or hint mode
 			if tui.GetJumpAction() == editor.JumpActionDelete || tui.GetJumpAction() == editor.JumpActionEdit || tui.GetJumpAction() == editor.JumpActionHint {
 				drawConnectionLabels(tui)
+			}
+			// Draw insertion labels if in insert mode
+			if tui.GetJumpAction() == editor.JumpActionInsertAt {
+				drawInsertionLabels(tui)
 			}
 		}
 
@@ -1026,6 +1045,77 @@ func drawConnectionLabels(tui *editor.TUIEditor) {
 	fmt.Print(buf.String())
 }
 
+func drawInsertionLabels(tui *editor.TUIEditor) {
+	// Get insertion labels from TUI
+	labels := tui.GetInsertionLabels()
+	if len(labels) == 0 {
+		return
+	}
+
+	d := tui.GetDiagram()
+	termHeight := tui.GetTerminalHeight()
+	scrollOffset := tui.GetDiagramScrollOffset()
+
+	// Buffer all output to prevent flicker
+	var buf bytes.Buffer
+
+	// Save cursor once
+	buf.WriteString("\033[s")
+
+	// Draw insertion point indicators
+	for insertPos, label := range labels {
+		var viewportY int
+
+		if insertPos == 0 {
+			// Before first connection - show at the top of the message area
+			if d.Type == "sequence" {
+				// In sequence diagrams, messages start after participants (around line 8)
+				viewportY = 8 - scrollOffset + 1
+				if scrollOffset > 0 {
+					// With sticky headers, adjust for header space
+					viewportY = 8
+				}
+			} else {
+				// For other diagrams, show at top
+				viewportY = 2
+			}
+		} else if insertPos <= len(d.Connections) {
+			// After a specific connection - find its Y position
+			connectionPaths := tui.GetConnectionPaths()
+			if path, ok := connectionPaths[insertPos-1]; ok && len(path.Points) > 0 {
+				// Get the end point of the previous connection
+				lastPoint := path.Points[len(path.Points)-1]
+
+				// Convert to viewport coordinates
+				if d.Type == "sequence" && scrollOffset > 0 {
+					// With sticky headers
+					headerLines := 7
+					viewportY = headerLines + 1 + (lastPoint.Y - scrollOffset) + 2 // +2 to place after the connection
+				} else {
+					// Normal scrolling
+					viewportY = lastPoint.Y - scrollOffset + 3
+				}
+			}
+		}
+
+		// Skip if the label would be outside the visible area
+		if viewportY < 1 || viewportY > termHeight-3 {
+			continue
+		}
+
+		// Draw insertion point indicator (centered on the line)
+		centerX := 40 // Center of typical terminal
+		fmt.Fprintf(&buf, "\033[%d;%dH", viewportY, centerX-10)
+		fmt.Fprintf(&buf, "\033[36m--- [ %c ] Insert here ---\033[0m", label) // Cyan text
+	}
+
+	// Restore cursor
+	buf.WriteString("\033[u")
+
+	// Write all buffered output at once to prevent flicker
+	fmt.Print(buf.String())
+}
+
 func drawEd(tui *editor.TUIEditor) {
 	// Draw Ed in bottom-right corner using ANSI positioning
 	mode := tui.GetMode()
@@ -1128,14 +1218,29 @@ func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Pla
 		mode := tui.GetMode()
 		modeStr := mode.String()
 
-		// Add indicator for continuous modes
-		if mode == editor.ModeJump && tui.GetJumpAction() == editor.JumpActionConnectFrom {
-			if tui.IsContinuousConnect() {
-				modeStr = "CONNECT (continuous)"
-			}
-		} else if mode == editor.ModeJump && tui.GetJumpAction() == editor.JumpActionDelete {
-			if tui.IsContinuousDelete() {
-				modeStr = "DELETE (continuous)"
+		// Add indicator for continuous modes and special states
+		if mode == editor.ModeJump {
+			switch tui.GetJumpAction() {
+			case editor.JumpActionConnectFrom:
+				if tui.GetInsertionPoint() >= 0 {
+					modeStr = fmt.Sprintf("INSERT CONNECTION: Select FROM (at position %d)", tui.GetInsertionPoint())
+				} else if tui.IsContinuousConnect() {
+					modeStr = "CONNECT (continuous)"
+				} else {
+					modeStr = "CONNECT: Select FROM"
+				}
+			case editor.JumpActionConnectTo:
+				if tui.GetInsertionPoint() >= 0 {
+					modeStr = fmt.Sprintf("INSERT CONNECTION: Select TO (at position %d)", tui.GetInsertionPoint())
+				} else {
+					modeStr = "CONNECT: Select TO"
+				}
+			case editor.JumpActionDelete:
+				if tui.IsContinuousDelete() {
+					modeStr = "DELETE (continuous)"
+				}
+			case editor.JumpActionInsertAt:
+				modeStr = "INSERT: Select position"
 			}
 		}
 

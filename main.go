@@ -4,6 +4,7 @@ import (
 	"edd/diagram"
 	"edd/editor"
 	"edd/export"
+	"edd/importer"
 	"edd/render"
 	"edd/terminal"
 	"edd/validation"
@@ -13,6 +14,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -31,6 +34,9 @@ func main() {
 		// Export flags
 		format     = flag.String("format", "ascii", "Export format: ascii, mermaid, plantuml")
 		outputFile = flag.String("o", "", "Output file (default: stdout)")
+
+		// Import flags
+		importFormat = flag.String("import", "", "Import from format: mermaid, plantuml, graphviz, d2 (auto-detect if not specified)")
 
 		// Demo mode flags
 		demo      = flag.Bool("demo", false, "Demo mode: replay stdin input with randomized timing")
@@ -51,6 +57,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s -debug diagram.json\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -format mermaid diagram.json    # Export to Mermaid\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -format plantuml -o output.puml diagram.json\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -import mermaid diagram.mmd     # Import from Mermaid\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s diagram.mmd                     # Auto-detect format by extension\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nInteractive Mode Commands:\n")
 		fmt.Fprintf(os.Stderr, "  :export mermaid [file]   # Export to Mermaid format\n")
 		fmt.Fprintf(os.Stderr, "  :export plantuml [file]  # Export to PlantUML format\n")
@@ -99,7 +107,7 @@ func main() {
 	}
 
 	// Read the diagram file
-	diagram, err := loadDiagram(filename)
+	diagram, err := loadDiagram(filename, *importFormat)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading diagram: %v\n", err)
 		os.Exit(1)
@@ -183,8 +191,8 @@ func main() {
 	}
 }
 
-// loadDiagram loads a diagram from a JSON file
-func loadDiagram(filename string) (*diagram.Diagram, error) {
+// loadDiagram loads a diagram from a file, potentially importing from other formats
+func loadDiagram(filename string, importFormat string) (*diagram.Diagram, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("opening file: %w", err)
@@ -196,8 +204,82 @@ func loadDiagram(filename string) (*diagram.Diagram, error) {
 		return nil, fmt.Errorf("reading file: %w", err)
 	}
 
+	// Check if we need to import from another format
+	ext := strings.ToLower(filepath.Ext(filename))
+	needImport := importFormat != "" || ext != ".json"
+
+	// Known import extensions
+	importExtensions := map[string]bool{
+		".mmd":      true,
+		".mermaid":  true,
+		".puml":     true,
+		".plantuml": true,
+		".pu":       true,
+		".dot":      true,
+		".gv":       true,
+		".d2":       true,
+	}
+
+	if needImport && importExtensions[ext] {
+		// Import from another format
+		registry := importer.NewImporterRegistry()
+
+		var d *diagram.Diagram
+		if importFormat != "" {
+			// Use specified format
+			d, err = registry.ImportWithFormat(string(data), importFormat)
+		} else {
+			// Auto-detect format
+			d, err = registry.Import(string(data))
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("importing diagram: %w", err)
+		}
+
+		// Ensure all connections have unique IDs
+		diagram.EnsureUniqueConnectionIDs(d)
+
+		// Default arrows to true for all connections
+		for i := range d.Connections {
+			if !d.Connections[i].Arrow {
+				d.Connections[i].Arrow = true
+			}
+		}
+
+		return d, nil
+	}
+
+	// Parse as JSON
 	var d diagram.Diagram
 	if err := json.Unmarshal(data, &d); err != nil {
+		// If JSON parsing fails and it might be another format, try importing
+		if importFormat != "" || importExtensions[ext] {
+			registry := importer.NewImporterRegistry()
+
+			var imported *diagram.Diagram
+			if importFormat != "" {
+				imported, err = registry.ImportWithFormat(string(data), importFormat)
+			} else {
+				imported, err = registry.Import(string(data))
+			}
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse as JSON and import failed: %w", err)
+			}
+
+			// Ensure all connections have unique IDs
+			diagram.EnsureUniqueConnectionIDs(imported)
+
+			// Default arrows to true for all connections
+			for i := range imported.Connections {
+				if !imported.Connections[i].Arrow {
+					imported.Connections[i].Arrow = true
+				}
+			}
+
+			return imported, nil
+		}
 		return nil, fmt.Errorf("parsing JSON: %w", err)
 	}
 
@@ -231,7 +313,8 @@ func runInteractiveMode(filename string, diagramType string, demoSettings *termi
 
 	// Load diagram if filename provided
 	if filename != "" {
-		d, err := loadInteractiveDiagram(filename)
+		// Use the main loadDiagram function which handles imports
+		d, err := loadDiagram(filename, "")
 		if err != nil {
 			return fmt.Errorf("failed to load diagram: %w", err)
 		}
@@ -254,20 +337,3 @@ func runInteractiveMode(filename string, diagramType string, demoSettings *termi
 	return terminal.RunTUILoop(tui, filename, demoSettings)
 }
 
-// loadInteractiveDiagram loads a diagram from a JSON file for interactive editing
-func loadInteractiveDiagram(filename string) (*diagram.Diagram, error) {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	var d diagram.Diagram
-	if err := json.Unmarshal(data, &d); err != nil {
-		return nil, err
-	}
-
-	// Ensure all connections have unique IDs
-	diagram.EnsureUniqueConnectionIDs(&d)
-
-	return &d, nil
-}

@@ -16,6 +16,8 @@ const (
 	FormatMermaid Format = "mermaid"
 	// FormatPlantUML exports to PlantUML syntax
 	FormatPlantUML Format = "plantuml"
+	// FormatJSON exports to JSON (edd native format)
+	FormatJSON Format = "json"
 )
 
 // Exporter interface for different export formats
@@ -37,6 +39,8 @@ func NewExporter(format Format) (Exporter, error) {
 		return NewMermaidExporter(), nil
 	case FormatPlantUML:
 		return NewPlantUMLExporter(), nil
+	case FormatJSON:
+		return NewJSONExporter(), nil
 	default:
 		return nil, fmt.Errorf("unsupported export format: %s", format)
 	}
@@ -51,6 +55,8 @@ func ParseFormat(s string) (Format, error) {
 		return FormatMermaid, nil
 	case "plantuml", "puml":
 		return FormatPlantUML, nil
+	case "json":
+		return FormatJSON, nil
 	default:
 		return "", fmt.Errorf("unknown format: %s", s)
 	}
@@ -62,6 +68,7 @@ func GetAvailableFormats() []Format {
 		FormatASCII,
 		FormatMermaid,
 		FormatPlantUML,
+		FormatJSON,
 	}
 }
 
@@ -71,5 +78,6 @@ func GetFormatDescriptions() map[Format]string {
 		FormatASCII:    "ASCII/Unicode art (edd native format)",
 		FormatMermaid:  "Mermaid diagram syntax (for Markdown)",
 		FormatPlantUML: "PlantUML diagram syntax",
+		FormatJSON:     "JSON (edd data format)",
 	}
 }

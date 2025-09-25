@@ -22,7 +22,9 @@ type TUIEditor struct {
 	selectedConnection int          // Currently selected connection index (-1 for none)
 	jumpLabels         map[int]rune // Node ID -> jump label mapping
 	connectionLabels   map[int]rune // Connection index -> jump label mapping
+	insertionLabels    map[int]rune // Insertion point index -> jump label mapping
 	jumpAction         JumpAction   // What to do after jump selection
+	insertionPoint     int          // Where to insert new connection (for splice mode)
 	continuousConnect  bool         // Whether to continue connecting after each connection
 	continuousDelete   bool         // Whether to continue deleting after each deletion
 	editingHintConn    int          // Connection being edited for hints (-1 for none)
@@ -610,6 +612,48 @@ func (e *TUIEditor) AddConnection(from, to int, label string) {
 	e.SaveHistory()
 }
 
+// InsertConnection inserts a connection at a specific index
+func (e *TUIEditor) InsertConnection(index int, from, to int, label string) {
+	// Validate index
+	if index < 0 {
+		index = 0
+	}
+	if index > len(e.diagram.Connections) {
+		index = len(e.diagram.Connections)
+	}
+
+	// Generate a unique ID for the new connection
+	connID := len(e.diagram.Connections)
+	for _, existing := range e.diagram.Connections {
+		if existing.ID >= connID {
+			connID = existing.ID + 1
+		}
+	}
+
+	conn := diagram.Connection{
+		ID:    connID,
+		From:  from,
+		To:    to,
+		Label: label,
+	}
+
+	// Insert at the specified position
+	if index >= len(e.diagram.Connections) {
+		// Append to end
+		e.diagram.Connections = append(e.diagram.Connections, conn)
+	} else {
+		// Insert at position
+		e.diagram.Connections = append(e.diagram.Connections[:index],
+			append([]diagram.Connection{conn}, e.diagram.Connections[index:]...)...)
+	}
+
+	// Mark diagram as changed
+	e.diagramChanged = true
+
+	// Save to history after modification
+	e.SaveHistory()
+}
+
 // DeleteConnection removes a connection by index
 func (e *TUIEditor) DeleteConnection(index int) {
 	if index >= 0 && index < len(e.diagram.Connections) {
@@ -942,12 +986,13 @@ func (e *TUIEditor) isConnectionVisible(connIndex int) bool {
 func (e *TUIEditor) assignJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
 	e.connectionLabels = make(map[int]rune)
+	e.insertionLabels = make(map[int]rune) // Always clear insertion labels
 
 	// Debug logging
 	if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
 		fmt.Fprintf(f, "\n=== assignJumpLabels called ===\n")
 		fmt.Fprintf(f, "Scroll offset: %d, Mode: %v, Diagram type: %s\n", e.diagramScrollOffset, e.mode, e.diagram.Type)
-		fmt.Fprintf(f, "Total nodes: %d\n", len(e.diagram.Nodes))
+		fmt.Fprintf(f, "JumpAction: %v, Total nodes: %d\n", e.jumpAction, len(e.diagram.Nodes))
 		f.Close()
 	}
 
@@ -1026,6 +1071,30 @@ func (e *TUIEditor) assignJumpLabels() {
 				labelIndex++
 			}
 		}
+	} else if e.jumpAction == JumpActionInsertAt {
+		// For insert mode, assign labels to insertion points (before each connection and after the last)
+		if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Starting insertion point labeling at labelIndex=%d\n", labelIndex)
+			f.Close()
+		}
+
+		// Always add label for position 0 (before first connection)
+		if labelIndex < len(jumpChars) {
+			e.insertionLabels[0] = rune(jumpChars[labelIndex])
+			labelIndex++
+		}
+
+		// Add labels for positions after each visible connection
+		for i := 0; i < len(e.diagram.Connections); i++ {
+			if labelIndex >= len(jumpChars) {
+				break
+			}
+			// Only add labels for visible connections
+			if e.isConnectionVisible(i) {
+				e.insertionLabels[i+1] = rune(jumpChars[labelIndex])
+				labelIndex++
+			}
+		}
 	}
 
 	// Log final labels assigned
@@ -1050,6 +1119,7 @@ func (e *TUIEditor) getJumpLabel(nodeID int) string {
 func (e *TUIEditor) clearJumpLabels() {
 	e.jumpLabels = make(map[int]rune)
 	e.connectionLabels = make(map[int]rune)
+	e.insertionLabels = make(map[int]rune)
 	e.jumpAction = JumpActionSelect
 }
 
@@ -1099,12 +1169,13 @@ func (m Mode) String() string {
 type JumpAction int
 
 const (
-	JumpActionSelect      JumpAction = iota // Just select the node
-	JumpActionEdit                          // Edit the selected node
-	JumpActionDelete                        // Delete the selected node
-	JumpActionConnectFrom                   // Start connection from this node
-	JumpActionConnectTo                     // Complete connection to this node
-	JumpActionHint                          // Edit hints for nodes and connections
+	JumpActionSelect       JumpAction = iota // Just select the node
+	JumpActionEdit                           // Edit the selected node
+	JumpActionDelete                         // Delete the selected node
+	JumpActionConnectFrom                    // Start connection from this node
+	JumpActionConnectTo                      // Complete connection to this node
+	JumpActionHint                           // Edit hints for nodes and connections
+	JumpActionInsertAt                       // Select insertion point for new connection
 )
 
 // SetMode changes the editor mode
@@ -1551,6 +1622,16 @@ func (e *TUIEditor) GetConnectionLabels() map[int]rune {
 	return e.connectionLabels
 }
 
+// GetInsertionLabels returns the current insertion point jump labels
+func (e *TUIEditor) GetInsertionLabels() map[int]rune {
+	return e.insertionLabels
+}
+
+// GetInsertionPoint returns the current insertion point (-1 if not set)
+func (e *TUIEditor) GetInsertionPoint() int {
+	return e.insertionPoint
+}
+
 // GetJumpAction returns the current jump action
 func (e *TUIEditor) GetJumpAction() JumpAction {
 	return e.jumpAction
@@ -1653,6 +1734,24 @@ func (e *TUIEditor) StartCommand() {
 func (e *TUIEditor) StartHintEdit() {
 	if len(e.diagram.Nodes) > 0 || len(e.diagram.Connections) > 0 {
 		e.startJump(JumpActionHint)
+	}
+}
+
+// StartInsert starts connection insertion mode (for sequence diagrams)
+func (e *TUIEditor) StartInsert() {
+	// Only available for sequence diagrams with at least 2 nodes
+	if e.diagram.Type == "sequence" && len(e.diagram.Nodes) >= 2 {
+		e.continuousConnect = false
+		e.startJump(JumpActionInsertAt)
+	}
+}
+
+// StartContinuousInsert starts continuous connection insertion mode
+func (e *TUIEditor) StartContinuousInsert() {
+	// Only available for sequence diagrams with at least 2 nodes
+	if e.diagram.Type == "sequence" && len(e.diagram.Nodes) >= 2 {
+		e.continuousConnect = true
+		e.startJump(JumpActionInsertAt)
 	}
 }
 
@@ -1937,6 +2036,12 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 	case 'H': // Edit connection hints
 		e.StartHintEdit()
 
+	case 'i': // Insert connection (single)
+		e.StartInsert()
+
+	case 'I': // Insert connection (continuous)
+		e.StartContinuousInsert()
+
 	case 'J': // JSON view (capital J)
 		e.SetMode(ModeJSON)
 
@@ -2164,8 +2269,21 @@ func (e *TUIEditor) handleJumpKey(key rune) bool {
 		e.continuousDelete = false  // Exit continuous delete mode
 		e.previousJumpAction = 0    // Clear the previous action since we're canceling
 		e.selected = -1             // Clear selected node
+		e.insertionPoint = -1       // Clear insertion point
 		e.SetMode(ModeNormal)
 		return false
+	}
+
+	// Look for matching insertion point label (in insert mode)
+	if e.jumpAction == JumpActionInsertAt {
+		for insertPos, label := range e.insertionLabels {
+			if label == key {
+				// Save the insertion point and move to standard connect flow
+				e.insertionPoint = insertPos
+				e.startJump(JumpActionConnectFrom)
+				return false
+			}
+		}
 	}
 
 	// Look for matching node jump label
@@ -2324,7 +2442,21 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 
 	case JumpActionConnectTo:
 		if e.selected >= 0 {
-			e.AddConnection(e.selected, nodeID, "")
+			// Check if we have an insertion point set (from insert mode)
+			if e.insertionPoint >= 0 {
+				// Insert at the specified position
+				e.InsertConnection(e.insertionPoint, e.selected, nodeID, "")
+				// In continuous mode, increment insertion point to keep inserting at the same relative position
+				// Otherwise clear it
+				if e.continuousConnect {
+					e.insertionPoint++
+				} else {
+					e.insertionPoint = -1
+				}
+			} else {
+				// Normal append
+				e.AddConnection(e.selected, nodeID, "")
+			}
 		}
 
 		// If in continuous connect mode, behavior depends on diagram type
@@ -2342,6 +2474,7 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		} else {
 			// Normal mode - exit to normal
 			e.selected = -1
+			e.insertionPoint = -1 // Also clear here for safety
 			e.clearJumpLabels()
 			e.SetMode(ModeNormal)
 		}
