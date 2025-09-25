@@ -44,7 +44,7 @@ type MessagePosition struct {
 func NewSequenceLayout() *SequenceLayout {
 	return &SequenceLayout{
 		ParticipantSpacing: 15,
-		MessageSpacing:     3,  // Reduced from 4 to save vertical space
+		MessageSpacing:     2,  // Minimum: 1 line for arrow, 1 line for label
 		ParticipantWidth:   20,
 		ParticipantHeight:  3,
 		TopMargin:         2,
