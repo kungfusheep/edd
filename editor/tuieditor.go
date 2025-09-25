@@ -2140,6 +2140,8 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 	case 13, 10: // Enter - commit text
 		// Save the mode before committing (in case commit changes it)
 		wasInsertMode := e.mode == ModeInsert
+		wasEditingConnection := e.selectedConnection >= 0
+		currentConnectionIndex := e.selectedConnection
 
 		e.commitText()
 
@@ -2152,8 +2154,22 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 			e.cursorPos = 0
 			// Stay in INSERT mode (don't call SetMode as it clears the buffer)
 			// e.mode is already ModeInsert
+		} else if wasEditingConnection && e.mode == ModeEdit {
+			// If we were editing a connection, move to the next one
+			nextIndex := currentConnectionIndex + 1
+			if nextIndex < len(e.diagram.Connections) {
+				// Select and edit the next connection
+				e.selectedConnection = nextIndex
+				conn := e.diagram.Connections[nextIndex]
+				e.textBuffer = []rune(conn.Label)
+				e.cursorPos = len(e.textBuffer)
+				// Stay in EDIT mode
+			} else {
+				// No more connections, return to normal mode
+				e.SetMode(ModeNormal)
+			}
 		} else {
-			// In EDIT mode, return to normal
+			// In EDIT mode (for nodes), return to normal
 			e.SetMode(ModeNormal)
 		}
 
