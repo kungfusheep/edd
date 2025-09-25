@@ -23,7 +23,7 @@ func GetHelpText() string {
 			Name: "Node Operations",
 			Commands: []HelpCommand{
 				{"a/A", "Add node (A for continuous)"},
-				{"e", "Edit node text"},
+				{"e", "Edit node/connection text"},
 				{"d/D", "Delete node/connection (D for continuous)"},
 			},
 		},
@@ -88,6 +88,7 @@ func GetHelpText() string {
 	b.WriteString("╠════════════════════════════════════════════════════╣\n")
 	b.WriteString("║ In JUMP mode: Press labeled key to select target  ║\n")
 	b.WriteString("║ In EDIT mode: Ctrl+N for newline, Enter to save   ║\n")
+	b.WriteString("║   Connections: Enter/Tab=next, Shift+Tab=previous ║\n")
 	b.WriteString("╚════════════════════════════════════════════════════╝\n")
 	
 	return b.String()

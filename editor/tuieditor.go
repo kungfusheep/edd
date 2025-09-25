@@ -254,11 +254,21 @@ func (e *TUIEditor) Render() string {
 
 	// If we have a real renderer that can provide positions, use it
 	if realRenderer, ok := e.renderer.(*RealRenderer); ok {
-		// Set edit state if we're editing or inserting
+		// Set edit state based on what we're editing
 		if e.mode == ModeEdit || e.mode == ModeInsert {
-			realRenderer.SetEditState(e.selected, string(e.textBuffer), e.cursorPos)
+			if e.selectedConnection >= 0 {
+				// Editing a connection label
+				realRenderer.SetEditState(-1, "", 0) // Clear node edit state
+				realRenderer.SetConnectionEditState(e.selectedConnection, string(e.textBuffer), e.cursorPos)
+			} else {
+				// Editing a node
+				realRenderer.SetEditState(e.selected, string(e.textBuffer), e.cursorPos)
+				realRenderer.SetConnectionEditState(-1, "", 0) // Clear connection edit state
+			}
 		} else {
+			// Not editing anything
 			realRenderer.SetEditState(-1, "", 0)
+			realRenderer.SetConnectionEditState(-1, "", 0)
 		}
 
 		positions, output, err := realRenderer.RenderWithPositions(e.diagram)
@@ -1084,6 +1094,30 @@ func (e *TUIEditor) StartEditingConnection(connIndex int) {
 		// Clear jump labels and enter edit mode
 		e.clearJumpLabels()
 		e.SetMode(ModeEdit)
+	}
+}
+
+// HandleBacktab handles Shift+Tab to move to previous connection
+func (e *TUIEditor) HandleBacktab() {
+	if e.selectedConnection >= 0 && e.mode == ModeEdit && len(e.diagram.Connections) > 0 {
+		// Save current index before committing (commitText clears it)
+		currentIndex := e.selectedConnection
+
+		// Commit current text first
+		e.commitText()
+
+		// Move to previous connection
+		prevIndex := currentIndex - 1
+		if prevIndex < 0 {
+			// Wrap around to last connection
+			prevIndex = len(e.diagram.Connections) - 1
+		}
+
+		e.selectedConnection = prevIndex
+		conn := e.diagram.Connections[prevIndex]
+		e.textBuffer = []rune(conn.Label)
+		e.cursorPos = len(e.textBuffer)
+		// Stay in EDIT mode
 	}
 }
 
@@ -2595,9 +2629,33 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 	case 22: // Ctrl+V - move down one line (since Ctrl+N is for newline)
 		e.moveCursorDown()
 
+	case 9: // Tab - move to next connection (without committing)
+		if e.selectedConnection >= 0 && e.mode == ModeEdit {
+			// Save current index before committing (commitText clears it)
+			currentIndex := e.selectedConnection
+
+			// Commit current text first
+			e.commitText()
+
+			// Move to next connection
+			nextIndex := currentIndex + 1
+			if nextIndex >= len(e.diagram.Connections) {
+				// Wrap around to first connection
+				nextIndex = 0
+			}
+
+			e.selectedConnection = nextIndex
+			conn := e.diagram.Connections[nextIndex]
+			e.textBuffer = []rune(conn.Label)
+			e.cursorPos = len(e.textBuffer)
+			// Stay in EDIT mode
+		}
+
 	case 13, 10: // Enter - commit text
 		// Save the mode before committing (in case commit changes it)
 		wasInsertMode := e.mode == ModeInsert
+		wasEditingConnection := e.selectedConnection >= 0
+		currentConnectionIndex := e.selectedConnection
 
 		e.commitText()
 
@@ -2610,8 +2668,22 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 			e.cursorPos = 0
 			// Stay in INSERT mode (don't call SetMode as it clears the buffer)
 			// e.mode is already ModeInsert
+		} else if wasEditingConnection && e.mode == ModeEdit {
+			// If we were editing a connection, move to the next one
+			nextIndex := currentConnectionIndex + 1
+			if nextIndex < len(e.diagram.Connections) {
+				// Select and edit the next connection
+				e.selectedConnection = nextIndex
+				conn := e.diagram.Connections[nextIndex]
+				e.textBuffer = []rune(conn.Label)
+				e.cursorPos = len(e.textBuffer)
+				// Stay in EDIT mode
+			} else {
+				// No more connections, return to normal mode
+				e.SetMode(ModeNormal)
+			}
 		} else {
-			// In EDIT mode, return to normal
+			// In EDIT mode (for nodes), return to normal
 			e.SetMode(ModeNormal)
 		}
 

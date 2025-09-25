@@ -25,6 +25,11 @@ type RealRenderer struct {
 	editingNodeID int
 	editText      string
 	cursorPos     int
+
+	// Edit state for rendering cursor in connection labels
+	EditingConnectionID int // Made public for debugging
+	EditConnectionText  string
+	EditConnectionCursorPos int
 }
 
 // SetEditState sets the current editing state for in-node text editing
@@ -32,10 +37,23 @@ func (r *RealRenderer) SetEditState(nodeID int, text string, cursorPos int) {
 	r.editingNodeID = nodeID
 	r.editText = text
 	r.cursorPos = cursorPos
-	
+
 	// Debug log
 	if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 		fmt.Fprintf(f, "SetEditState: nodeID=%d, text='%s', cursorPos=%d\n", nodeID, text, cursorPos)
+		f.Close()
+	}
+}
+
+// SetConnectionEditState sets the current editing state for connection label editing
+func (r *RealRenderer) SetConnectionEditState(connectionID int, text string, cursorPos int) {
+	r.EditingConnectionID = connectionID
+	r.EditConnectionText = text
+	r.EditConnectionCursorPos = cursorPos
+
+	// Debug log
+	if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "SetConnectionEditState: connectionID=%d, text='%s', cursorPos=%d\n", connectionID, text, cursorPos)
 		f.Close()
 	}
 }
@@ -92,6 +110,7 @@ func NewRealRenderer() *RealRenderer {
 		nodeRenderer:  render.NewNodeRenderer(caps),
 		labelRenderer: render.NewLabelRenderer(),
 		editingNodeID: -1,
+		EditingConnectionID: -1,
 	}
 }
 
@@ -272,10 +291,21 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 	arrowConfig := pathfinding.NewArrowConfig()
 	connectionsWithArrows := pathfinding.ApplyArrowConfig(d.Connections, paths, arrowConfig)
 	
+	// Debug log the editing state
+	if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "=== Rendering connections ===\n")
+		fmt.Fprintf(f, "EditingConnectionID: %d\n", r.EditingConnectionID)
+		fmt.Fprintf(f, "EditConnectionText: '%s'\n", r.EditConnectionText)
+		fmt.Fprintf(f, "EditConnectionCursorPos: %d\n", r.EditConnectionCursorPos)
+		fmt.Fprintf(f, "Total connections: %d\n", len(d.Connections))
+		fmt.Fprintf(f, "Total connectionsWithArrows: %d\n", len(connectionsWithArrows))
+		f.Close()
+	}
+
 	// Render connections with hints
 	for i, cwa := range connectionsWithArrows {
 		hasArrow := cwa.ArrowType == pathfinding.ArrowEnd || cwa.ArrowType == pathfinding.ArrowBoth
-		
+
 		// Check if this connection has hints
 		if i < len(d.Connections) && d.Connections[i].Hints != nil && len(d.Connections[i].Hints) > 0 {
 			// Use RenderPathWithHints to apply visual hints
@@ -286,10 +316,40 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 		}
 	}
 	
-	// Render labels
+	// Render labels (with editing support)
 	for i, conn := range d.Connections {
-		if conn.Label != "" && i < len(connectionsWithArrows) {
-			r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, conn.Label, render.LabelMiddle)
+		labelText := conn.Label
+		isEditingThisConnection := r.EditingConnectionID == i
+
+		// Debug log each connection
+		if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "Connection %d: label='%s', isEditing=%v\n", i, conn.Label, isEditingThisConnection)
+			f.Close()
+		}
+
+		// If editing this connection, use edit text
+		if isEditingThisConnection {
+			labelText = r.EditConnectionText
+			// More debug logging
+			if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "  -> Using edit text: '%s' with cursor at %d\n", labelText, r.EditConnectionCursorPos)
+				f.Close()
+			}
+		}
+
+		// Render label if it has text or is being edited
+		if (labelText != "" || isEditingThisConnection) && i < len(connectionsWithArrows) {
+			if isEditingThisConnection {
+				// Render with cursor
+				if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "  -> Calling renderLabelWithCursor\n")
+					f.Close()
+				}
+				renderLabelWithCursor(r.labelRenderer, offsetCanvas, connectionsWithArrows[i].Path, labelText, r.EditConnectionCursorPos)
+			} else {
+				// Normal label render
+				r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, labelText, render.LabelMiddle)
+			}
 		}
 	}
 	
@@ -321,7 +381,7 @@ func (r *RealRenderer) renderSequenceWithPositions(d *diagram.Diagram) (*NodePos
 		tempNodes := make([]diagram.Node, len(d.Nodes))
 		copy(tempNodes, d.Nodes)
 		tempDiagram.Nodes = tempNodes
-		
+
 		// Update the text of the node being edited
 		for i := range tempDiagram.Nodes {
 			if tempDiagram.Nodes[i].ID == r.editingNodeID {
@@ -330,6 +390,21 @@ func (r *RealRenderer) renderSequenceWithPositions(d *diagram.Diagram) (*NodePos
 				tempDiagram.Nodes[i].Text = lines
 				break
 			}
+		}
+		renderDiagram = &tempDiagram
+	} else if r.EditingConnectionID >= 0 {
+		// If we're editing a connection label, create a copy with edited text
+		tempDiagram := *d
+		// Make a copy of the connections slice
+		tempConnections := make([]diagram.Connection, len(d.Connections))
+		copy(tempConnections, d.Connections)
+		tempDiagram.Connections = tempConnections
+
+		// Update the label of the connection being edited with cursor
+		if r.EditingConnectionID < len(tempDiagram.Connections) {
+			// Build the label with cursor
+			labelWithCursor := r.buildLabelWithCursor(r.EditConnectionText, r.EditConnectionCursorPos)
+			tempDiagram.Connections[r.EditingConnectionID].Label = labelWithCursor
 		}
 		renderDiagram = &tempDiagram
 	}
@@ -477,6 +552,124 @@ func drawSimpleBox(c render.Canvas, node diagram.Node, style render.NodeStyle) {
 	}
 	c.Set(diagram.Point{X: node.X + node.Width - 1, Y: node.Y + node.Height - 1}, style.BottomRight)
 }
+
+// buildLabelWithCursor builds a label string with cursor for direct inclusion
+func (r *RealRenderer) buildLabelWithCursor(text string, cursorPos int) string {
+	runes := []rune(text)
+	maxVisibleChars := 15 // Allow more chars for sequence diagrams
+
+	var displayText []rune
+	var adjustedCursorPos int
+
+	if len(runes) <= maxVisibleChars {
+		// Text fits, use it all
+		displayText = runes
+		adjustedCursorPos = cursorPos
+	} else {
+		// Text too long, need to window it
+		// Keep cursor visible by showing a window around it
+		if cursorPos <= 8 {
+			// Cursor near start, show beginning
+			displayText = runes[:maxVisibleChars]
+			adjustedCursorPos = cursorPos
+		} else if cursorPos >= len(runes) - 7 {
+			// Cursor near end, show end
+			start := len(runes) - maxVisibleChars
+			displayText = runes[start:]
+			adjustedCursorPos = cursorPos - start
+		} else {
+			// Cursor in middle, center window on cursor
+			start := cursorPos - 7
+			if start < 0 {
+				start = 0
+			}
+			end := start + maxVisibleChars
+			if end > len(runes) {
+				end = len(runes)
+				start = end - maxVisibleChars
+			}
+			displayText = runes[start:end]
+			adjustedCursorPos = cursorPos - start
+		}
+	}
+
+	// Now build string with cursor
+	if adjustedCursorPos >= 0 && adjustedCursorPos <= len(displayText) {
+		before := string(displayText[:adjustedCursorPos])
+		after := ""
+		if adjustedCursorPos < len(displayText) {
+			after = string(displayText[adjustedCursorPos:])
+		}
+		return before + "█" + after
+	}
+	// Shouldn't happen but failsafe
+	return string(displayText) + "█"
+}
+
+func renderLabelWithCursor(labelRenderer *render.LabelRenderer, c render.Canvas, path diagram.Path, text string, cursorPos int) {
+	// The label renderer truncates at 10 chars total (including brackets it adds)
+	// So content can be 8 chars: [12345678] plus .. for truncation: [123456..]
+	// When editing, we need to show the cursor, which takes 1 char
+	// So we can show at most 7 chars of actual text plus cursor
+
+	runes := []rune(text)
+	maxVisibleChars := 7 // Room for 7 chars + 1 cursor in the 8-char content space
+
+	var displayText []rune
+	var adjustedCursorPos int
+
+	if len(runes) <= maxVisibleChars {
+		// Text fits, use it all
+		displayText = runes
+		adjustedCursorPos = cursorPos
+	} else {
+		// Text too long, need to window it
+		// Keep cursor visible by showing a window around it
+		if cursorPos <= 4 {
+			// Cursor near start, show beginning
+			displayText = runes[:maxVisibleChars]
+			adjustedCursorPos = cursorPos
+		} else if cursorPos >= len(runes) - 3 {
+			// Cursor near end, show end
+			start := len(runes) - maxVisibleChars
+			displayText = runes[start:]
+			adjustedCursorPos = cursorPos - start
+		} else {
+			// Cursor in middle, center window on cursor
+			start := cursorPos - 3
+			if start < 0 {
+				start = 0
+			}
+			end := start + maxVisibleChars
+			if end > len(runes) {
+				end = len(runes)
+				start = end - maxVisibleChars
+			}
+			displayText = runes[start:end]
+			adjustedCursorPos = cursorPos - start
+		}
+	}
+
+	// Now build string with cursor
+	var labelWithCursor string
+	if adjustedCursorPos >= 0 && adjustedCursorPos <= len(displayText) {
+		before := string(displayText[:adjustedCursorPos])
+		after := ""
+		if adjustedCursorPos < len(displayText) {
+			after = string(displayText[adjustedCursorPos:])
+		}
+		labelWithCursor = before + "█" + after
+	} else {
+		// Shouldn't happen but failsafe
+		labelWithCursor = string(displayText) + "█"
+	}
+
+	// Use the standard label renderer
+	// It will add brackets and won't truncate since we pre-sized the content
+	labelRenderer.RenderLabel(c, path, labelWithCursor, render.LabelMiddle)
+}
+
+// Removed - no longer needed since we use the standard label renderer
 
 func renderNodeWithEdit(c render.Canvas, node diagram.Node, nodeRenderer *render.NodeRenderer, isEditing bool, editText string, cursorPos int) {
 	// If not editing, use NodeRenderer to draw with styles

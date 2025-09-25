@@ -14,6 +14,7 @@ const (
 	KeyPageUp
 	KeyPageDown
 	KeyDelete
+	KeyBacktab
 )
 
 // KeyEvent represents either a regular character or a special key
