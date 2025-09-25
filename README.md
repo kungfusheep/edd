@@ -1,10 +1,4 @@
-# edd
-
-```
-╭────╮
-│◉‿ ◉│
-╰────╯
-```
+# edd `◉‿ ◉`
 
 A terminal-based diagram editor for creating sequence diagrams and flowcharts.
 
@@ -12,7 +6,11 @@ A terminal-based diagram editor for creating sequence diagrams and flowcharts.
 
 ### Diagram Types
 - **Sequence diagrams** - Show interactions between participants over time
+<img width="1636" height="1009" alt="image" src="https://github.com/user-attachments/assets/0404230a-c0f6-41b0-a10a-05aa6663e10d" />
+
 - **Flowcharts** - Box-and-arrow diagrams for processes and flows
+<img width="1400" height="346" alt="image" src="https://github.com/user-attachments/assets/14feb915-c53c-46ab-8380-c1472f33e99d" />
+
 
 ### Editor Modes
 - **Interactive TUI** - Vim-like modal editing in the terminal
