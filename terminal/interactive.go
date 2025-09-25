@@ -901,6 +901,10 @@ func parseEscapeSequence(seq []byte) editor.KeyEvent {
 	if seqStr == "\033[F" || seqStr == "\033[4~" || seqStr == "\033OF" {
 		return editor.KeyEvent{SpecialKey: editor.KeyEnd}
 	}
+	// Shift+Tab (backtab)
+	if seqStr == "\033[Z" {
+		return editor.KeyEvent{SpecialKey: editor.KeyBacktab}
+	}
 
 	// Alt+Backspace (word delete) - various terminals send different sequences
 	if len(seq) == 2 && seq[0] == 27 && seq[1] == 127 {
@@ -1330,6 +1334,9 @@ func handleSpecialKeyInTextMode(tui *editor.TUIEditor, key editor.SpecialKey) {
 		tui.HandleArrowKey('H') // Home key
 	case editor.KeyEnd:
 		tui.HandleArrowKey('E') // End key
+	case editor.KeyBacktab:
+		// Handle Shift+Tab for previous connection
+		tui.HandleBacktab()
 	}
 }
 

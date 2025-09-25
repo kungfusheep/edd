@@ -707,6 +707,30 @@ func (e *TUIEditor) StartEditingConnection(connIndex int) {
 	}
 }
 
+// HandleBacktab handles Shift+Tab to move to previous connection
+func (e *TUIEditor) HandleBacktab() {
+	if e.selectedConnection >= 0 && e.mode == ModeEdit && len(e.diagram.Connections) > 0 {
+		// Save current index before committing (commitText clears it)
+		currentIndex := e.selectedConnection
+
+		// Commit current text first
+		e.commitText()
+
+		// Move to previous connection
+		prevIndex := currentIndex - 1
+		if prevIndex < 0 {
+			// Wrap around to last connection
+			prevIndex = len(e.diagram.Connections) - 1
+		}
+
+		e.selectedConnection = prevIndex
+		conn := e.diagram.Connections[prevIndex]
+		e.textBuffer = []rune(conn.Label)
+		e.cursorPos = len(e.textBuffer)
+		// Stay in EDIT mode
+	}
+}
+
 // UpdateConnectionLabel updates the label of a connection
 func (e *TUIEditor) UpdateConnectionLabel(connIndex int, label string) {
 	if connIndex >= 0 && connIndex < len(e.diagram.Connections) {
@@ -2146,6 +2170,28 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 
 	case 22: // Ctrl+V - move down one line (since Ctrl+N is for newline)
 		e.moveCursorDown()
+
+	case 9: // Tab - move to next connection (without committing)
+		if e.selectedConnection >= 0 && e.mode == ModeEdit {
+			// Save current index before committing (commitText clears it)
+			currentIndex := e.selectedConnection
+
+			// Commit current text first
+			e.commitText()
+
+			// Move to next connection
+			nextIndex := currentIndex + 1
+			if nextIndex >= len(e.diagram.Connections) {
+				// Wrap around to first connection
+				nextIndex = 0
+			}
+
+			e.selectedConnection = nextIndex
+			conn := e.diagram.Connections[nextIndex]
+			e.textBuffer = []rune(conn.Label)
+			e.cursorPos = len(e.textBuffer)
+			// Stay in EDIT mode
+		}
 
 	case 13, 10: // Enter - commit text
 		// Save the mode before committing (in case commit changes it)
