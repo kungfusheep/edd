@@ -5,6 +5,7 @@ import (
 	"edd/editor"
 	"edd/export"
 	"edd/importer"
+	"edd/markdown"
 	"edd/render"
 	"edd/terminal"
 	"edd/validation"
@@ -36,7 +37,12 @@ func main() {
 		outputFile = flag.String("o", "", "Output file (default: stdout)")
 
 		// Import flags
-		importFormat = flag.String("import", "", "Import from format: mermaid, plantuml, graphviz, d2 (auto-detect if not specified)")
+		inputFormat = flag.String("input-format", "", "Input format: json, mermaid, plantuml, graphviz, d2 (auto-detect if not specified)")
+		importFormat = flag.String("import", "", "[Deprecated: use -input-format] Import from format: mermaid, plantuml, graphviz, d2")
+
+		// Markdown mode flags
+		markdownMode = flag.Bool("markdown", false, "Edit diagram blocks within markdown files")
+		blockIndex   = flag.Int("block", 0, "Which diagram block to edit (1-based index, 0 = show picker)")
 
 		// Demo mode flags
 		demo      = flag.Bool("demo", false, "Demo mode: replay stdin input with randomized timing")
@@ -57,8 +63,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s -debug diagram.json\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -format mermaid diagram.json    # Export to Mermaid\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -format plantuml -o output.puml diagram.json\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s -import mermaid diagram.mmd     # Import from Mermaid\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s diagram.mmd                     # Auto-detect format by extension\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -input-format mermaid diagram.mmd  # Import from Mermaid\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s diagram.mmd                        # Auto-detect format by extension\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -input-format mermaid <(cat file)  # Use process substitution\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -markdown README.md                 # Edit diagram block in markdown\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s -markdown -block 2 README.md        # Edit 2nd diagram block\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nInteractive Mode Commands:\n")
 		fmt.Fprintf(os.Stderr, "  :export mermaid [file]   # Export to Mermaid format\n")
 		fmt.Fprintf(os.Stderr, "  :export plantuml [file]  # Export to PlantUML format\n")
@@ -77,6 +86,26 @@ func main() {
 	var filename string
 	if len(args) > 0 {
 		filename = args[0]
+	}
+
+	// Handle markdown mode
+	if *markdownMode && filename != "" {
+		// Check if this is extraction mode (non-interactive)
+		if *format != "ascii" {
+			err := runMarkdownExtraction(filename, *blockIndex, *format, *outputFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		} else if *interactive || *edit || (len(args) > 0) {
+			// Interactive editing mode
+			err := runMarkdownMode(filename, *blockIndex)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		os.Exit(0)
 	}
 
 	// Handle interactive mode (including demo mode)
@@ -107,7 +136,12 @@ func main() {
 	}
 
 	// Read the diagram file
-	diagram, err := loadDiagram(filename, *importFormat)
+	// Use inputFormat if specified, otherwise fall back to importFormat for backwards compatibility
+	inFmt := *inputFormat
+	if inFmt == "" {
+		inFmt = *importFormat
+	}
+	diagram, err := loadDiagram(filename, inFmt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading diagram: %v\n", err)
 		os.Exit(1)
@@ -192,7 +226,7 @@ func main() {
 }
 
 // loadDiagram loads a diagram from a file, potentially importing from other formats
-func loadDiagram(filename string, importFormat string) (*diagram.Diagram, error) {
+func loadDiagram(filename string, inputFormat string) (*diagram.Diagram, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("opening file: %w", err)
@@ -206,7 +240,31 @@ func loadDiagram(filename string, importFormat string) (*diagram.Diagram, error)
 
 	// Check if we need to import from another format
 	ext := strings.ToLower(filepath.Ext(filename))
-	needImport := importFormat != "" || ext != ".json"
+
+	// If input format is explicitly specified, use it
+	if inputFormat != "" && inputFormat != "json" {
+		// Import from specified format
+		registry := importer.NewImporterRegistry()
+		d, err := registry.ImportWithFormat(string(data), inputFormat)
+		if err != nil {
+			return nil, fmt.Errorf("importing diagram: %w", err)
+		}
+
+		// Ensure all connections have unique IDs
+		diagram.EnsureUniqueConnectionIDs(d)
+
+		// Default arrows to true for all connections
+		for i := range d.Connections {
+			if !d.Connections[i].Arrow {
+				d.Connections[i].Arrow = true
+			}
+		}
+
+		return d, nil
+	}
+
+	// Auto-detect based on extension
+	needImport := ext != ".json" && ext != ""
 
 	// Known import extensions
 	importExtensions := map[string]bool{
@@ -224,14 +282,8 @@ func loadDiagram(filename string, importFormat string) (*diagram.Diagram, error)
 		// Import from another format
 		registry := importer.NewImporterRegistry()
 
-		var d *diagram.Diagram
-		if importFormat != "" {
-			// Use specified format
-			d, err = registry.ImportWithFormat(string(data), importFormat)
-		} else {
-			// Auto-detect format
-			d, err = registry.Import(string(data))
-		}
+		// Auto-detect format
+		d, err := registry.Import(string(data))
 
 		if err != nil {
 			return nil, fmt.Errorf("importing diagram: %w", err)
@@ -254,12 +306,12 @@ func loadDiagram(filename string, importFormat string) (*diagram.Diagram, error)
 	var d diagram.Diagram
 	if err := json.Unmarshal(data, &d); err != nil {
 		// If JSON parsing fails and it might be another format, try importing
-		if importFormat != "" || importExtensions[ext] {
+		if inputFormat != "" || importExtensions[ext] {
 			registry := importer.NewImporterRegistry()
 
 			var imported *diagram.Diagram
-			if importFormat != "" {
-				imported, err = registry.ImportWithFormat(string(data), importFormat)
+			if inputFormat != "" {
+				imported, err = registry.ImportWithFormat(string(data), inputFormat)
 			} else {
 				imported, err = registry.Import(string(data))
 			}
@@ -300,6 +352,193 @@ func loadDiagram(filename string, importFormat string) (*diagram.Diagram, error)
 	}
 
 	return &d, nil
+}
+
+// runMarkdownExtraction extracts and exports a diagram from markdown without interaction
+func runMarkdownExtraction(filename string, blockIndex int, format string, outputFile string) error {
+	// Read the markdown file
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("reading markdown file: %w", err)
+	}
+
+	// Scan for diagram blocks
+	scanner := markdown.NewScanner(string(content))
+	blocks := scanner.FindDiagramBlocks()
+
+	if len(blocks) == 0 {
+		return fmt.Errorf("no diagram blocks found in %s", filename)
+	}
+
+	// Determine which block to extract
+	var selectedBlock markdown.DiagramBlock
+
+	if blockIndex > 0 {
+		// User specified a block index (1-based)
+		if blockIndex > len(blocks) {
+			return fmt.Errorf("block index %d is out of range (found %d blocks)", blockIndex, len(blocks))
+		}
+		selectedBlock = blocks[blockIndex-1]
+	} else if len(blocks) == 1 {
+		// Only one block, select it automatically
+		selectedBlock = blocks[0]
+	} else {
+		return fmt.Errorf("multiple diagram blocks found, please specify which one with -block")
+	}
+
+	// Import the diagram from the block content
+	registry := importer.NewImporterRegistry()
+	var d *diagram.Diagram
+
+	if selectedBlock.Type != "" {
+		d, err = registry.ImportWithFormat(selectedBlock.Content, selectedBlock.Type)
+	} else {
+		d, err = registry.Import(selectedBlock.Content)
+	}
+
+	if err != nil {
+		return fmt.Errorf("importing diagram from markdown block: %w", err)
+	}
+
+	// Parse export format
+	exportFormat, err := export.ParseFormat(format)
+	if err != nil {
+		return fmt.Errorf("invalid format: %w", err)
+	}
+
+	// Create exporter
+	exporter, err := export.NewExporter(exportFormat)
+	if err != nil {
+		return fmt.Errorf("creating exporter: %w", err)
+	}
+
+	// Export the diagram
+	output, err := exporter.Export(d)
+	if err != nil {
+		return fmt.Errorf("exporting diagram: %w", err)
+	}
+
+	// Output to file or stdout
+	if outputFile != "" {
+		err = ioutil.WriteFile(outputFile, []byte(output), 0644)
+		if err != nil {
+			return fmt.Errorf("writing output file: %w", err)
+		}
+	} else {
+		fmt.Print(output)
+	}
+
+	return nil
+}
+
+// runMarkdownMode handles editing diagram blocks within markdown files
+func runMarkdownMode(filename string, blockIndex int) error {
+	// Read the markdown file
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("reading markdown file: %w", err)
+	}
+
+	// Scan for diagram blocks
+	scanner := markdown.NewScanner(string(content))
+	blocks := scanner.FindDiagramBlocks()
+
+	if len(blocks) == 0 {
+		return fmt.Errorf("no diagram blocks found in %s", filename)
+	}
+
+	// Determine which block to edit
+	var selectedBlock markdown.DiagramBlock
+	var selectedIndex int
+
+	if blockIndex > 0 {
+		// User specified a block index (1-based)
+		if blockIndex > len(blocks) {
+			return fmt.Errorf("block index %d is out of range (found %d blocks)", blockIndex, len(blocks))
+		}
+		selectedBlock = blocks[blockIndex-1]
+		selectedIndex = blockIndex - 1
+	} else if len(blocks) == 1 {
+		// Only one block, select it automatically
+		selectedBlock = blocks[0]
+		selectedIndex = 0
+		fmt.Printf("Editing %s block at line %d\n", selectedBlock.Type, selectedBlock.StartLine+1)
+	} else {
+		// Multiple blocks, show picker
+		fmt.Println("Found multiple diagram blocks:")
+		for i, block := range blocks {
+			fmt.Println(markdown.FormatBlockInfo(block, i))
+		}
+		fmt.Print("\nSelect block to edit (1-", len(blocks), "): ")
+
+		var choice int
+		_, err := fmt.Scanln(&choice)
+		if err != nil || choice < 1 || choice > len(blocks) {
+			return fmt.Errorf("invalid selection")
+		}
+		selectedBlock = blocks[choice-1]
+		selectedIndex = choice - 1
+	}
+
+	// Import the diagram from the block content
+	registry := importer.NewImporterRegistry()
+	var d *diagram.Diagram
+
+	// Try to import based on the block type
+	if selectedBlock.Type != "" {
+		d, err = registry.ImportWithFormat(selectedBlock.Content, selectedBlock.Type)
+	} else {
+		d, err = registry.Import(selectedBlock.Content)
+	}
+
+	if err != nil {
+		return fmt.Errorf("importing diagram from markdown block: %w", err)
+	}
+
+	// Ensure all connections have unique IDs
+	diagram.EnsureUniqueConnectionIDs(d)
+
+	// Default arrows to true for all connections
+	for i := range d.Connections {
+		if !d.Connections[i].Arrow {
+			d.Connections[i].Arrow = true
+		}
+	}
+
+	// Create a temporary file to store the diagram JSON
+	tempFile := fmt.Sprintf("/tmp/edd_markdown_%d.json", selectedIndex)
+	dataJSON, err := json.MarshalIndent(d, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling diagram to JSON: %w", err)
+	}
+	err = ioutil.WriteFile(tempFile, dataJSON, 0644)
+	if err != nil {
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+
+	// Store markdown context for later (using 1-based index for consistency)
+	err = ioutil.WriteFile(tempFile+".ctx", []byte(fmt.Sprintf("%s\n%d\n%s", filename, selectedIndex+1, selectedBlock.Type)), 0644)
+	if err != nil {
+		return fmt.Errorf("writing context file: %w", err)
+	}
+
+	fmt.Printf("\n[Press :w to save back to markdown, :q to exit without saving]\n\n")
+
+	// Run interactive mode with the temp file
+	err = runInteractiveMode(tempFile, d.Type, nil)
+	if err != nil {
+		return err
+	}
+
+	// The save is now handled by the :w and :wq commands in the interactive mode
+	// via the saveToMarkdown function in terminal/interactive.go
+	// No automatic save on exit - user must explicitly save with :w or :wq
+
+	// Clean up temp files
+	os.Remove(tempFile)
+	os.Remove(tempFile + ".ctx")
+
+	return nil
 }
 
 // runInteractiveMode launches the TUI editor with optional demo mode

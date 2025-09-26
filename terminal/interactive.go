@@ -7,6 +7,7 @@ import (
 	"edd/diagram"
 	"edd/editor"
 	"edd/export"
+	"edd/markdown"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -537,6 +539,10 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 				return nil // Exit requested from command mode
 			}
 			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
+				// Check for unsaved changes
+				if tui.HasUnsavedChanges() {
+					// TODO: Show warning about unsaved changes
+				}
 				return nil // Exit requested from normal mode
 			}
 
@@ -655,9 +661,55 @@ func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 
 // executeSave handles saving the diagram to a JSON file
 func executeSave(tui *editor.TUIEditor, filename string) {
+	// Log to file for debugging
+	logFile, _ := os.OpenFile("/tmp/edd_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if logFile != nil {
+		logFile.WriteString(fmt.Sprintf("\n[%s] executeSave called: filename='%s'\n",
+			time.Now().Format("15:04:05"), filename))
+		defer logFile.Close()
+	}
+
 	// Get the diagram
 	d := tui.GetDiagram()
 
+	// Check if this is a markdown context (temp file with .ctx file)
+	if strings.HasPrefix(filename, "/tmp/edd_markdown_") {
+		if logFile != nil {
+			logFile.WriteString(fmt.Sprintf("[%s] Detected markdown context\n", time.Now().Format("15:04:05")))
+		}
+		// Check for context file
+		ctxFile := filename + ".ctx"
+		if ctxData, err := ioutil.ReadFile(ctxFile); err == nil {
+			// Parse context: markdown_file\nblock_index\nblock_type
+			lines := strings.Split(string(ctxData), "\n")
+			if len(lines) >= 3 {
+				markdownFile := lines[0]
+				blockIndex, _ := strconv.Atoi(lines[1])
+				blockType := lines[2]
+
+				// Save back to markdown
+				if logFile != nil {
+					logFile.WriteString(fmt.Sprintf("[%s] Calling SaveToMarkdown: file=%s, block=%d, type=%s\n",
+						time.Now().Format("15:04:05"), markdownFile, blockIndex, blockType))
+				}
+			if err := SaveToMarkdown(d, markdownFile, blockIndex, blockType); err != nil {
+					if logFile != nil {
+						logFile.WriteString(fmt.Sprintf("[%s] ERROR: %v\n", time.Now().Format("15:04:05"), err))
+					}
+					return
+				}
+				// Write a visible success message to the command result
+				if logFile != nil {
+					logFile.WriteString(fmt.Sprintf("[%s] SUCCESS: Saved to %s\n", time.Now().Format("15:04:05"), markdownFile))
+				}
+				tui.SetCommandResult(fmt.Sprintf("Saved to %s", markdownFile))
+				tui.SetHasChanges(false) // Clear the changes flag after successful save
+				return
+			}
+		}
+	}
+
+	// Normal JSON save
 	// Ensure unique connection IDs before saving
 	diagram.EnsureUniqueConnectionIDs(d)
 
@@ -676,6 +728,68 @@ func executeSave(tui *editor.TUIEditor, filename string) {
 	}
 
 	fmt.Fprintf(os.Stderr, "\nSaved to %s", filename)
+}
+
+// SaveToMarkdown saves the diagram back to the markdown file
+// Exported for testing purposes
+func SaveToMarkdown(d *diagram.Diagram, markdownFile string, blockIndex int, blockType string) error {
+	// Read the current markdown file
+	content, err := ioutil.ReadFile(markdownFile)
+	if err != nil {
+		return fmt.Errorf("failed to read markdown file: %w", err)
+	}
+
+	// Create scanner to find blocks
+	scanner := markdown.NewScanner(string(content))
+	blocks := scanner.FindDiagramBlocks()
+
+	// Validate block index (0-based internally, but 1-based for user)
+	if blockIndex < 1 || blockIndex > len(blocks) {
+		return fmt.Errorf("invalid block index %d (file has %d blocks)", blockIndex, len(blocks))
+	}
+
+	// Get the block to update (convert to 0-based)
+	block := blocks[blockIndex-1]
+
+	// Export the diagram to the appropriate format
+	var exportedContent string
+	var format export.Format
+
+	switch strings.ToLower(blockType) {
+	case "mermaid":
+		format = export.FormatMermaid
+	case "plantuml", "puml":
+		format = export.FormatPlantUML
+	default:
+		// For unsupported types, just export as mermaid (most common)
+		format = export.FormatMermaid
+	}
+
+	exporter, err := export.NewExporter(format)
+	if err != nil {
+		return fmt.Errorf("failed to create exporter: %w", err)
+	}
+
+	exportedContent, err = exporter.Export(d)
+	if err != nil {
+		return fmt.Errorf("failed to export diagram: %w", err)
+	}
+
+	// Replace the block content
+	newContent, err := scanner.ReplaceBlock(block, exportedContent)
+	if err != nil {
+		return fmt.Errorf("failed to replace block: %w", err)
+	}
+
+	// Write back to the markdown file
+	if err := ioutil.WriteFile(markdownFile, []byte(newContent), 0644); err != nil {
+		return fmt.Errorf("failed to write markdown file: %w", err)
+	}
+
+	// Update scanner's internal content for potential future saves
+	scanner.UpdateContent(newContent)
+
+	return nil
 }
 
 // executeExport handles the actual export of the diagram

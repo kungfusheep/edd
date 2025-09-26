@@ -55,6 +55,8 @@ func (p *PlantUMLImporter) importSequenceDiagram(content string) (*diagram.Diagr
 	nextID := 0
 
 	lines := strings.Split(content, "\n")
+
+	// First pass: collect participants
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "'") || line == "@startuml" || line == "@enduml" {
@@ -63,18 +65,75 @@ func (p *PlantUMLImporter) importSequenceDiagram(content string) (*diagram.Diagr
 
 		// Parse participant/actor declarations
 		if strings.HasPrefix(line, "participant ") || strings.HasPrefix(line, "actor ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				name := strings.Join(parts[1:], " ")
-				name = strings.Trim(name, `"`)
-				if _, exists := participantMap[name]; !exists {
+			// Check for alias syntax: participant "Name" as Alias
+			aliasPattern := regexp.MustCompile(`^(participant|actor)\s+"([^"]+)"\s+as\s+(\w+)`)
+			if matches := aliasPattern.FindStringSubmatch(line); len(matches) == 4 {
+				// Has alias - use the quoted name as display and alias as key
+				displayName := matches[2]
+				alias := matches[3]
+
+				if _, exists := participantMap[alias]; !exists {
 					d.Nodes = append(d.Nodes, diagram.Node{
 						ID:   nextID,
-						Text: []string{name},
+						Text: []string{displayName},
 					})
-					participantMap[name] = nextID
+					participantMap[alias] = nextID
 					nextID++
 				}
+			} else {
+				// No alias - simple participant declaration
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					name := strings.Join(parts[1:], " ")
+					name = strings.Trim(name, `"`)
+					if _, exists := participantMap[name]; !exists {
+						d.Nodes = append(d.Nodes, diagram.Node{
+							ID:   nextID,
+							Text: []string{name},
+						})
+						participantMap[name] = nextID
+						nextID++
+					}
+				}
+			}
+		}
+	}
+
+	// Second pass: process messages and activations
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "'") || line == "@startuml" || line == "@enduml" ||
+		   strings.HasPrefix(line, "participant ") || strings.HasPrefix(line, "actor ") ||
+		   strings.HasPrefix(line, "skinparam") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "activate ") {
+			// Activate happens AFTER the previous message is added
+			// Apply it to the most recent connection
+			parts := strings.Fields(line)
+			if len(parts) >= 2 && len(d.Connections) > 0 {
+				activateAlias := parts[1]
+				lastConn := &d.Connections[len(d.Connections)-1]
+
+				// Check which participant ID this alias refers to
+				if pid, exists := participantMap[activateAlias]; exists {
+					if pid == lastConn.To {
+						// Activating the recipient of the last message
+						lastConn.Hints["activate"] = "true"
+					} else if pid == lastConn.From {
+						// Activating the sender of the last message
+						lastConn.Hints["activate_source"] = "true"
+					}
+				}
+			}
+		} else if strings.HasPrefix(line, "deactivate ") {
+			// Deactivate happens AFTER the previous message
+			parts := strings.Fields(line)
+			if len(parts) >= 2 && len(d.Connections) > 0 {
+				// Apply deactivate to the most recent connection
+				lastConn := &d.Connections[len(d.Connections)-1]
+				lastConn.Hints["deactivate"] = "true"
 			}
 		} else {
 			// Parse messages

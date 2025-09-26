@@ -73,6 +73,7 @@ type TUIEditor struct {
 	saveRequested   bool   // Save was requested
 	saveFilename    string // Filename for save (optional)
 	quitRequested   bool   // Quit was requested
+	hasChanges      bool   // Track unsaved changes
 }
 
 // NewTUIEditor creates a new TUI editor instance
@@ -161,6 +162,11 @@ func (e *TUIEditor) GetQuitRequest() bool {
 	requested := e.quitRequested
 	e.quitRequested = false
 	return requested
+}
+
+// SetHasChanges sets the hasChanges flag
+func (e *TUIEditor) SetHasChanges(changed bool) {
+	e.hasChanges = changed
 }
 
 // SetTerminalSize updates the terminal dimensions
@@ -2275,21 +2281,6 @@ func (e *TUIEditor) HandleJSONInput(key rune) {
 	e.handleJSONKey(key)
 }
 
-// HandleCommandInput processes command mode input
-func (e *TUIEditor) HandleCommandInput(key rune) {
-	switch key {
-	case 27: // ESC
-		e.SetMode(ModeNormal)
-	case 127, 8: // Backspace
-		if len(e.commandBuffer) > 0 {
-			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
-		}
-	default:
-		if unicode.IsPrint(key) {
-			e.commandBuffer = append(e.commandBuffer, key)
-		}
-	}
-}
 
 // GetCommand returns the current command buffer
 func (e *TUIEditor) GetCommand() string {
@@ -2299,6 +2290,99 @@ func (e *TUIEditor) GetCommand() string {
 // ClearCommand clears the command buffer
 func (e *TUIEditor) ClearCommand() {
 	e.commandBuffer = []rune{}
+	e.commandResult = ""
+	e.saveRequested = false
+	e.quitRequested = false
+	e.exportFormat = ""
+	e.exportFilename = ""
+}
+
+// ProcessCommand processes the completed command when Enter is pressed
+func (e *TUIEditor) ProcessCommand() {
+	cmd := strings.TrimSpace(string(e.commandBuffer))
+
+	// Log to file since we can't see stderr in TUI
+	if logFile, err := os.OpenFile("/tmp/edd_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		logFile.WriteString(fmt.Sprintf("\n[%s] ProcessCommand: cmd='%s'\n",
+			time.Now().Format("15:04:05"), cmd))
+		logFile.Close()
+	}
+
+	if cmd == "" {
+		e.SetMode(ModeNormal)
+		return
+	}
+
+	// Parse command
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		e.SetMode(ModeNormal)
+		return
+	}
+
+	switch parts[0] {
+	case "w", "write":
+		// Save command
+		e.saveRequested = true
+		if len(parts) > 1 {
+			e.saveFilename = parts[1]
+		}
+		e.hasChanges = false // Clear changes flag after save
+		e.commandResult = "Saving..."
+		e.SetMode(ModeNormal)
+
+	case "wq":
+		// Save and quit
+		e.saveRequested = true
+		if len(parts) > 1 {
+			e.saveFilename = parts[1]
+		}
+		e.quitRequested = true
+		e.hasChanges = false
+		e.SetMode(ModeNormal)
+
+	case "q", "quit":
+		// Quit
+		if e.hasChanges {
+			// Has unsaved changes - require :q! to force quit
+			e.commandResult = "Unsaved changes! Use :q! to force quit or :wq to save and quit"
+			e.SetMode(ModeNormal)
+		} else {
+			e.quitRequested = true
+			e.SetMode(ModeNormal)
+		}
+
+	case "q!":
+		// Force quit without saving
+		e.quitRequested = true
+		e.SetMode(ModeNormal)
+
+	case "export":
+		// Export command
+		if len(parts) < 2 {
+			e.commandResult = "Usage: :export <format> [filename]"
+		} else {
+			e.exportFormat = parts[1]
+			if len(parts) > 2 {
+				e.exportFilename = parts[2]
+			}
+		}
+		e.SetMode(ModeNormal)
+
+	default:
+		e.commandResult = "Unknown command: " + parts[0]
+		e.SetMode(ModeNormal)
+	}
+}
+
+// HasUnsavedChanges returns whether there are unsaved changes
+func (e *TUIEditor) HasUnsavedChanges() bool {
+	return e.hasChanges
+}
+
+// markAsModified marks the diagram as having unsaved changes
+func (e *TUIEditor) markAsModified() {
+	e.hasChanges = true
 }
 
 // AnimateEd advances Ed's animation
@@ -2714,8 +2798,8 @@ func (e *TUIEditor) handleCommandKey(key rune) bool {
 		}
 
 	case 13, 10: // Enter - execute command
-		e.executeCommand(string(e.commandBuffer))
-		e.SetMode(ModeNormal)
+		e.ProcessCommand()
+		// ProcessCommand will handle setting the mode
 
 	default:
 		// Add to command buffer
