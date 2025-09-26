@@ -661,22 +661,11 @@ func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 
 // executeSave handles saving the diagram to a JSON file
 func executeSave(tui *editor.TUIEditor, filename string) {
-	// Log to file for debugging
-	logFile, _ := os.OpenFile("/tmp/edd_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if logFile != nil {
-		logFile.WriteString(fmt.Sprintf("\n[%s] executeSave called: filename='%s'\n",
-			time.Now().Format("15:04:05"), filename))
-		defer logFile.Close()
-	}
-
 	// Get the diagram
 	d := tui.GetDiagram()
 
 	// Check if this is a markdown context (temp file with .ctx file)
 	if strings.HasPrefix(filename, "/tmp/edd_markdown_") {
-		if logFile != nil {
-			logFile.WriteString(fmt.Sprintf("[%s] Detected markdown context\n", time.Now().Format("15:04:05")))
-		}
 		// Check for context file
 		ctxFile := filename + ".ctx"
 		if ctxData, err := ioutil.ReadFile(ctxFile); err == nil {
@@ -688,20 +677,12 @@ func executeSave(tui *editor.TUIEditor, filename string) {
 				blockType := lines[2]
 
 				// Save back to markdown
-				if logFile != nil {
-					logFile.WriteString(fmt.Sprintf("[%s] Calling SaveToMarkdown: file=%s, block=%d, type=%s\n",
-						time.Now().Format("15:04:05"), markdownFile, blockIndex, blockType))
-				}
 			if err := SaveToMarkdown(d, markdownFile, blockIndex, blockType); err != nil {
-					if logFile != nil {
-						logFile.WriteString(fmt.Sprintf("[%s] ERROR: %v\n", time.Now().Format("15:04:05"), err))
-					}
+					fmt.Fprintf(os.Stderr, "\nError saving to markdown: %v", err)
 					return
 				}
 				// Write a visible success message to the command result
-				if logFile != nil {
-					logFile.WriteString(fmt.Sprintf("[%s] SUCCESS: Saved to %s\n", time.Now().Format("15:04:05"), markdownFile))
-				}
+				fmt.Fprintf(os.Stderr, "\nSaved to %s", markdownFile)
 				tui.SetCommandResult(fmt.Sprintf("Saved to %s", markdownFile))
 				tui.SetHasChanges(false) // Clear the changes flag after successful save
 				return

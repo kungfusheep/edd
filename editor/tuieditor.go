@@ -2300,14 +2300,6 @@ func (e *TUIEditor) ClearCommand() {
 // ProcessCommand processes the completed command when Enter is pressed
 func (e *TUIEditor) ProcessCommand() {
 	cmd := strings.TrimSpace(string(e.commandBuffer))
-
-	// Log to file since we can't see stderr in TUI
-	if logFile, err := os.OpenFile("/tmp/edd_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
-		logFile.WriteString(fmt.Sprintf("\n[%s] ProcessCommand: cmd='%s'\n",
-			time.Now().Format("15:04:05"), cmd))
-		logFile.Close()
-	}
-
 	if cmd == "" {
 		e.SetMode(ModeNormal)
 		return

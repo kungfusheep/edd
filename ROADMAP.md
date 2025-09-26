@@ -52,9 +52,9 @@ skinparam shadowing false
 
 participant "User Browser" as P0
 participant "Web Server" as P1
-participant "API Gateway" as P2
+participant "API Gateway" as P2 #51CF66
 participant "Auth Service" as P3
-participant "Database" as P4
+participant "Database" as P4 #FF6B6B
 
 P0 -> P1 : GET /login
 P1 -> P0 : 200 OK (login page)

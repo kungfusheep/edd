@@ -70,18 +70,30 @@ func (p *PlantUMLImporter) importSequenceDiagram(content string) (*diagram.Diagr
 
 		// Parse participant/actor declarations
 		if strings.HasPrefix(line, "participant ") || strings.HasPrefix(line, "actor ") {
-			// Check for alias syntax: participant "Name" as Alias
-			aliasPattern := regexp.MustCompile(`^(participant|actor)\s+"([^"]+)"\s+as\s+(\w+)`)
-			if matches := aliasPattern.FindStringSubmatch(line); len(matches) == 4 {
+			// Check for alias syntax with optional color: participant "Name" as Alias #color
+			aliasPattern := regexp.MustCompile(`^(participant|actor)\s+"([^"]+)"\s+as\s+(\w+)\s*(#[0-9A-Fa-f]+)?`)
+			if matches := aliasPattern.FindStringSubmatch(line); len(matches) >= 4 {
 				// Has alias - use the quoted name as display and alias as key
 				displayName := matches[2]
 				alias := matches[3]
 
 				if _, exists := participantMap[alias]; !exists {
-					d.Nodes = append(d.Nodes, diagram.Node{
+					node := diagram.Node{
 						ID:   nextID,
 						Text: []string{displayName},
-					})
+					}
+
+					// Check for color hint (matches[4] if present)
+					if len(matches) > 4 && matches[4] != "" {
+						if node.Hints == nil {
+							node.Hints = make(map[string]string)
+						}
+						// Convert hex color to named color for TUI
+						hexColor := strings.TrimPrefix(matches[4], "#")
+						node.Hints["color"] = p.mapHexToColor(hexColor)
+					}
+
+					d.Nodes = append(d.Nodes, node)
 					participantMap[alias] = nextID
 					nextID++
 				}
@@ -193,6 +205,34 @@ func (p *PlantUMLImporter) importSequenceDiagram(content string) (*diagram.Diagr
 	}
 
 	return d, nil
+}
+
+// mapHexToColor converts a hex color code to a named color for the TUI
+func (p *PlantUMLImporter) mapHexToColor(hexColor string) string {
+	// Map of known hex colors to TUI color names
+	// These should match what the PlantUML exporter uses
+	hexToName := map[string]string{
+		"FF6B6B": "red",
+		"51CF66": "green",
+		"339AF0": "blue",
+		"FFD43B": "yellow",
+		"FF6B9D": "magenta",
+		"22B8CF": "cyan",
+		"FFFFFF": "white",
+		"212529": "black",
+		"868E96": "gray",
+	}
+
+	// Normalize hex color to uppercase
+	hexColor = strings.ToUpper(strings.TrimPrefix(hexColor, "#"))
+
+	if name, ok := hexToName[hexColor]; ok {
+		return name
+	}
+
+	// If we don't recognize the hex color, just return it as is
+	// The TUI might not display it, but at least we preserve it
+	return hexColor
 }
 
 // importActivityDiagram imports a PlantUML activity diagram
