@@ -70,9 +70,16 @@ func (m *MermaidImporter) importSequenceDiagram(content string) (*diagram.Diagra
 			continue // Skip empty lines and comments
 		}
 
-		// Parse participant declarations
-		if strings.HasPrefix(line, "participant ") {
-			decl := strings.TrimPrefix(line, "participant ")
+		// Parse participant/actor declarations
+		if strings.HasPrefix(line, "participant ") || strings.HasPrefix(line, "actor ") {
+			nodeType := "participant"
+			decl := line
+			if strings.HasPrefix(line, "actor ") {
+				nodeType = "actor"
+				decl = strings.TrimPrefix(line, "actor ")
+			} else {
+				decl = strings.TrimPrefix(line, "participant ")
+			}
 			decl = strings.TrimSpace(decl)
 
 			// Handle "participant ID as Display Name" syntax
@@ -87,10 +94,13 @@ func (m *MermaidImporter) importSequenceDiagram(content string) (*diagram.Diagra
 			}
 
 			if _, exists := participantMap[id]; !exists {
-				d.Nodes = append(d.Nodes, diagram.Node{
-					ID:   nextID,
-					Text: []string{displayName},
-				})
+				node := diagram.Node{
+					ID:    nextID,
+					Text:  []string{displayName},
+					Hints: make(map[string]string),
+				}
+				node.Hints["node-type"] = nodeType
+				d.Nodes = append(d.Nodes, node)
 				participantMap[id] = nextID
 				nextID++
 			}
@@ -155,13 +165,24 @@ func (m *MermaidImporter) importFlowchart(content string) (*diagram.Diagram, err
 
 	// Map to track node names to IDs
 	nodeMap := make(map[string]int)
+	nodeIndexMap := make(map[string]int) // Track which node in the array
 	nextID := 0
 
-	// Extract node style from various formats
-	nodePattern := regexp.MustCompile(`([A-Za-z0-9_]+)(\[("[^"]*"|[^\]]*)\]|\(("[^"]*"|[^\)]*)\)|\{("[^"]*"|[^\}]*)\}|\[\[("[^"]*"|[^\]]*)\]\])`)
+	// Enhanced node pattern to capture different shapes
+	// Matches: ID[text], ID(text), ID{text}, ID{{text}}, ID[[text]], ID[(text)], ID([text])
+	nodePattern := regexp.MustCompile(`([A-Za-z0-9_]+)(\[("[^"]*"|[^\]]*)\]|\(("[^"]*"|[^\)]*)\)|\{("[^"]*"|[^\}]*)\}|\{\{("[^"]*"|[^\}]*)\}\}|\[\[("[^"]*"|[^\]]*)\]\]|\[\(("[^"]*"|[^\)]*)\)\]|\(\[("[^"]*"|[^\]]*)\]\)|\>("[^"]*"|[^\]]*)\]|\(\(("[^"]*"|[^\)]*)\)\))`)
 
 	// Extract connections
-	connectionPattern := regexp.MustCompile(`([A-Za-z0-9_]+)\s*(-->?|-.->|==>|--[^>]*>)\s*(?:\|([^|]*)\|)?\s*([A-Za-z0-9_]+)`)
+	connectionPattern := regexp.MustCompile(`([A-Za-z0-9_]+)\s*(-->?|-.->|==>|--[^>]*>|<-->|o--o|x--x)\s*(?:\|([^|]*)\|)?\s*([A-Za-z0-9_]+)`)
+
+	// Pattern for subgraphs
+	subgraphPattern := regexp.MustCompile(`^\s*subgraph\s+([A-Za-z0-9_]+)\s*\[?([^\]]*)\]?`)
+
+	// Pattern for notes
+	notePattern := regexp.MustCompile(`^\s*([A-Za-z0-9_]+)\s*~~~\s*(.*)`)
+
+	// Track current subgraph
+	currentSubgraph := ""
 
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
@@ -175,22 +196,86 @@ func (m *MermaidImporter) importFlowchart(content string) (*diagram.Diagram, err
 			continue
 		}
 
+		// Check for subgraph start
+		if matches := subgraphPattern.FindStringSubmatch(line); matches != nil {
+			currentSubgraph = matches[1]
+			continue
+		}
+
+		// Check for end of subgraph
+		if line == "end" {
+			currentSubgraph = ""
+			continue
+		}
+
+		// Check for notes
+		if matches := notePattern.FindStringSubmatch(line); matches != nil {
+			nodeID := matches[1]
+			noteText := matches[2]
+
+			if idx, exists := nodeMap[nodeID]; exists {
+				// Add note to existing node's hints
+				nodeIndex := nodeIndexMap[nodeID]
+				if d.Nodes[nodeIndex].Hints == nil {
+					d.Nodes[nodeIndex].Hints = make(map[string]string)
+				}
+				d.Nodes[nodeIndex].Hints["note"] = noteText
+				_ = idx // use idx to avoid unused variable
+			}
+			continue
+		}
+
 		// Check for node declarations
 		if matches := nodePattern.FindAllStringSubmatch(line, -1); matches != nil {
 			for _, match := range matches {
 				nodeID := match[1]
-				nodeText := match[2]
+				fullShape := match[2]
 
-				// Remove brackets and quotes
-				nodeText = strings.Trim(nodeText, "[](){}")
+				// Extract text from shape
+				nodeText := fullShape
+				// Remove outer brackets/parens and trim quotes
+				nodeText = strings.Trim(nodeText, "[](){}<>")
 				nodeText = strings.Trim(nodeText, `"`)
 
 				if _, exists := nodeMap[nodeID]; !exists {
-					d.Nodes = append(d.Nodes, diagram.Node{
-						ID:   nextID,
-						Text: []string{nodeText},
-					})
+					node := diagram.Node{
+						ID:    nextID,
+						Text:  []string{nodeText},
+						Hints: make(map[string]string),
+					}
+
+					// Determine shape based on bracket style
+					if strings.HasPrefix(fullShape, "[[") {
+						node.Hints["shape"] = "double"
+						node.Hints["box-style"] = "double"
+					} else if strings.HasPrefix(fullShape, "((") {
+						node.Hints["shape"] = "circle"
+					} else if strings.HasPrefix(fullShape, "(") {
+						node.Hints["shape"] = "rounded"
+						node.Hints["style"] = "rounded"
+					} else if strings.HasPrefix(fullShape, "{") {
+						if strings.HasPrefix(fullShape, "{{") {
+							node.Hints["shape"] = "hexagon"
+						} else {
+							node.Hints["shape"] = "diamond"
+						}
+					} else if strings.HasPrefix(fullShape, ">") {
+						node.Hints["shape"] = "trapezoid"
+					} else if strings.HasPrefix(fullShape, "[(") {
+						node.Hints["shape"] = "cylinder"
+					} else if strings.HasPrefix(fullShape, "([") {
+						node.Hints["shape"] = "parallelogram"
+					}
+					// Default [text] is just a rectangle, no special hint needed
+
+					// Add subgraph/group info if in one
+					if currentSubgraph != "" {
+						node.Hints["group"] = currentSubgraph
+					}
+
+					d.Nodes = append(d.Nodes, node)
 					nodeMap[nodeID] = nextID
+					nodeIndexMap[nodeID] = len(d.Nodes) - 1
 					nextID++
 				}
 			}
@@ -205,19 +290,31 @@ func (m *MermaidImporter) importFlowchart(content string) (*diagram.Diagram, err
 
 			// Ensure nodes exist
 			if _, exists := nodeMap[fromID]; !exists {
-				d.Nodes = append(d.Nodes, diagram.Node{
-					ID:   nextID,
-					Text: []string{fromID},
-				})
+				node := diagram.Node{
+					ID:    nextID,
+					Text:  []string{fromID},
+					Hints: make(map[string]string),
+				}
+				if currentSubgraph != "" {
+					node.Hints["group"] = currentSubgraph
+				}
+				d.Nodes = append(d.Nodes, node)
 				nodeMap[fromID] = nextID
+				nodeIndexMap[fromID] = len(d.Nodes) - 1
 				nextID++
 			}
 			if _, exists := nodeMap[toID]; !exists {
-				d.Nodes = append(d.Nodes, diagram.Node{
-					ID:   nextID,
-					Text: []string{toID},
-				})
+				node := diagram.Node{
+					ID:    nextID,
+					Text:  []string{toID},
+					Hints: make(map[string]string),
+				}
+				if currentSubgraph != "" {
+					node.Hints["group"] = currentSubgraph
+				}
+				d.Nodes = append(d.Nodes, node)
 				nodeMap[toID] = nextID
+				nodeIndexMap[toID] = len(d.Nodes) - 1
 				nextID++
 			}
 
@@ -229,11 +326,20 @@ func (m *MermaidImporter) importFlowchart(content string) (*diagram.Diagram, err
 				Hints: make(map[string]string),
 			}
 
-			// Add hints based on arrow style
+			// Enhanced arrow style detection
 			if strings.Contains(arrow, "-.") {
 				conn.Hints["style"] = "dashed"
 			} else if strings.Contains(arrow, "==") {
 				conn.Hints["style"] = "thick"
+			}
+
+			// Check for special arrow types
+			if strings.Contains(arrow, "<-->") {
+				conn.Hints["bidirectional"] = "true"
+			} else if strings.Contains(arrow, "o--o") {
+				conn.Hints["arrow-type"] = "circle"
+			} else if strings.Contains(arrow, "x--x") {
+				conn.Hints["arrow-type"] = "cross"
 			}
 
 			d.Connections = append(d.Connections, conn)

@@ -27,6 +27,11 @@ func (p *PlantUMLImporter) CanImport(content string) bool {
 func (p *PlantUMLImporter) Import(content string) (*diagram.Diagram, error) {
 	content = strings.TrimSpace(content)
 
+	// Check for activity diagram markers
+	if strings.Contains(content, ":") && (strings.Contains(content, ";") || strings.Contains(content, "if ")) {
+		return p.importActivityDiagram(content)
+	}
+
 	// Check for sequence diagram markers
 	if strings.Contains(content, "->") || strings.Contains(content, "-->") {
 		return p.importSequenceDiagram(content)
@@ -125,6 +130,163 @@ func (p *PlantUMLImporter) importSequenceDiagram(content string) (*diagram.Diagr
 
 				d.Connections = append(d.Connections, conn)
 			}
+		}
+	}
+
+	return d, nil
+}
+
+// importActivityDiagram imports a PlantUML activity diagram
+func (p *PlantUMLImporter) importActivityDiagram(content string) (*diagram.Diagram, error) {
+	d := &diagram.Diagram{
+		Type: "box", // Activity diagrams are flowchart-like
+	}
+
+	nodeMap := make(map[string]int)
+	nextID := 0
+	var lastNodeID *int
+
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "'") || line == "@startuml" || line == "@enduml" {
+			continue
+		}
+		if line == "start" || line == "stop" || line == "end" {
+			continue // Skip start/stop keywords
+		}
+
+		// Parse activity nodes (format: :Activity text;)
+		activityPattern := regexp.MustCompile(`^:([^;]+);?$`)
+		if matches := activityPattern.FindStringSubmatch(line); len(matches) >= 2 {
+			activityText := strings.TrimSpace(matches[1])
+
+			// Create node
+			node := diagram.Node{
+				ID:    nextID,
+				Text:  []string{activityText},
+				Hints: make(map[string]string),
+			}
+
+			// Check for color hints in activity text
+			if strings.Contains(activityText, "|") {
+				parts := strings.Split(activityText, "|")
+				if len(parts) >= 2 {
+					node.Text = []string{strings.TrimSpace(parts[0])}
+					colorPart := strings.TrimSpace(parts[1])
+					if strings.HasPrefix(colorPart, "#") {
+						node.Hints["color"] = strings.TrimPrefix(colorPart, "#")
+					}
+				}
+			}
+
+			d.Nodes = append(d.Nodes, node)
+			nodeMap[activityText] = nextID
+
+			// Create connection from last node if exists
+			if lastNodeID != nil {
+				d.Connections = append(d.Connections, diagram.Connection{
+					From:  *lastNodeID,
+					To:    nextID,
+					Hints: make(map[string]string),
+				})
+			}
+
+			lastNodeID = &nextID
+			nextID++
+			continue
+		}
+
+		// Parse if conditions (format: if (condition?) then)
+		ifPattern := regexp.MustCompile(`^if\s*\(([^)]+)\)\s*then`)
+		if matches := ifPattern.FindStringSubmatch(line); len(matches) >= 2 {
+			condition := strings.TrimSpace(matches[1])
+
+			// Create decision node
+			node := diagram.Node{
+				ID:    nextID,
+				Text:  []string{condition},
+				Hints: make(map[string]string),
+			}
+			node.Hints["shape"] = "diamond" // Decision nodes are diamonds
+
+			d.Nodes = append(d.Nodes, node)
+			nodeMap[condition] = nextID
+
+			// Create connection from last node if exists
+			if lastNodeID != nil {
+				d.Connections = append(d.Connections, diagram.Connection{
+					From:  *lastNodeID,
+					To:    nextID,
+					Hints: make(map[string]string),
+				})
+			}
+
+			lastNodeID = &nextID
+			nextID++
+			continue
+		}
+
+		// Parse notes
+		if strings.HasPrefix(line, "note ") {
+			noteText := strings.TrimPrefix(line, "note ")
+			noteText = strings.TrimSpace(noteText)
+
+			// Add note to last node if exists
+			if lastNodeID != nil && *lastNodeID < len(d.Nodes) {
+				if d.Nodes[*lastNodeID].Hints == nil {
+					d.Nodes[*lastNodeID].Hints = make(map[string]string)
+				}
+				d.Nodes[*lastNodeID].Hints["note"] = noteText
+			}
+			continue
+		}
+
+		// Parse direct connections (format: A -> B)
+		connPattern := regexp.MustCompile(`^([^-]+?)\s*(->|-->)\s*([^:]+)(?:\s*:\s*(.*))?$`)
+		if matches := connPattern.FindStringSubmatch(line); len(matches) >= 4 {
+			fromName := strings.TrimSpace(matches[1])
+			arrow := matches[2]
+			toName := strings.TrimSpace(matches[3])
+			label := ""
+			if len(matches) > 4 {
+				label = strings.TrimSpace(matches[4])
+			}
+
+			// Ensure nodes exist
+			if _, exists := nodeMap[fromName]; !exists {
+				d.Nodes = append(d.Nodes, diagram.Node{
+					ID:    nextID,
+					Text:  []string{fromName},
+					Hints: make(map[string]string),
+				})
+				nodeMap[fromName] = nextID
+				nextID++
+			}
+			if _, exists := nodeMap[toName]; !exists {
+				d.Nodes = append(d.Nodes, diagram.Node{
+					ID:    nextID,
+					Text:  []string{toName},
+					Hints: make(map[string]string),
+				})
+				nodeMap[toName] = nextID
+				nextID++
+			}
+
+			conn := diagram.Connection{
+				From:  nodeMap[fromName],
+				To:    nodeMap[toName],
+				Label: label,
+				Hints: make(map[string]string),
+			}
+
+			// Add style hints
+			if strings.Contains(arrow, "--") {
+				conn.Hints["style"] = "dashed"
+			}
+
+			d.Connections = append(d.Connections, conn)
+			lastNodeID = nil // Reset last node since we made explicit connection
 		}
 	}
 

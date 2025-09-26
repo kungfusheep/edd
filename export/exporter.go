@@ -18,6 +18,10 @@ const (
 	FormatPlantUML Format = "plantuml"
 	// FormatJSON exports to JSON (edd native format)
 	FormatJSON Format = "json"
+	// FormatGraphviz exports to Graphviz DOT syntax
+	FormatGraphviz Format = "graphviz"
+	// FormatD2 exports to D2 syntax
+	FormatD2 Format = "d2"
 )
 
 // Exporter interface for different export formats
@@ -41,6 +45,10 @@ func NewExporter(format Format) (Exporter, error) {
 		return NewPlantUMLExporter(), nil
 	case FormatJSON:
 		return NewJSONExporter(), nil
+	case FormatGraphviz:
+		return NewGraphvizExporter(), nil
+	case FormatD2:
+		return NewD2Exporter(), nil
 	default:
 		return nil, fmt.Errorf("unsupported export format: %s", format)
 	}
@@ -57,6 +65,10 @@ func ParseFormat(s string) (Format, error) {
 		return FormatPlantUML, nil
 	case "json":
 		return FormatJSON, nil
+	case "graphviz", "dot", "gv":
+		return FormatGraphviz, nil
+	case "d2":
+		return FormatD2, nil
 	default:
 		return "", fmt.Errorf("unknown format: %s", s)
 	}
@@ -69,6 +81,8 @@ func GetAvailableFormats() []Format {
 		FormatMermaid,
 		FormatPlantUML,
 		FormatJSON,
+		FormatGraphviz,
+		FormatD2,
 	}
 }
 
@@ -79,5 +93,7 @@ func GetFormatDescriptions() map[Format]string {
 		FormatMermaid:  "Mermaid diagram syntax (for Markdown)",
 		FormatPlantUML: "PlantUML diagram syntax",
 		FormatJSON:     "JSON (edd data format)",
+		FormatGraphviz: "Graphviz DOT syntax",
+		FormatD2:       "D2 diagram syntax",
 	}
 }
