@@ -6,7 +6,7 @@ Fast, keyboard-driven diagram editing in your terminal. Create sequence diagrams
 
 - **Built for speed** - Every action optimized for minimal keystrokes
 - **Jump navigation** - Navigate and edit with single-key jumps (like EasyMotion for diagrams)
-- **Format agnostic** - Import Mermaid, PlantUML, Graphviz, D2 - edit them all the same way
+- **Multi-format** - Work with Mermaid, PlantUML, Graphviz, D2 using the same interface
 - **Terminal-native** - No browser, no mouse, just your keyboard
 
 ## Features
@@ -22,13 +22,13 @@ Press any action key (connect, delete, edit) and jump labels appear on every ele
 <img width="1400" height="346" alt="image" src="https://github.com/user-attachments/assets/14feb915-c53c-46ab-8380-c1472f33e99d" />
 
 
-### Universal Format Support
-Edit any diagram format with the same fast interface. Import from one format, export to another - edd speaks them all.
+### Multi-Format Support
+Edit multiple diagram formats with the same fast interface. Import from one format, export to another.
 
 #### Supported Formats
 - **Import**: Mermaid, PlantUML, Graphviz DOT, D2, JSON
 - **Export**: ASCII/Unicode, Mermaid, PlantUML, JSON
-- **Convert**: Any importable format to any exportable format in one command
+- **Convert**: Between formats in one command
 
 ### Editor Modes
 - **Interactive TUI** - Vim-like modal editing with jump navigation
@@ -57,7 +57,7 @@ Every command designed for efficiency - no mouse needed, minimal keystrokes requ
 - `:w [filename]` - Save
 - `:wq` - Save and quit
 - `:q` - Quit
-- `:export format [file]` - Export to any format
+- `:export format [file]` - Export to supported formats
 
 
 ## Installation
@@ -73,13 +73,13 @@ go install github.com/kungfusheep/edd@latest
 # Launch interactive editor
 edd
 
-# Edit any diagram format
+# Edit supported diagram formats
 edd -i diagram.mmd
 edd -i flowchart.puml
 edd -i graph.dot
 ```
 
-### Format Conversion - Your Universal Diagram Translator
+### Format Conversion - Seamless Translation Between Formats
 ```bash
 # Mermaid to PlantUML
 edd -format plantuml diagram.mmd
@@ -90,13 +90,29 @@ edd -format ascii sequence.puml
 # Graphviz to Mermaid
 edd -format mermaid graph.dot
 
-# Any format to terminal display
+# Display various formats in terminal
 edd diagram.mmd
 edd flowchart.puml
 edd graph.d2
 ```
 
-### Workflow Examples
+### Real-World Workflow Example
+
+Transform diagram formats using edd's unified editing experience:
+
+```bash
+# Your team uses PlantUML, but you need Mermaid for GitHub
+$ edd -i architecture.puml
+# → Opens in TUI editor with full editing capabilities
+# → Make your changes using jump navigation
+# → Press :export mermaid architecture.mmd
+# → Now you have both formats!
+
+# Or do it in one command
+$ edd -format mermaid architecture.puml > architecture.mmd
+```
+
+### More Workflow Examples
 ```bash
 # Edit a Mermaid diagram from your markdown docs
 edd -i README.mmd
@@ -108,6 +124,11 @@ done
 
 # Quick ASCII diagram for documentation
 edd -format ascii design.json > diagram.txt
+
+# Import Graphviz, edit interactively, save as PlantUML
+edd -i network.dot
+# (edit with jump mode navigation)
+# :export plantuml network.puml
 ```
 
 ## Diagram Format
