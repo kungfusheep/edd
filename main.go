@@ -210,7 +210,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Successfully exported to %s\n", *outputFile)
 	} else {
 		// Output to stdout
-		fmt.Print(output)
+		fmt.Println(output)
 	}
 
 	// Run standalone validation if requested (only for ASCII format)
