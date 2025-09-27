@@ -22,8 +22,8 @@ type FlowchartRenderer struct {
 
 // NewFlowchartRenderer creates a new flowchart diagram renderer
 func NewFlowchartRenderer(caps TerminalCapabilities) *FlowchartRenderer {
-	// Use simple layout by default
-	layoutEngine := layout.NewSimpleLayout()
+	// Use vertical layout for flowcharts (top-to-bottom flow)
+	layoutEngine := layout.NewVerticalLayout()
 	
 	// Use smart pathfinder with good defaults
 	pathfinder := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
@@ -55,8 +55,8 @@ func NewFlowchartRenderer(caps TerminalCapabilities) *FlowchartRenderer {
 
 // CanRender returns true if this renderer can handle the given diagram type.
 func (r *FlowchartRenderer) CanRender(diagramType diagram.DiagramType) bool {
-	// Flowchart is the default type (empty string or "flowchart")
-	return diagramType == diagram.DiagramTypeFlowchart || diagramType == ""
+	// Flowchart handles: empty string (default), "flowchart", and "box" (legacy name)
+	return diagramType == diagram.DiagramTypeFlowchart || diagramType == "" || diagramType == "box"
 }
 
 // Render renders the flowchart diagram and returns the string output.

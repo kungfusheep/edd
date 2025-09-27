@@ -77,10 +77,11 @@ func (r *RealRenderer) GetCursorPos() int {
 func NewRealRenderer() *RealRenderer {
 	// Use the actual refactored renderer that supports colors and proper separation
 	mainRenderer := render.NewRenderer()
-	
+
 	// Keep the old structure for compatibility but delegate to the real renderer
-	// Use simple layout
-	layoutEngine := layout.NewSimpleLayout()
+	// Default to vertical layout for flowcharts
+	// Note: The actual layout will be chosen based on diagram type in RenderWithPositions
+	layoutEngine := layout.NewVerticalLayout()
 	
 	// Use smart pathfinder with caching
 	pathfinder := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
@@ -124,14 +125,17 @@ type NodePositions struct {
 // Render implements the diagram.Renderer interface for TUI
 func (r *RealRenderer) Render(d *diagram.Diagram) (string, error) {
 	// If we're editing a node, we need to use RenderWithPositions to handle edit state
-	// The mainRenderer doesn't support editing text display
+	// The mainRenderer doesn't support editing text display with cursor
 	if r.editingNodeID >= 0 {
 		positions, output, err := r.RenderWithPositions(d)
 		_ = positions // Will be used by TUI for jump labels
 		return output, err
 	}
-	
+
 	// Use the main renderer which properly handles colors and diagram types
+	// The main renderer already handles different diagram types correctly:
+	// - Flowcharts use VerticalLayout
+	// - Sequence diagrams use SequenceRenderer
 	if r.mainRenderer != nil {
 		return r.mainRenderer.Render(d)
 	}
@@ -154,9 +158,19 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 	
 	// Calculate node dimensions
 	nodes := calculateNodeDimensions(d.Nodes)
-	
+
+	// Choose layout based on diagram type
+	var layoutEngine diagram.LayoutEngine
+	if d.Type == "flowchart" || d.Type == "" || d.Type == "box" {
+		// Use vertical layout for flowcharts and box diagrams
+		layoutEngine = layout.NewVerticalLayout()
+	} else {
+		// Use horizontal layout for other diagram types (system topologies, etc.)
+		layoutEngine = layout.NewSimpleLayout()
+	}
+
 	// Layout
-	layoutNodes, err := r.layout.Layout(nodes, d.Connections)
+	layoutNodes, err := layoutEngine.Layout(nodes, d.Connections)
 	
 	// After layout, adjust dimensions for editing node if needed
 	if r.editingNodeID >= 0 {
