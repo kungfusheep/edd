@@ -64,17 +64,6 @@ func (v *virtualObstacleChecker) CreateObstacleFunc(nodes []diagram.Node, source
 	}
 }
 
-// shouldAddVirtualObstacles determines if virtual obstacles should be added for a node
-func (v *virtualObstacleChecker) shouldAddVirtualObstacles(nodeID, sourceID, targetID int) bool {
-	// Apply to all nodes by default, with scaling for source/target
-	if nodeID == sourceID && !v.config.EnableForSource {
-		return false
-	}
-	if nodeID == targetID && !v.config.EnableForTarget {
-		return false
-	}
-	return true
-}
 
 // createVirtualZones creates virtual obstacle zones around a node
 func (v *virtualObstacleChecker) createVirtualZones(node diagram.Node, sourceID, targetID int) []ObstacleZone {

@@ -325,20 +325,6 @@ func (r *SequenceRenderer) drawActivationBoxes(activations []ActivationPeriod, p
 	}
 }
 
-// mergeJunctionChar determines the correct junction character when lines meet
-func (r *SequenceRenderer) mergeJunctionChar(existing rune, incoming rune, isVertical bool) rune {
-	// If there's a vertical line and we're adding a horizontal line
-	if (existing == '│' || existing == '┆' || existing == '·') && !isVertical {
-		if incoming == '─' || incoming == '╌' {
-			return '├' // Branch right
-		}
-		if incoming == '◀' {
-			return '┤' // Arrow coming in from right
-		}
-	}
-	// Default to incoming if no merge needed
-	return incoming
-}
 
 // drawArrow draws a horizontal arrow between two x positions
 func (r *SequenceRenderer) drawArrow(c Canvas, fromX, toX, y int, leftToRight bool, label string, hints map[string]string) {

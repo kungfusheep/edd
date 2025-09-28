@@ -64,31 +64,7 @@ func RunTUILoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettin
 	return runInteractiveLoop(tui, filename, demoSettings)
 }
 
-func loadDiagramFile(filename string) (*diagram.Diagram, error) {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
 
-	var d diagram.Diagram
-	if err := json.Unmarshal(data, &d); err != nil {
-		return nil, err
-	}
-
-	// Ensure all connections have unique IDs
-	diagram.EnsureUniqueConnectionIDs(&d)
-
-	return &d, nil
-}
-
-func saveDiagramFile(filename string, d *diagram.Diagram) error {
-	data, err := json.MarshalIndent(d, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(filename, data, 0644)
-}
 
 // validateDiagram checks if a diagram has valid structure
 func validateDiagram(d *diagram.Diagram) error {
@@ -922,55 +898,8 @@ func fcntl(fd int, cmd int, arg int) (int, error) {
 }
 
 // readKeyWithEscape reads a key and handles escape sequences for special keys
-func readKeyWithEscape() editor.KeyEvent {
-	var b [1]byte
-	n, _ := os.Stdin.Read(b[:])
-
-	if n == 0 {
-		return editor.KeyEvent{Rune: 0}
-	}
-
-	// Just return the raw key - we'll handle escape sequences separately when needed
-	return editor.KeyEvent{Rune: rune(b[0])}
-}
 
 // readKeyWithArrowSupport reads a key and handles arrow keys in edit modes
-func readKeyWithArrowSupport() editor.KeyEvent {
-	var b [1]byte
-	n, _ := os.Stdin.Read(b[:])
-
-	if n == 0 {
-		return editor.KeyEvent{Rune: 0}
-	}
-
-	// Check for escape sequences
-	if b[0] == 27 { // ESC character
-		// Try to read more bytes for escape sequence
-		var seq [10]byte
-		seq[0] = b[0]
-
-		// Use a select with a very short timeout to check if more data is immediately available
-		done := make(chan int)
-		go func() {
-			n, _ := os.Stdin.Read(seq[1:])
-			done <- n
-		}()
-
-		select {
-		case n := <-done:
-			if n > 0 {
-				// Parse escape sequence
-				return parseEscapeSequence(seq[:n+1])
-			}
-		case <-time.After(10 * time.Millisecond):
-			// No more bytes quickly available, it's just ESC
-		}
-
-		return editor.KeyEvent{Rune: 27} // Just ESC
-	}
-
-	return editor.KeyEvent{Rune: rune(b[0])}
-}
 
 // parseEscapeSequence parses ANSI escape sequences into special keys
 func parseEscapeSequence(seq []byte) editor.KeyEvent {

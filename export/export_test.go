@@ -136,8 +136,8 @@ func TestMermaidExporter_Flowchart(t *testing.T) {
 		"N3{Decision}",
 		"N4[End]",
 		"N1 --> N2",
-		"N2 --|check| N3",
-		"N3 -.-|yes| N4",
+		"N2 -->|check| N3",
+		"N3 -.->|yes| N4",
 	}
 
 	for _, part := range expectedParts {

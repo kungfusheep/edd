@@ -57,17 +57,17 @@ func NewExporter(format Format) (Exporter, error) {
 // ParseFormat converts a string to a Format
 func ParseFormat(s string) (Format, error) {
 	switch s {
-	case "ascii", "text", "txt":
+	case "ascii", "text", "txt", "a":
 		return FormatASCII, nil
-	case "mermaid", "mmd":
+	case "mermaid", "mmd", "m":
 		return FormatMermaid, nil
-	case "plantuml", "puml":
+	case "plantuml", "puml", "p":
 		return FormatPlantUML, nil
-	case "json":
+	case "json", "j":
 		return FormatJSON, nil
-	case "graphviz", "dot", "gv":
+	case "graphviz", "dot", "gv", "g":
 		return FormatGraphviz, nil
-	case "d2":
+	case "d2", "d":
 		return FormatD2, nil
 	default:
 		return "", fmt.Errorf("unknown format: %s", s)

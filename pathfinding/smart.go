@@ -220,22 +220,6 @@ func (s *SmartPathFinder) canConnectDirect(start, end diagram.Point, obstacles f
 	return false
 }
 
-// tryDirectRoute attempts to find a clear L-shaped path between two points.
-func (s *SmartPathFinder) tryDirectRoute(start, end diagram.Point, obstacles func(diagram.Point) bool) []diagram.Point {
-	// Try horizontal-first
-	hPath := []diagram.Point{start, {X: end.X, Y: start.Y}, end}
-	if s.isSegmentClear(start, hPath[1], obstacles) && s.isSegmentClear(hPath[1], end, obstacles) {
-		return hPath
-	}
-	
-	// Try vertical-first
-	vPath := []diagram.Point{start, {X: start.X, Y: end.Y}, end}
-	if s.isSegmentClear(start, vPath[1], obstacles) && s.isSegmentClear(vPath[1], end, obstacles) {
-		return vPath
-	}
-	
-	return nil
-}
 
 // isSegmentClear checks if a straight line segment is clear of render.
 func (s *SmartPathFinder) isSegmentClear(start, end diagram.Point, obstacles func(diagram.Point) bool) bool {

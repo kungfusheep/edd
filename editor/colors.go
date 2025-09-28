@@ -9,7 +9,6 @@ import (
 // ColoredCanvas wraps a canvas to add color support
 type ColoredCanvas struct {
 	render.Canvas
-	currentColor string
 }
 
 // NewColoredCanvas creates a canvas wrapper with color support
@@ -54,30 +53,6 @@ func getColorCode(color string) string {
 	}
 }
 
-// getStyleCharacters returns the characters to use for a given style
-func getStyleCharacters(style string) (horizontal, vertical rune) {
-	switch style {
-	case "dashed":
-		return '╌', '╎'  // Unicode dashed box drawing
-	case "dotted":
-		return '·', '·'
-	case "double":
-		return '═', '║'
-	default:
-		return '─', '│'
-	}
-}
-
-// applyColorCode is a placeholder - in reality we need to modify the canvas output
-func applyColorCode(c render.Canvas, color string) {
-	// This would need to be implemented differently
-	// We might need to track colored segments in the canvas
-}
-
-// resetColorCode resets to default color
-func resetColorCode(c render.Canvas) {
-	// This would need to be implemented differently
-}
 
 // WrapWithColor wraps a string segment with ANSI color codes
 func WrapWithColor(text string, color string) string {

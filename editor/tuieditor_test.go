@@ -2,56 +2,12 @@ package editor
 
 import (
 	"edd/diagram"
-	"edd/render"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 )
-
-// ===== Test helpers =====
-
-func createTestEditor() *TUIEditor {
-	d := &diagram.Diagram{
-		Nodes:       []diagram.Node{},
-		Connections: []diagram.Connection{},
-	}
-	return &TUIEditor{
-		diagram:            d,
-		renderer:           render.NewRenderer(),
-		selected:           -1,
-		selectedConnection: -1,
-		mode:               ModeNormal,
-		jumpLabels:         make(map[int]rune),
-		connectionLabels:   make(map[int]rune),
-	}
-}
-
-func createTestEditorWithNodes(nodeCount int) *TUIEditor {
-	ed := createTestEditor()
-	for i := 0; i < nodeCount; i++ {
-		ed.diagram.Nodes = append(ed.diagram.Nodes, diagram.Node{
-			ID:   i,
-			Text: []string{fmt.Sprintf("Node %d", i+1)},
-		})
-	}
-	return ed
-}
-
-// Helper to simulate a sequence of key presses
-func sendKeys(ed *TUIEditor, keys string) {
-	for _, key := range keys {
-		ed.HandleKey(key)
-	}
-}
-
-// Helper to send text input
-func sendText(ed *TUIEditor, text string) {
-	for _, ch := range text {
-		ed.HandleKey(ch)
-	}
-}
 
 // Create a test diagram with reasonable complexity for benchmarks
 func createTestDiagram(nodes, connections int) *diagram.Diagram {
@@ -138,15 +94,15 @@ func TestAdjacentNodeConnection(t *testing.T) {
 		fmt.Printf("  Node %d -> '%c'\n", nodeID, label)
 	}
 	
-	// The labels should be: a, s, d, f, g, h
+	// The labels should be: a, s, d, f, j, k (based on jumpChars sequence)
 	// Let's verify what we actually get
 	expectedLabels := map[int]rune{
 		1: 'a', // A
 		2: 's', // B
 		3: 'd', // C
 		4: 'f', // D
-		5: 'g', // E
-		6: 'h', // F
+		5: 'j', // E
+		6: 'k', // F
 	}
 	
 	for nodeID, expected := range expectedLabels {
@@ -175,12 +131,11 @@ func TestAdjacentNodeConnection(t *testing.T) {
 	}
 	
 	// Try to select F
-	// PROBLEM: F might have label 'h' but when we press 'f' it selects D again!
-	// This is the issue - 'f' is D's label
-	
-	// Let me try selecting h for F
-	fmt.Printf("\nPressing 'h' to select node F (id=6)\n")
-	tui.HandleKey('h')
+	// F has label 'k' based on the jumpChars sequence
+
+	// Select k for F
+	fmt.Printf("\nPressing 'k' to select node F (id=6)\n")
+	tui.HandleKey('k')
 	
 	fmt.Printf("After attempting F: selected=%d, jumpAction=%v\n", tui.selected, tui.jumpAction)
 	
@@ -2136,10 +2091,14 @@ func TestRestartConnectMode(t *testing.T) {
 	
 	// Make connection A -> B
 	tui.HandleKey('a') // Select A as FROM (has label 'a')
-	tui.HandleKey('b') // Select B as TO (has label 'b')
-	
-	fmt.Printf("Created connection: %d -> %d\n", 
-		tui.diagram.Connections[0].From, tui.diagram.Connections[0].To)
+	tui.HandleKey('s') // Select B as TO (has label 's' - B is second node)
+
+	if len(tui.diagram.Connections) > 0 {
+		fmt.Printf("Created connection: %d -> %d\n",
+			tui.diagram.Connections[0].From, tui.diagram.Connections[0].To)
+	} else {
+		t.Fatal("No connection was created")
+	}
 	
 	// Exit continuous mode
 	tui.HandleKey(27) // ESC
@@ -2165,18 +2124,18 @@ func TestRestartConnectMode(t *testing.T) {
 	
 	// Try to make connection B -> C (adjacent nodes)
 	fmt.Println("\nTrying to connect B -> C:")
-	fmt.Println("Pressing 'b' to select B as FROM")
-	tui.HandleKey('b') // Select B as FROM (has label 'b')
-	
+	fmt.Println("Pressing 's' to select B as FROM")
+	tui.HandleKey('s') // Select B as FROM (has label 's')
+
 	fmt.Printf("After selecting B: selected=%d, jumpAction=%v\n", tui.selected, tui.jumpAction)
-	
+
 	fmt.Println("Jump labels after selecting B:")
 	for nodeID, label := range tui.jumpLabels {
 		fmt.Printf("  Node %d -> '%c'\n", nodeID, label)
 	}
-	
-	fmt.Println("Pressing 'c' to select C as TO")
-	tui.HandleKey('c') // Select C as TO (has label 'c')
+
+	fmt.Println("Pressing 'd' to select C as TO")
+	tui.HandleKey('d') // Select C as TO (has label 'd')
 	
 	fmt.Printf("After selecting C: selected=%d, jumpAction=%v\n", tui.selected, tui.jumpAction)
 	
@@ -2232,7 +2191,7 @@ func TestRestartAfterPartialConnection(t *testing.T) {
 	
 	// Try to make a connection
 	tui.HandleKey('a') // Select A as FROM (has label 'a')
-	tui.HandleKey('b') // Select B as TO (has label 'b')
+	tui.HandleKey('s') // Select B as TO (has label 's')
 	
 	if len(tui.diagram.Connections) != 1 {
 		t.Errorf("Expected 1 connection after restart, got %d", len(tui.diagram.Connections))
@@ -2311,18 +2270,7 @@ func TestTextEditingIntegration(t *testing.T) {
 		t.Errorf("Final text: Expected '%s', got '%s'", expectedFinal, string(tui.textBuffer))
 	}
 	
-	// Move back a few chars then delete word
-	tui.handleTextKey(5) // Ctrl+E to go to end of line
-	for i := 0; i < 4; i++ {
-		tui.handleTextKey(2) // Ctrl+B to move back
-	}
-	// Cursor should be at 'l' in "Final line"
-	tui.handleTextKey(23) // Ctrl+W to delete "Final "
-	
-	expectedAfterDelete := "Hello world\nSecond line\nline"
-	if string(tui.textBuffer) != expectedAfterDelete {
-		t.Errorf("After Ctrl+W: Expected '%s', got '%s'", expectedAfterDelete, string(tui.textBuffer))
-	}
+	// Ctrl+W (delete word backward) functionality was removed - skip this test
 }
 func TestAllEditingShortcuts(t *testing.T) {
 	shortcuts := []struct {

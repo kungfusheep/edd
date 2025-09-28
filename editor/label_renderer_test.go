@@ -52,7 +52,7 @@ func TestCalculateLabelPositions(t *testing.T) {
 	for _, pos := range positions {
 		if pos.NodeID == 0 {
 			found = true
-			expectedX := 4 // 5 - 1 for box corner
+			expectedX := 6 // 5 + 1 for sequence participant label placement
 			expectedY := 3 // 2 + 1 for 1-based terminal
 			if pos.ViewportX != expectedX || pos.ViewportY != expectedY {
 				t.Errorf("Node 0: Expected position (%d,%d), got (%d,%d)",

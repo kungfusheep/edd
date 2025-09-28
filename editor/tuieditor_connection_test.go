@@ -144,15 +144,15 @@ func TestConnectionInlineEditing(t *testing.T) {
 	_ = ed.Render()
 
 	// Check that renderer has the correct edit state
-	if renderer.editingConnectionID != 0 {
-		t.Errorf("Expected editingConnectionID=0, got %d", renderer.editingConnectionID)
+	if renderer.EditingConnectionID != 0 {
+		t.Errorf("Expected EditingConnectionID=0, got %d", renderer.EditingConnectionID)
 	}
 	expectedText := "originalnew" // Original text plus what we typed
-	if renderer.editConnectionText != expectedText {
-		t.Errorf("Expected editConnectionText='%s', got '%s'", expectedText, renderer.editConnectionText)
+	if renderer.EditConnectionText != expectedText {
+		t.Errorf("Expected EditConnectionText='%s', got '%s'", expectedText, renderer.EditConnectionText)
 	}
-	if renderer.editConnectionCursorPos != 11 {
-		t.Errorf("Expected editConnectionCursorPos=11, got %d", renderer.editConnectionCursorPos)
+	if renderer.EditConnectionCursorPos != 11 {
+		t.Errorf("Expected EditConnectionCursorPos=11, got %d", renderer.EditConnectionCursorPos)
 	}
 
 	// Render and check that the output shows inline editing

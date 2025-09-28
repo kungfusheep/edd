@@ -181,39 +181,3 @@ func (m *CharacterMerger) initializeMergeRules() {
 	m.mergeMap[mergePair{'+', '|'}] = '+'
 }
 
-// isHorizontalChar checks if a character is a horizontal line.
-func isHorizontalChar(r rune) bool {
-	switch r {
-	case '─', '━', '-', '═':
-		return true
-	case '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼':
-		return true
-	case '╔', '╗', '╚', '╝', '╠', '╣', '╦', '╩', '╬':
-		return true
-	case '╭', '╮', '╰', '╯':
-		return true
-	case '+':
-		return true
-	default:
-		return false
-	}
-}
-
-// isVerticalChar checks if a character is a vertical line.
-func isVerticalChar(r rune) bool {
-	switch r {
-	case '│', '┃', '|', '║':
-		return true
-	case '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼':
-		return true
-	case '╔', '╗', '╚', '╝', '╠', '╣', '╦', '╩', '╬':
-		return true
-	case '╭', '╮', '╰', '╯':
-		return true
-	case '+':
-		return true
-	default:
-		return false
-	}
-}
-

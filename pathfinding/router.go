@@ -2,7 +2,6 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/layout"
 	"fmt"
 	"math"
 )
@@ -101,157 +100,7 @@ func (r *Router) RouteConnections(connections []diagram.Connection, nodes []diag
 	return r.routeConnectionsWithDynamicObstacles(connections, nodes)
 }
 
-// getConnectionPoint determines the best connection point on a node for connecting to another node.
-// This creates cleaner diagrams by choosing appropriate sides of boxes.
-// Connection points are placed ON the box edges for proper connection termination.
-func getConnectionPoint(fromNode, toNode *diagram.Node) diagram.Point {
-	// Calculate centers
-	fromCenter := diagram.Point{
-		X: fromNode.X + fromNode.Width/2,
-		Y: fromNode.Y + fromNode.Height/2,
-	}
-	toCenter := diagram.Point{
-		X: toNode.X + toNode.Width/2,
-		Y: toNode.Y + toNode.Height/2,
-	}
 
-	// Determine direction
-	dx := toCenter.X - fromCenter.X
-	dy := toCenter.Y - fromCenter.Y
-
-	// Debug: Log the values to understand the issue
-	// fmt.Printf("Connection from node %d to node %d: dx=%d, dy=%d, abs(dx)=%d, abs(dy)=%d\n",
-	//           fromNode.ID, toNode.ID, dx, dy, layout.Abs(dx), layout.Abs(dy))
-
-	// Choose connection point based on direction
-	// Connection points are placed ON the box edges for proper connection termination
-	// For vertical layouts (flowcharts), prefer vertical connections when possible
-	// Only use horizontal when the vertical distance is very small or zero
-
-	// Strong preference for vertical connections in flowcharts
-	// Only go horizontal if there's minimal vertical distance
-	const verticalBias = 0.3 // Use vertical unless horizontal distance is 3x larger
-
-	if layout.Abs(dy) > 0 && float64(layout.Abs(dx)) < float64(layout.Abs(dy))/verticalBias {
-		// Vertical connection preferred
-		if dy > 0 {
-			// Connect from bottom (on the edge)
-			return diagram.Point{
-				X: fromNode.X + fromNode.Width/2,
-				Y: fromNode.Y + fromNode.Height - 1,
-			}
-		} else {
-			// Connect from top (on the edge)
-			return diagram.Point{
-				X: fromNode.X + fromNode.Width/2,
-				Y: fromNode.Y,
-			}
-		}
-	} else {
-		// Horizontal connection (only when necessary)
-		if dx > 0 {
-			// Connect from right side (on the edge)
-			return diagram.Point{
-				X: fromNode.X + fromNode.Width - 1,
-				Y: fromNode.Y + fromNode.Height/2,
-			}
-		} else if dx < 0 {
-			// Connect from left side (on the edge)
-			return diagram.Point{
-				X: fromNode.X,
-				Y: fromNode.Y + fromNode.Height/2,
-			}
-		} else {
-			// dx == 0, directly above/below - use vertical
-			if dy > 0 {
-				// Connect from bottom (on the edge)
-				return diagram.Point{
-					X: fromNode.X + fromNode.Width/2,
-					Y: fromNode.Y + fromNode.Height - 1,
-				}
-			} else {
-				// Connect from top (on the edge)
-				return diagram.Point{
-					X: fromNode.X + fromNode.Width/2,
-					Y: fromNode.Y,
-				}
-			}
-		}
-	}
-}
-
-// getEdgePoint returns the exact edge point of a box for junction creation.
-// This is the point ON the box edge where the connection meets it.
-func getEdgePoint(fromNode, toNode *diagram.Node) diagram.Point {
-	// Calculate centers
-	fromCenter := diagram.Point{
-		X: fromNode.X + fromNode.Width/2,
-		Y: fromNode.Y + fromNode.Height/2,
-	}
-	toCenter := diagram.Point{
-		X: toNode.X + toNode.Width/2,
-		Y: toNode.Y + toNode.Height/2,
-	}
-	
-	// Determine direction
-	dx := toCenter.X - fromCenter.X
-	dy := toCenter.Y - fromCenter.Y
-	
-	// Choose edge point based on direction
-	// Edge points are ON the box edges for proper junction creation
-	// For vertical layouts (flowcharts), prefer vertical connections
-
-	// Strong preference for vertical connections in flowcharts
-	// Only go horizontal if there's minimal vertical distance
-	const verticalBias = 0.3 // Use vertical unless horizontal distance is 3x larger
-
-	if layout.Abs(dy) > 0 && float64(layout.Abs(dx)) < float64(layout.Abs(dy))/verticalBias {
-		// Vertical connection preferred
-		if dy > 0 {
-			// Connect from bottom (at the edge)
-			return diagram.Point{
-				X: fromNode.X + fromNode.Width/2,
-				Y: fromNode.Y + fromNode.Height - 1,
-			}
-		} else {
-			// Connect from top (at the edge)
-			return diagram.Point{
-				X: fromNode.X + fromNode.Width/2,
-				Y: fromNode.Y,
-			}
-		}
-	} else {
-		// Horizontal connection (only when necessary)
-		if dx > 0 {
-			// Connect from right side (at the edge)
-			return diagram.Point{
-				X: fromNode.X + fromNode.Width - 1,
-				Y: fromNode.Y + fromNode.Height/2,
-			}
-		} else if dx < 0 {
-			// Connect from left side (at the edge)
-			return diagram.Point{
-				X: fromNode.X,
-				Y: fromNode.Y + fromNode.Height/2,
-			}
-		} else {
-			// dx == 0, directly above/below - use vertical
-			if dy > 0 {
-				// Connect from bottom (at the edge)
-				return diagram.Point{
-					X: fromNode.X + fromNode.Width/2,
-					Y: fromNode.Y + fromNode.Height - 1,
-				}
-			} else {
-				// Connect from top (at the edge)
-				return diagram.Point{
-					X: fromNode.X + fromNode.Width/2,
-					Y: fromNode.Y,
-				}
-			}
-		}
-	}
-}
 
 
 
@@ -394,15 +243,4 @@ func (r *Router) routeConnectionsWithDynamicObstacles(connections []diagram.Conn
 	}
 	
 	return paths, nil
-}
-
-
-// createObstaclesFunction is a temporary stub for backward compatibility.
-// This should be removed once all callers are updated to use ObstacleManager.
-func createObstaclesFunction(nodes []diagram.Node, sourceID, targetID int) func(diagram.Point) bool {
-	// Create a temporary obstacle manager for compatibility
-	config := DefaultVirtualObstacleConfig()
-	manager := NewObstacleManager(config)
-	conn := diagram.Connection{From: sourceID, To: targetID}
-	return manager.GetObstacleFuncForConnection(nodes, conn)
 }

@@ -608,31 +608,6 @@ func (e *TUIEditor) isReturnConnection(from, to int) bool {
 	return false
 }
 
-// hasOpenCallFrom checks if 'to' has an open call from 'from' that hasn't been responded to
-func (e *TUIEditor) hasOpenCallFrom(from, to int) bool {
-	// Only for sequence diagrams
-	if e.diagram.Type != "sequence" {
-		return false
-	}
-
-	// Track open calls using a simple approach:
-	// Look through existing connections to see if 'to' has received from 'from'
-	// without responding back yet
-
-	callDepth := 0
-	for _, conn := range e.diagram.Connections {
-		if conn.From == from && conn.To == to {
-			// Found a call from 'from' to 'to'
-			callDepth++
-		} else if conn.From == to && conn.To == from {
-			// Found a response from 'to' back to 'from'
-			callDepth--
-		}
-	}
-
-	// If callDepth > 0, there are unanswered calls
-	return callDepth > 0
-}
 
 // detectActivation determines if a connection should trigger activation/deactivation
 // based on behavioral patterns (not keywords)
@@ -1574,12 +1549,6 @@ func (e *TUIEditor) assignJumpLabels() {
 }
 
 // getJumpLabel returns the jump label for a node ID
-func (e *TUIEditor) getJumpLabel(nodeID int) string {
-	if label, ok := e.jumpLabels[nodeID]; ok {
-		return string(label)
-	}
-	return ""
-}
 
 // clearJumpLabels clears all jump labels
 func (e *TUIEditor) clearJumpLabels() {
@@ -1738,45 +1707,8 @@ func (e *TUIEditor) moveCursorBackward() {
 // Additional useful cursor movements
 
 // moveCursorWordForward moves cursor to the beginning of the next word (Alt+F in terminals)
-func (e *TUIEditor) moveCursorWordForward() {
-	if e.cursorPos >= len(e.textBuffer) {
-		return
-	}
-
-	// Skip current word
-	for e.cursorPos < len(e.textBuffer) && e.textBuffer[e.cursorPos] != ' ' && e.textBuffer[e.cursorPos] != '\n' {
-		e.cursorPos++
-	}
-
-	// Skip spaces
-	for e.cursorPos < len(e.textBuffer) && e.textBuffer[e.cursorPos] == ' ' {
-		e.cursorPos++
-	}
-
-	e.updateCursorPosition()
-}
 
 // moveCursorWordBackward moves cursor to the beginning of the previous word (Alt+B in terminals)
-func (e *TUIEditor) moveCursorWordBackward() {
-	if e.cursorPos == 0 {
-		return
-	}
-
-	// Move back one position
-	e.cursorPos--
-
-	// Skip spaces
-	for e.cursorPos > 0 && e.textBuffer[e.cursorPos] == ' ' {
-		e.cursorPos--
-	}
-
-	// Find beginning of word
-	for e.cursorPos > 0 && e.textBuffer[e.cursorPos-1] != ' ' && e.textBuffer[e.cursorPos-1] != '\n' {
-		e.cursorPos--
-	}
-
-	e.updateCursorPosition()
-}
 
 // moveCursorUp moves cursor up one line (Arrow Up)
 func (e *TUIEditor) moveCursorUp() {
@@ -1793,34 +1725,6 @@ func (e *TUIEditor) moveCursorDown() {
 // ============================================
 
 // deleteWordBackward deletes the previous word (Ctrl+W)
-func (e *TUIEditor) deleteWordBackward() {
-	if e.cursorPos == 0 {
-		return
-	}
-
-	// Find the start of the previous word
-	startPos := e.cursorPos - 1
-
-	// Skip any trailing spaces
-	for startPos >= 0 && e.textBuffer[startPos] == ' ' {
-		startPos--
-	}
-
-	// Skip the word itself (non-space characters)
-	for startPos >= 0 && e.textBuffer[startPos] != ' ' && e.textBuffer[startPos] != '\n' {
-		startPos--
-	}
-
-	// startPos is now one position before the word start
-	startPos++
-
-	// Delete from startPos to cursorPos
-	if startPos < e.cursorPos {
-		e.textBuffer = append(e.textBuffer[:startPos], e.textBuffer[e.cursorPos:]...)
-		e.cursorPos = startPos
-		e.updateCursorPosition()
-	}
-}
 
 // deleteToBeginningOfLine deletes from cursor to beginning of current line (Ctrl+U)
 func (e *TUIEditor) deleteToBeginningOfLine() {
@@ -1863,35 +1767,8 @@ func (e *TUIEditor) deleteToEndOfLine() {
 }
 
 // deleteWord deletes the word at cursor position (for future use)
-func (e *TUIEditor) deleteWord() {
-	if e.cursorPos >= len(e.textBuffer) {
-		return
-	}
-
-	endPos := e.cursorPos
-
-	// Skip any leading spaces
-	for endPos < len(e.textBuffer) && e.textBuffer[endPos] == ' ' {
-		endPos++
-	}
-
-	// Skip the word itself
-	for endPos < len(e.textBuffer) && e.textBuffer[endPos] != ' ' && e.textBuffer[endPos] != '\n' {
-		endPos++
-	}
-
-	// Delete from cursorPos to endPos
-	if endPos > e.cursorPos {
-		e.textBuffer = append(e.textBuffer[:e.cursorPos], e.textBuffer[endPos:]...)
-		// cursorPos stays the same
-		e.updateCursorPosition()
-	}
-}
 
 // Helper to check if a rune is a word boundary
-func isWordBoundary(r rune) bool {
-	return unicode.IsSpace(r) || unicode.IsPunct(r)
-}
 
 // ============================================
 // Methods from multiline.go
@@ -2349,7 +2226,7 @@ func (e *TUIEditor) ProcessCommand() {
 		e.quitRequested = true
 		e.SetMode(ModeNormal)
 
-	case "export":
+	case "e", "export":
 		// Export command
 		if len(parts) < 2 {
 			e.commandResult = "Usage: :export <format> [filename]"
@@ -2373,9 +2250,6 @@ func (e *TUIEditor) HasUnsavedChanges() bool {
 }
 
 // markAsModified marks the diagram as having unsaved changes
-func (e *TUIEditor) markAsModified() {
-	e.hasChanges = true
-}
 
 // AnimateEd advances Ed's animation
 func (e *TUIEditor) AnimateEd() {
@@ -2422,133 +2296,16 @@ func (e *TUIEditor) TransformToViewport(diagramY int, hasScrollIndicator bool) i
 // ============================================
 
 // Available node styles in cycle order
-var nodeStyles = []string{"rounded", "sharp", "double", "thick"}
 
 // Available node colors in cycle order
-var nodeColors = []string{"", "red", "green", "yellow", "blue", "magenta", "cyan"}
 
 // cycleNodeStyle cycles through available node styles
-func (e *TUIEditor) cycleNodeStyle(nodeID int) {
-	// Find the node
-	var node *diagram.Node
-	for i := range e.diagram.Nodes {
-		if e.diagram.Nodes[i].ID == nodeID {
-			node = &e.diagram.Nodes[i]
-			break
-		}
-	}
-
-	if node == nil {
-		return
-	}
-
-	// Save state for undo
-	e.history.SaveState(e.diagram)
-
-	// Initialize hints if needed
-	if node.Hints == nil {
-		node.Hints = make(map[string]string)
-	}
-
-	// Get current style
-	currentStyle := node.Hints["style"]
-
-	// Find current index
-	currentIndex := -1
-	for i, style := range nodeStyles {
-		if style == currentStyle {
-			currentIndex = i
-			break
-		}
-	}
-
-	// Cycle to next style
-	nextIndex := (currentIndex + 1) % len(nodeStyles)
-	node.Hints["style"] = nodeStyles[nextIndex]
-
-	// If it's the default (first) style and no other hints, remove the hints map
-	if nodeStyles[nextIndex] == nodeStyles[0] && len(node.Hints) == 1 {
-		delete(node.Hints, "style")
-		if len(node.Hints) == 0 {
-			node.Hints = nil
-		}
-	}
-}
 
 // cycleNodeColor cycles through available node colors
-func (e *TUIEditor) cycleNodeColor(nodeID int) {
-	// Find the node
-	var node *diagram.Node
-	for i := range e.diagram.Nodes {
-		if e.diagram.Nodes[i].ID == nodeID {
-			node = &e.diagram.Nodes[i]
-			break
-		}
-	}
-
-	if node == nil {
-		return
-	}
-
-	// Save state for undo
-	e.history.SaveState(e.diagram)
-
-	// Initialize hints if needed
-	if node.Hints == nil {
-		node.Hints = make(map[string]string)
-	}
-
-	// Get current color
-	currentColor := node.Hints["color"]
-
-	// Find current index
-	currentIndex := 0 // Default to no color (empty string)
-	for i, color := range nodeColors {
-		if color == currentColor {
-			currentIndex = i
-			break
-		}
-	}
-
-	// Cycle to next color
-	nextIndex := (currentIndex + 1) % len(nodeColors)
-
-	if nodeColors[nextIndex] == "" {
-		// Remove color hint
-		delete(node.Hints, "color")
-		if len(node.Hints) == 0 {
-			node.Hints = nil
-		}
-	} else {
-		node.Hints["color"] = nodeColors[nextIndex]
-	}
-}
 
 // getNodeStyle returns the style hint for a node
-func (e *TUIEditor) getNodeStyle(nodeID int) string {
-	for _, node := range e.diagram.Nodes {
-		if node.ID == nodeID {
-			if node.Hints != nil {
-				return node.Hints["style"]
-			}
-			return ""
-		}
-	}
-	return ""
-}
 
 // getNodeColor returns the color hint for a node
-func (e *TUIEditor) getNodeColor(nodeID int) string {
-	for _, node := range e.diagram.Nodes {
-		if node.ID == nodeID {
-			if node.Hints != nil {
-				return node.Hints["color"]
-			}
-			return ""
-		}
-	}
-	return ""
-}
 
 // ============================================
 // Methods from keys.go
@@ -2678,9 +2435,6 @@ func (e *TUIEditor) handleTextKey(key rune) bool {
 	case 14: // Ctrl+N - insert newline for multi-line editing
 		e.insertNewline()
 
-	case 23: // Ctrl+W - delete word backward
-		e.deleteWordBackward()
-
 	case 21: // Ctrl+U - delete to beginning of line
 		e.deleteToBeginningOfLine()
 
@@ -2803,68 +2557,7 @@ func (e *TUIEditor) handleCommandKey(key rune) bool {
 	return false
 }
 
-// executeCommand processes command mode commands
-func (e *TUIEditor) executeCommand(command string) {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return
-	}
 
-	switch parts[0] {
-	case "w", "write":
-		// Save command - handled by terminal layer
-		e.saveRequested = true
-		if len(parts) > 1 {
-			e.saveFilename = parts[1]
-		}
-		e.commandResult = "Saving..."
-	case "q", "quit":
-		// Quit command - handled by terminal layer
-		e.quitRequested = true
-		e.commandResult = "Quitting..."
-	case "wq":
-		// Save and quit
-		e.saveRequested = true
-		e.quitRequested = true
-		if len(parts) > 1 {
-			e.saveFilename = parts[1]
-		}
-		e.commandResult = "Saving and quitting..."
-	case "export", "exp", "e":
-		// Export command - support various aliases
-		if len(parts) < 2 {
-			e.commandResult = "Usage: export <format> [filename|clipboard|clip]"
-			return
-		}
-		format := parts[1]
-		filename := ""
-		if len(parts) > 2 {
-			filename = parts[2]
-		}
-		e.exportDiagram(format, filename)
-	default:
-		e.commandResult = "Unknown command: " + parts[0]
-	}
-}
-
-// exportDiagram exports the diagram to the specified format
-func (e *TUIEditor) exportDiagram(format, filename string) {
-	// Support format shortcuts
-	switch format {
-	case "m":
-		format = "mermaid"
-	case "p":
-		format = "plantuml"
-	case "a":
-		format = "ascii"
-	}
-
-	// This will be implemented by the terminal layer
-	// Set a command result that the terminal layer can check
-	e.exportFormat = format
-	e.exportFilename = filename
-	e.commandResult = "Export requested: " + format
-}
 
 // handleJumpKey processes keys when jump labels are active
 func (e *TUIEditor) handleJumpKey(key rune) bool {

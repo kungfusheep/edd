@@ -750,55 +750,6 @@ func (s *SimpleLayout) detectComponents(nodes []diagram.Node, outgoing, incoming
 	return components
 }
 
-// hasCycle detects if the given component contains cycles using DFS
-func (s *SimpleLayout) hasCycle(component []int, outgoing map[int][]int) bool {
-	// Track visit states: 0 = unvisited, 1 = visiting, 2 = visited
-	state := make(map[int]int)
-
-	// DFS to detect cycles
-	var dfs func(nodeID int) bool
-	dfs = func(nodeID int) bool {
-		state[nodeID] = 1 // Mark as visiting
-
-		for _, neighbor := range outgoing[nodeID] {
-			// Only check neighbors within this component
-			inComponent := false
-			for _, compNode := range component {
-				if compNode == neighbor {
-					inComponent = true
-					break
-				}
-			}
-			if !inComponent {
-				continue
-			}
-
-			if state[neighbor] == 1 {
-				// Found a back edge - cycle detected
-				return true
-			}
-			if state[neighbor] == 0 {
-				if dfs(neighbor) {
-					return true
-				}
-			}
-		}
-
-		state[nodeID] = 2 // Mark as visited
-		return false
-	}
-
-	// Check each node in the component
-	for _, nodeID := range component {
-		if state[nodeID] == 0 {
-			if dfs(nodeID) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
 
 // assignGridLayout arranges nodes in a grid pattern for small cyclic graphs
 func (s *SimpleLayout) assignGridLayout(nodes []diagram.Node) [][]int {
@@ -946,10 +897,6 @@ func (s *SimpleLayout) assignRadialLayout(nodes []diagram.Node, hubID int, outgo
 	return layers
 }
 
-// positionNodes assigns X,Y coordinates to nodes based on their layers.
-func (s *SimpleLayout) positionNodes(nodes []diagram.Node, layers [][]int) {
-	s.positionNodesWithOffset(nodes, layers, 0)
-}
 
 // positionRadialNodesWithOffset positions nodes in a radial/hub-spoke pattern
 func (s *SimpleLayout) positionRadialNodesWithOffset(nodes []diagram.Node, layers [][]int, xOffset int, hubID int) {
