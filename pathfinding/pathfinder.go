@@ -14,29 +14,32 @@ type PathFinder = diagram.PathFinder
 
 // PathCost defines the cost model for pathfinding algorithms.
 type PathCost struct {
-	StraightCost  int // Base cost for straight movement
-	TurnCost      int // Penalty for changing direction
-	CrossingCost  int // Penalty for crossing existing paths
-	ProximityCost int // Cost modifier near obstacles (positive=avoid walls, negative=hug walls)
-	DirectionBias int // Prefer certain directions (0=none, positive=horizontal, negative=vertical)
+	StraightCost         int // Base cost for straight movement
+	TurnCost             int // Penalty for changing direction
+	CrossingCost         int // Penalty for crossing existing paths
+	ProximityCost        int // Cost modifier near obstacles (positive=avoid walls, negative=hug walls)
+	DirectionBias        int // Prefer certain directions (0=none, positive=horizontal, negative=vertical)
+	InitialDirectionBonus int // Bonus for continuing in the initial direction (reduces cost)
 }
 
 // DefaultPathCost provides reasonable defaults for path finding.
 var DefaultPathCost = PathCost{
-	StraightCost:  10,
-	TurnCost:      20,
-	CrossingCost:  50,
-	ProximityCost: 30,
-	DirectionBias: 0,
+	StraightCost:         10,
+	TurnCost:             20,
+	CrossingCost:         50,
+	ProximityCost:        30,
+	DirectionBias:        0,
+	InitialDirectionBonus: 0,
 }
 
 // EdgeHuggingPathCost provides a cost model that prefers paths along edges.
 var EdgeHuggingPathCost = PathCost{
-	StraightCost:  10,
-	TurnCost:      20,
-	CrossingCost:  50,
-	ProximityCost: -5,  // Negative value encourages hugging walls
-	DirectionBias: 0,
+	StraightCost:         10,
+	TurnCost:             20,
+	CrossingCost:         50,
+	ProximityCost:        -5, // Negative value encourages hugging walls
+	DirectionBias:        0,
+	InitialDirectionBonus: 0,
 }
 
 // ManhattanDistance calculates the Manhattan distance between two points.

@@ -65,8 +65,23 @@ func (s *SmartPathFinder) FindPath(start, end diagram.Point, obstacles func(diag
 	}
 	
 	// Try different routing strategies
-	strategies := []RoutingStrategy{HorizontalFirst, VerticalFirst}
-	
+	// Choose initial strategy based on the dominant direction
+	dx := layout.Abs(end.X - start.X)
+	dy := layout.Abs(end.Y - start.Y)
+
+	var strategies []RoutingStrategy
+	if dy > dx {
+		// Vertical movement is dominant - try vertical first
+		strategies = []RoutingStrategy{VerticalFirst, HorizontalFirst}
+	} else if dx > dy {
+		// Horizontal movement is dominant - try horizontal first
+		strategies = []RoutingStrategy{HorizontalFirst, VerticalFirst}
+	} else {
+		// Equal distance - choose based on initial direction preference
+		// For flowcharts, prefer vertical movement
+		strategies = []RoutingStrategy{VerticalFirst, HorizontalFirst}
+	}
+
 	for _, strategy := range strategies {
 		s.directFinder.strategy = strategy
 		directPath, err := s.directFinder.FindPath(start, end, obstacles) // FIXED: Pass obstacles to direct finder too

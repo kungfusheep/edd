@@ -27,10 +27,11 @@ func NewFlowchartRenderer(caps TerminalCapabilities) *FlowchartRenderer {
 	
 	// Use smart pathfinder with good defaults
 	pathfinder := pathfinding.NewSmartPathFinder(pathfinding.PathCost{
-		StraightCost:  10,
-		TurnCost:      100,  // Very high cost to strongly discourage turns
-		ProximityCost: 0,    // Neutral - don't hug or avoid walls
-		DirectionBias: 0,    // No bias - treat horizontal and vertical equally for symmetry
+		StraightCost:         10,
+		TurnCost:             100, // Very high cost to strongly discourage turns
+		ProximityCost:        0,   // Neutral - don't hug or avoid walls
+		DirectionBias:        0,   // No bias - treat horizontal and vertical equally for symmetry
+		InitialDirectionBonus: 5,  // Prefer continuing in the initial direction
 	})
 	
 	// Add caching for performance. Cache size of 100 handles most diagrams

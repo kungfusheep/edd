@@ -73,24 +73,11 @@ func (ar *AreaRouter) RouteConnection(conn diagram.Connection, nodes []diagram.N
 	//     targetNode.ID, targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height, targetCenter.X, targetCenter.Y)
 	
 	// Choose exit point on source edge based on direction to target
-	if layout.Abs(dx) > layout.Abs(dy) {
-		// Primarily horizontal movement
-		if dx > 0 {
-			// Exit from right edge (one unit past the actual edge for pathfinding)
-			startPoint = diagram.Point{
-				X: sourceNode.X + sourceNode.Width,
-				Y: sourceNode.Y + sourceNode.Height/2,
-			}
-			// fmt.Printf("  Exiting from right edge at (%d,%d)\n", startPoint.X, startPoint.Y)
-		} else {
-			// Exit from left edge (one unit before the actual edge for pathfinding)
-			startPoint = diagram.Point{
-				X: sourceNode.X - 1,
-				Y: sourceNode.Y + sourceNode.Height/2,
-			}
-		}
-	} else {
-		// Primarily vertical movement
+	// For vertical layouts (flowcharts), prefer vertical connections
+	const verticalBias = 0.3 // Use vertical unless horizontal distance is 3x larger
+
+	if layout.Abs(dy) > 0 && float64(layout.Abs(dx)) < float64(layout.Abs(dy))/verticalBias {
+		// Primarily vertical movement - prefer this for flowcharts
 		if dy > 0 {
 			// Exit from bottom edge
 			startPoint = diagram.Point{
@@ -103,6 +90,37 @@ func (ar *AreaRouter) RouteConnection(conn diagram.Connection, nodes []diagram.N
 			startPoint = diagram.Point{
 				X: sourceNode.X + sourceNode.Width/2,
 				Y: sourceNode.Y - 1,
+			}
+		}
+	} else {
+		// Primarily horizontal movement (only when necessary)
+		if dx > 0 {
+			// Exit from right edge (one unit past the actual edge for pathfinding)
+			startPoint = diagram.Point{
+				X: sourceNode.X + sourceNode.Width,
+				Y: sourceNode.Y + sourceNode.Height/2,
+			}
+			// fmt.Printf("  Exiting from right edge at (%d,%d)\n", startPoint.X, startPoint.Y)
+		} else if dx < 0 {
+			// Exit from left edge (one unit before the actual edge for pathfinding)
+			startPoint = diagram.Point{
+				X: sourceNode.X - 1,
+				Y: sourceNode.Y + sourceNode.Height/2,
+			}
+		} else {
+			// dx == 0, directly above/below - use vertical
+			if dy > 0 {
+				// Exit from bottom edge
+				startPoint = diagram.Point{
+					X: sourceNode.X + sourceNode.Width/2,
+					Y: sourceNode.Y + sourceNode.Height,
+				}
+			} else {
+				// Exit from top edge
+				startPoint = diagram.Point{
+					X: sourceNode.X + sourceNode.Width/2,
+					Y: sourceNode.Y - 1,
+				}
 			}
 		}
 	}

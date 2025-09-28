@@ -10,13 +10,14 @@ import (
 
 // AStarNode represents a state in the A* search.
 type AStarNode struct {
-	Point     diagram.Point
-	GCost     int        // Cost from start
-	HCost     int        // Heuristic cost to goal
-	FCost     int        // GCost + HCost
-	Parent    *AStarNode
-	Direction Direction  // Direction we entered this node from
-	Index     int        // Index in the heap
+	Point            diagram.Point
+	GCost            int        // Cost from start
+	HCost            int        // Heuristic cost to goal
+	FCost            int        // GCost + HCost
+	Parent           *AStarNode
+	Direction        Direction // Direction we entered this node from
+	InitialDirection Direction // The first direction taken from start
+	Index            int       // Index in the heap
 }
 
 // NodeQueue is a priority queue for A* nodes.
@@ -155,8 +156,8 @@ func (a *AStarPathFinder) FindPath(start, end diagram.Point, obstacles func(diag
 		// Move to closed set
 		closedSet[currentKey] = true
 		
-		// Explore neighbors
-		for _, neighbor := range GetNeighbors(current.Point) {
+		// Explore neighbors using symmetric ordering to prevent directional bias
+		for _, neighbor := range GetNeighborsSymmetric(current.Point, end) {
 			neighborKey := PointKey{neighbor.X, neighbor.Y}
 			
 			// Skip if in closed set
@@ -171,22 +172,34 @@ func (a *AStarPathFinder) FindPath(start, end diagram.Point, obstacles func(diag
 			
 			// Calculate costs
 			dir := GetDirection(current.Point, neighbor)
+
+			// Determine initial direction (propagate from parent or set for first move)
+			var initialDir Direction
+			if current.Parent == nil {
+				// This is the first move from start
+				initialDir = dir
+			} else {
+				// Propagate initial direction from parent
+				initialDir = current.InitialDirection
+			}
+
 			tentativeGCost := a.calculateGCost(current, neighbor, dir, obstacles)
-			
+
 			// Check if we've seen this node before
 			existingNode, exists := nodeMap[neighborKey]
-			
+
 			if !exists {
 				// New node
 				newNode := &AStarNode{
-					Point:     neighbor,
-					GCost:     tentativeGCost,
-					HCost:     a.heuristic(neighbor, end, dir),
-					Parent:    current,
-					Direction: dir,
+					Point:            neighbor,
+					GCost:            tentativeGCost,
+					HCost:            a.heuristic(neighbor, end, dir),
+					Parent:           current,
+					Direction:        dir,
+					InitialDirection: initialDir,
 				}
 				newNode.FCost = newNode.GCost + newNode.HCost
-				
+
 				heap.Push(openSet, newNode)
 				nodeMap[neighborKey] = newNode
 			} else if tentativeGCost < existingNode.GCost {
@@ -195,7 +208,8 @@ func (a *AStarPathFinder) FindPath(start, end diagram.Point, obstacles func(diag
 				existingNode.FCost = existingNode.GCost + existingNode.HCost
 				existingNode.Parent = current
 				existingNode.Direction = dir
-				
+				existingNode.InitialDirection = initialDir
+
 				// Fix heap ordering
 				heap.Fix(openSet, existingNode.Index)
 			}
@@ -232,12 +246,24 @@ func (a *AStarPathFinder) heuristic(current, goal diagram.Point, currentDir Dire
 func (a *AStarPathFinder) calculateGCost(current *AStarNode, next diagram.Point, nextDir Direction, obstacles func(diagram.Point) bool) int {
 	// Base movement cost
 	cost := a.costs.StraightCost
-	
+
 	// Add turn cost if changing direction
 	if current.Parent != nil && current.Direction != DirNone && current.Direction != nextDir {
 		cost += a.costs.TurnCost
 	}
-	
+
+	// Apply initial direction bonus
+	// Encourage continuing in the initial direction taken from the start
+	if a.costs.InitialDirectionBonus != 0 && current.InitialDirection != DirNone {
+		if nextDir == current.InitialDirection {
+			// Reduce cost when moving in the initial direction
+			bonus := a.costs.InitialDirectionBonus
+			if bonus < cost {
+				cost -= bonus
+			}
+		}
+	}
+
 	// Apply proximity cost/bonus based on obstacles
 	if a.costs.ProximityCost != 0 && obstacles != nil {
 		adjacentObstacles := a.countAdjacentObstacles(next, obstacles)
@@ -253,7 +279,7 @@ func (a *AStarPathFinder) calculateGCost(current *AStarNode, next diagram.Point,
 			cost += proximityCost
 		}
 	}
-	
+
 	// Direction bias (prefer horizontal/vertical based on setting)
 	if a.costs.DirectionBias != 0 {
 		if a.costs.DirectionBias > 0 && (nextDir == DirEast || nextDir == DirWest) {
@@ -270,7 +296,7 @@ func (a *AStarPathFinder) calculateGCost(current *AStarNode, next diagram.Point,
 			}
 		}
 	}
-	
+
 	return current.GCost + cost
 }
 
@@ -361,12 +387,17 @@ func (a *AStarPathFinder) FindPathToArea(start diagram.Point, targetNode diagram
 		if isAtNodeEdge(current.Point, targetNode) && (obstacles == nil || !obstacles(current.Point)) {
 			return a.reconstructPath(current), nil
 		}
-		
+
 		// Move to closed set
 		closedSet[currentKey] = true
-		
-		// Explore neighbors
-		for _, neighbor := range GetNeighbors(current.Point) {
+
+		// Explore neighbors using symmetric ordering to prevent directional bias
+		// Use center of target node as goal for symmetric exploration
+		targetCenter := diagram.Point{
+			X: targetNode.X + targetNode.Width/2,
+			Y: targetNode.Y + targetNode.Height/2,
+		}
+		for _, neighbor := range GetNeighborsSymmetric(current.Point, targetCenter) {
 			neighborKey := PointKey{neighbor.X, neighbor.Y}
 			
 			// Skip if in closed set
@@ -384,22 +415,34 @@ func (a *AStarPathFinder) FindPathToArea(start diagram.Point, targetNode diagram
 			
 			// Calculate costs
 			dir := GetDirection(current.Point, neighbor)
+
+			// Determine initial direction (propagate from parent or set for first move)
+			var initialDir Direction
+			if current.Parent == nil {
+				// This is the first move from start
+				initialDir = dir
+			} else {
+				// Propagate initial direction from parent
+				initialDir = current.InitialDirection
+			}
+
 			tentativeGCost := a.calculateGCost(current, neighbor, dir, obstacles)
-			
+
 			// Check if we've seen this node before
 			existingNode, exists := nodeMap[neighborKey]
-			
+
 			if !exists {
 				// New node
 				newNode := &AStarNode{
-					Point:     neighbor,
-					GCost:     tentativeGCost,
-					HCost:     a.heuristicToArea(neighbor, targetNode, dir),
-					Parent:    current,
-					Direction: dir,
+					Point:            neighbor,
+					GCost:            tentativeGCost,
+					HCost:            a.heuristicToArea(neighbor, targetNode, dir),
+					Parent:           current,
+					Direction:        dir,
+					InitialDirection: initialDir,
 				}
 				newNode.FCost = newNode.GCost + newNode.HCost
-				
+
 				heap.Push(openSet, newNode)
 				nodeMap[neighborKey] = newNode
 			} else if tentativeGCost < existingNode.GCost {
@@ -408,7 +451,8 @@ func (a *AStarPathFinder) FindPathToArea(start diagram.Point, targetNode diagram
 				existingNode.FCost = existingNode.GCost + existingNode.HCost
 				existingNode.Parent = current
 				existingNode.Direction = dir
-				
+				existingNode.InitialDirection = initialDir
+
 				// Fix heap ordering
 				heap.Fix(openSet, existingNode.Index)
 			}
