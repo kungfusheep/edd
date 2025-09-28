@@ -180,116 +180,72 @@ func (e *PlantUMLExporter) exportSequence(d *diagram.Diagram) (string, error) {
 	return sb.String(), nil
 }
 
-// exportActivity exports a flowchart as a PlantUML activity diagram
+// exportActivity exports a box/flowchart diagram
 func (e *PlantUMLExporter) exportActivity(d *diagram.Diagram) (string, error) {
 	var sb strings.Builder
 	sb.WriteString("@startuml\n")
 	sb.WriteString("!theme plain\n")
-	sb.WriteString("skinparam backgroundColor white\n\n")
+	sb.WriteString("skinparam backgroundColor white\n")
+	sb.WriteString("skinparam componentStyle rectangle\n\n")
 
-	// For flowcharts, we'll use activity diagram syntax (beta)
-	sb.WriteString("start\n\n")
-
-	// Create a map of node IDs to their labels
+	// Create a map to store node IDs to PlantUML-safe identifiers
 	nodeMap := make(map[int]string)
-	processedNodes := make(map[int]bool)
 
-	// Find the start node (node with no incoming connections)
-	startNodes := e.findStartNodes(d)
+	// First, declare all nodes as components
+	for _, node := range d.Nodes {
+		// Create a safe identifier for PlantUML
+		nodeID := fmt.Sprintf("N%d", node.ID)
+		nodeMap[node.ID] = nodeID
 
-	// Build the flow recursively
-	for _, startNode := range startNodes {
-		e.buildActivityFlow(&sb, d, startNode, nodeMap, processedNodes, 0)
+		label := e.getNodeLabel(node)
+
+		// Apply color and style hints if available
+		style := ""
+		if hints := node.Hints; hints != nil {
+			if color := hints["color"]; color != "" {
+				hexColor := e.mapColorToHex(color)
+				style = fmt.Sprintf(" #%s", hexColor)
+			}
+		}
+
+		// Write the component declaration
+		sb.WriteString(fmt.Sprintf("component \"%s\" as %s%s\n", label, nodeID, style))
 	}
 
-	// Add any disconnected nodes
-	for _, node := range d.Nodes {
-		if !processedNodes[node.ID] {
-			label := e.getNodeLabel(node)
-			sb.WriteString(fmt.Sprintf(":%s;\n", label))
-			processedNodes[node.ID] = true
+	// Add a blank line between nodes and connections
+	if len(d.Connections) > 0 {
+		sb.WriteString("\n")
+	}
+
+	// Then add all connections
+	for _, conn := range d.Connections {
+		fromID, fromExists := nodeMap[conn.From]
+		toID, toExists := nodeMap[conn.To]
+
+		if !fromExists || !toExists {
+			continue
+		}
+
+		// Determine arrow style based on hints
+		arrowStyle := "-->"
+		if hints := conn.Hints; hints != nil {
+			if style := hints["style"]; style == "dashed" || style == "dotted" {
+				arrowStyle = "..>"
+			}
+		}
+
+		// Add the connection with label if present
+		if conn.Label != "" {
+			sb.WriteString(fmt.Sprintf("%s %s %s : %s\n", fromID, arrowStyle, toID, conn.Label))
+		} else {
+			sb.WriteString(fmt.Sprintf("%s %s %s\n", fromID, arrowStyle, toID))
 		}
 	}
 
-	sb.WriteString("\nstop\n")
-	sb.WriteString("@enduml\n")
+	sb.WriteString("\n@enduml\n")
 	return sb.String(), nil
 }
 
-// buildActivityFlow recursively builds the activity flow
-func (e *PlantUMLExporter) buildActivityFlow(sb *strings.Builder, d *diagram.Diagram, nodeID int, nodeMap map[int]string, processed map[int]bool, depth int) {
-	if processed[nodeID] {
-		return // Already processed this node
-	}
-
-	// Find the node
-	var currentNode *diagram.Node
-	for _, node := range d.Nodes {
-		if node.ID == nodeID {
-			currentNode = &node
-			break
-		}
-	}
-
-	if currentNode == nil {
-		return
-	}
-
-	processed[nodeID] = true
-	label := e.getNodeLabel(*currentNode)
-
-	// Check if this is a decision node (has multiple outgoing connections with labels)
-	outgoing := e.findOutgoingConnections(d, nodeID)
-
-	if len(outgoing) > 1 && e.hasLabels(outgoing) {
-		// Decision node
-		sb.WriteString(fmt.Sprintf("if (%s?) then\n", label))
-
-		first := true
-		for _, conn := range outgoing {
-			if first {
-				if conn.Label != "" {
-					sb.WriteString(fmt.Sprintf("  (%s)\n", conn.Label))
-				} else {
-					sb.WriteString("  (yes)\n")
-				}
-				first = false
-			} else {
-				if conn.Label != "" {
-					sb.WriteString(fmt.Sprintf("else (%s)\n", conn.Label))
-				} else {
-					sb.WriteString("else (no)\n")
-				}
-			}
-
-			// Process the target node
-			e.buildActivityFlow(sb, d, conn.To, nodeMap, processed, depth+1)
-		}
-		sb.WriteString("endif\n")
-	} else {
-		// Regular activity node
-		nodeStyle := ""
-		if hints := currentNode.Hints; hints != nil {
-			if color := hints["color"]; color != "" {
-				nodeStyle = fmt.Sprintf("#%s", e.mapColorToHex(color))
-			}
-		}
-
-		if nodeStyle != "" {
-			sb.WriteString(fmt.Sprintf(":%s|%s;\n", label, nodeStyle))
-		} else {
-			sb.WriteString(fmt.Sprintf(":%s;\n", label))
-		}
-
-		// Process outgoing connections
-		for _, conn := range outgoing {
-			if conn.Label != "" {
-				sb.WriteString(fmt.Sprintf("note right: %s\n", conn.Label))
-			}
-			e.buildActivityFlow(sb, d, conn.To, nodeMap, processed, depth+1)
-		}
-	}
-}
 
 // findStartNodes finds nodes with no incoming connections
 func (e *PlantUMLExporter) findStartNodes(d *diagram.Diagram) []int {
