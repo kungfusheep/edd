@@ -117,9 +117,11 @@ func (e *TUIEditor) SetDiagram(d *diagram.Diagram) {
 	e.diagram = d
 	// Don't auto-scroll when loading a diagram - start at the top
 	e.diagramScrollOffset = 0
-	e.diagramChanged = false
-	// Save this as a new state in history
+
+	// Clear history and save initial state
+	e.history.Clear()
 	e.history.SaveState(d)
+	e.diagramChanged = false
 }
 
 // GetDiagram returns the current diagram
@@ -1192,6 +1194,9 @@ func (e *TUIEditor) Undo() {
 		e.selected = -1
 		e.selectedConnection = -1
 		e.clearJumpLabels()
+		// Clear cached positions to force re-render
+		e.nodePositions = nil
+		e.connectionPaths = nil
 	}
 }
 
@@ -1203,6 +1208,9 @@ func (e *TUIEditor) Redo() {
 		e.selected = -1
 		e.selectedConnection = -1
 		e.clearJumpLabels()
+		// Clear cached positions to force re-render
+		e.nodePositions = nil
+		e.connectionPaths = nil
 	}
 }
 
@@ -1403,23 +1411,46 @@ func (e *TUIEditor) assignJumpLabels() {
 
 	labelIndex := 0
 
-	// Special handling for sequence diagrams in connect mode
-	// Participants are always visible at the top (sticky header)
-	if e.diagram.Type == "sequence" &&
-	   (e.jumpAction == JumpActionConnectFrom || e.jumpAction == JumpActionConnectTo) {
-		// Always assign labels to all participants
-		for _, node := range e.diagram.Nodes {
-			if labelIndex >= len(jumpChars) {
-				break
+	// Special handling for sequence diagrams
+	if e.diagram.Type == "sequence" {
+		// Handle reorder mode specially
+		if e.jumpAction == JumpActionReorderFrom {
+			// Show labels on all participants for selection
+			for _, node := range e.diagram.Nodes {
+				if labelIndex >= len(jumpChars) {
+					break
+				}
+				e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
+				labelIndex++
 			}
-			e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
-			if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-				fmt.Fprintf(f, "  Sequence participant %d -> label '%c' (always visible)\n", node.ID, jumpChars[labelIndex])
-				f.Close()
+		} else if e.jumpAction == JumpActionReorderTo {
+			// Show insertion point labels (positions between participants)
+			// We'll use jumpLabels but with position indices as keys
+			for i := 0; i <= len(e.diagram.Nodes); i++ {
+				if labelIndex >= len(jumpChars) {
+					break
+				}
+				// Use negative IDs for positions to avoid conflicts with node IDs
+				e.jumpLabels[-i-1] = rune(jumpChars[labelIndex])
+				labelIndex++
 			}
-			labelIndex++
+		} else if e.jumpAction == JumpActionConnectFrom || e.jumpAction == JumpActionConnectTo ||
+				  e.jumpAction == JumpActionHint || e.jumpAction == JumpActionEdit ||
+				  e.jumpAction == JumpActionDelete {
+			// Connect, hint, edit, delete modes - show labels on all participants
+			for _, node := range e.diagram.Nodes {
+				if labelIndex >= len(jumpChars) {
+					break
+				}
+				e.jumpLabels[node.ID] = rune(jumpChars[labelIndex])
+				if f, err := os.OpenFile("/tmp/edd_labels.log", os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+					fmt.Fprintf(f, "  Sequence participant %d -> label '%c' (always visible)\n", node.ID, jumpChars[labelIndex])
+					f.Close()
+				}
+				labelIndex++
+			}
 		}
-	} else if e.jumpAction != JumpActionActivation && e.jumpAction != JumpActionDeleteActivation {
+	} else if e.jumpAction != JumpActionActivation && e.jumpAction != JumpActionDeleteActivation && e.jumpAction != JumpActionReorderFrom && e.jumpAction != JumpActionReorderTo {
 		// For activation modes, we only want connection labels, not node labels
 		// Original logic - assign labels only to visible nodes
 		for _, node := range e.diagram.Nodes {
@@ -1604,15 +1635,17 @@ func (m Mode) String() string {
 type JumpAction int
 
 const (
-	JumpActionSelect       JumpAction = iota // Just select the node
-	JumpActionEdit                           // Edit the selected node
-	JumpActionDelete                         // Delete the selected node
-	JumpActionConnectFrom                    // Start connection from this node
-	JumpActionConnectTo                      // Complete connection to this node
-	JumpActionHint                           // Edit hints for nodes and connections
-	JumpActionInsertAt                       // Select insertion point for new connection
-	JumpActionActivation                     // Toggle activation on connections
-	JumpActionDeleteActivation               // Delete activation from connections
+	JumpActionSelect           JumpAction = iota // Just select the node
+	JumpActionEdit                               // Edit the selected node
+	JumpActionDelete                             // Delete the selected node
+	JumpActionConnectFrom                        // Start connection from this node
+	JumpActionConnectTo                          // Complete connection to this node
+	JumpActionHint                               // Edit hints for nodes and connections
+	JumpActionInsertAt                           // Select insertion point for new connection
+	JumpActionActivation                         // Toggle activation on connections
+	JumpActionDeleteActivation                   // Delete activation from connections
+	JumpActionReorderFrom                        // Select participant to reorder (sequence diagrams)
+	JumpActionReorderTo                          // Select position to move participant to
 )
 
 // SetMode changes the editor mode
@@ -2124,6 +2157,72 @@ func (e *TUIEditor) StartActivationDelete() {
 	}
 }
 
+// StartParticipantReorder initiates reordering mode for sequence diagram participants
+func (e *TUIEditor) StartParticipantReorder() {
+	// Only available for sequence diagrams with multiple participants
+	if e.diagram.Type == "sequence" && len(e.diagram.Nodes) >= 2 {
+		e.startJump(JumpActionReorderFrom)
+	}
+}
+
+// reorderParticipant moves a participant to a new position in the sequence
+func (e *TUIEditor) reorderParticipant(nodeID int, newPosition int) {
+	// Find the node to move
+	var nodeToMove *diagram.Node
+	var currentIndex int
+	for i, node := range e.diagram.Nodes {
+		if node.ID == nodeID {
+			nodeToMove = &e.diagram.Nodes[i]
+			currentIndex = i
+			break
+		}
+	}
+
+	if nodeToMove == nil {
+		return
+	}
+
+	// The newPosition represents where to insert in the final array
+	// But we need to account for the fact that we're removing an element first
+	// If the new position is after the current position, we need to subtract 1
+	// because the removal shifts everything down
+	adjustedPosition := newPosition
+	if newPosition > currentIndex + 1 {
+		// Moving forward past our original position
+		adjustedPosition = newPosition - 1
+	}
+
+
+	// Create a new slice with the node removed
+	newNodes := make([]diagram.Node, 0, len(e.diagram.Nodes))
+	for i, node := range e.diagram.Nodes {
+		if i != currentIndex {
+			newNodes = append(newNodes, node)
+		}
+	}
+
+	// Insert the node at the adjusted position
+	if adjustedPosition >= len(newNodes) {
+		// Append at end
+		newNodes = append(newNodes, *nodeToMove)
+	} else {
+		// Insert at position
+		newNodes = append(newNodes[:adjustedPosition], append([]diagram.Node{*nodeToMove}, newNodes[adjustedPosition:]...)...)
+	}
+
+	// Update the diagram
+	e.diagram.Nodes = newNodes
+	e.hasChanges = true
+
+
+	// Clear cached positions to force re-render with new order
+	e.nodePositions = nil
+	e.connectionPaths = nil
+
+	// Save to history after modification
+	e.SaveHistory()
+}
+
 // HandleTextInput processes text input in insert/edit modes
 func (e *TUIEditor) HandleTextInput(key rune) {
 	// Delegate to the actual text handler
@@ -2366,6 +2465,11 @@ func (e *TUIEditor) handleNormalKey(key rune) bool {
 
 	case 'V': // Delete activations (shift+v)
 		e.StartActivationDelete()
+
+	case 'O': // Order/reorder participants (sequence diagrams only)
+		if e.diagram.Type == "sequence" && len(e.diagram.Nodes) >= 2 {
+			e.StartParticipantReorder()
+		}
 
 	case 'J': // JSON view (capital J)
 		e.SetMode(ModeJSON)
@@ -2810,6 +2914,24 @@ func (e *TUIEditor) executeJumpAction(nodeID int) {
 		// Just return to normal mode
 		e.clearJumpLabels()
 		e.SetMode(ModeNormal)
+
+	case JumpActionReorderFrom:
+		// Save the selected participant to move
+		e.selected = nodeID
+		// Show insertion point labels
+		e.startJump(JumpActionReorderTo)
+		return // Don't clear jump labels yet
+
+	case JumpActionReorderTo:
+		if e.selected >= 0 {
+			// The nodeID is negative for insertion positions
+			// Convert back to actual position index
+			position := (-nodeID) - 1
+			e.reorderParticipant(e.selected, position)
+			e.selected = -1
+			e.clearJumpLabels()
+			e.SetMode(ModeNormal)
+		}
 	}
 }
 

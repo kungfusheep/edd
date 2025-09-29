@@ -18,7 +18,70 @@ type LabelPosition struct {
 func (e *TUIEditor) CalculateLabelPositions(hasScrollIndicator bool) []LabelPosition {
 	positions := []LabelPosition{}
 
-	// Process node labels
+	// Special handling for reorder mode insertion points
+	if e.jumpAction == JumpActionReorderTo && e.diagram.Type == "sequence" {
+		// Calculate positions between participants
+		participantY := 3 // Standard Y position for participants (accounting for header)
+		if hasScrollIndicator {
+			participantY = 4
+		}
+
+		// Calculate X positions for insertion points
+		startX := 10 // Starting X position
+		spacing := 20 // Approximate spacing between participants
+
+		// Get actual participant positions if available
+		// IMPORTANT: Collect positions in the order nodes appear in the diagram
+		// to ensure insertion labels align correctly with the visual layout
+		var participantXPositions []int
+		participantWidth := 20 // Standard participant box width
+		for _, node := range e.diagram.Nodes {
+			if pos, ok := e.nodePositions[node.ID]; ok {
+				// Store the center X position of each participant
+				// (pos.X is the left edge, so add half the width)
+				centerX := pos.X + participantWidth/2
+				participantXPositions = append(participantXPositions, centerX)
+			}
+		}
+
+		// Create insertion point labels
+		for nodeID, label := range e.jumpLabels {
+			if nodeID < 0 { // Negative IDs are insertion points
+				position := (-nodeID) - 1
+
+				var insertX int
+				if len(participantXPositions) > 0 {
+					if position == 0 {
+						// Before first participant (to the left of its center)
+						insertX = participantXPositions[0] - participantWidth/2 - 3
+						if insertX < 2 {
+							insertX = 2
+						}
+					} else if position >= len(participantXPositions) {
+						// After last participant (to the right of its center)
+						insertX = participantXPositions[len(participantXPositions)-1] + participantWidth/2 + 3
+					} else if position > 0 && position < len(participantXPositions) {
+						// Between two participants (midpoint of their centers)
+						insertX = (participantXPositions[position-1] + participantXPositions[position]) / 2
+					}
+				} else {
+					// Fallback if no positions available
+					insertX = startX + position * spacing
+				}
+
+				positions = append(positions, LabelPosition{
+					NodeID:    nodeID,
+					Label:     label,
+					ViewportX: insertX,
+					ViewportY: participantY,
+					IsFrom:    false,
+				})
+			}
+		}
+		return positions
+	}
+
+	// Process node labels (existing logic)
 	for nodeID, label := range e.jumpLabels {
 		if pos, ok := e.nodePositions[nodeID]; ok {
 			viewportY := 0

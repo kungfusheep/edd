@@ -2,7 +2,6 @@ package layout
 
 import (
 	"edd/diagram"
-	"sort"
 )
 
 // SequenceLayout implements a layout engine for UML sequence diagrams
@@ -135,11 +134,9 @@ func (s *SequenceLayout) identifyParticipants(d *diagram.Diagram) []diagram.Node
 		}
 	}
 	
-	// Sort by node ID for consistent ordering
-	sort.Slice(participants, func(i, j int) bool {
-		return participants[i].ID < participants[j].ID
-	})
-	
+	// Don't sort - preserve the order from the diagram
+	// This allows user to reorder participants as needed
+
 	return participants
 }
 

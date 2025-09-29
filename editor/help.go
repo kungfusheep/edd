@@ -36,6 +36,13 @@ func GetHelpText() string {
 			},
 		},
 		{
+			Name: "Sequence Diagram",
+			Commands: []HelpCommand{
+				{"O", "Reorder participants"},
+				{"V", "Delete activations"},
+			},
+		},
+		{
 			Name: "Visual Styling",
 			Commands: []HelpCommand{
 				{"H", "Edit hints - shows labels on nodes & connections"},
@@ -96,5 +103,5 @@ func GetHelpText() string {
 
 // GetCompactHelp returns a single-line help hint
 func GetCompactHelp() string {
-	return "a:add c:connect e:edit d:delete H:hints J:json j/k:scroll u:undo ?:help q:quit"
+	return "a:add c:connect e:edit d:delete O:reorder H:hints J:json j/k:scroll u:undo ?:help q:quit"
 }
