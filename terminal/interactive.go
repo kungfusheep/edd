@@ -260,6 +260,11 @@ func setupTerminal() error {
 	return cmd.Run()
 }
 
+// SetupTerminal is the exported version of setupTerminal
+func SetupTerminal() error {
+	return setupTerminal()
+}
+
 func restoreTerminal() {
 	// Restore terminal to sane state (like stty sane)
 	cmd := exec.Command("stty", "sane")
@@ -280,6 +285,11 @@ func restoreTerminal() {
 
 	// Flush output
 	os.Stdout.Sync()
+}
+
+// RestoreTerminal is the exported version of restoreTerminal
+func RestoreTerminal() {
+	restoreTerminal()
 }
 
 // clearStdinBuffer reads and discards any pending input
@@ -304,6 +314,9 @@ func clearStdinBuffer() {
 		}
 	}
 }
+
+// Special error to signal return to picker
+var ErrReturnToPicker = fmt.Errorf("return_to_picker")
 
 func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *DemoSettings) error {
 	// Debug: Log that we're starting the interactive loop
@@ -511,13 +524,20 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 			}
 
 			// Normal key handling
-			if handleKeyEvent(tui, keyEvent, &filename, demoPlayer) {
-				return nil // Exit requested from command mode
+			quitType := handleKeyEvent(tui, keyEvent, &filename, demoPlayer)
+			if quitType == 1 {
+				return ErrReturnToPicker // Return to picker
+			} else if quitType == 2 {
+				return nil // Exit completely
 			}
 			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
 				// Check for unsaved changes
 				if tui.HasUnsavedChanges() {
 					// TODO: Show warning about unsaved changes
+				}
+				// In markdown mode, 'q' returns to picker
+				if tui.IsMarkdownMode() {
+					return ErrReturnToPicker
 				}
 				return nil // Exit requested from normal mode
 			}
@@ -532,8 +552,11 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 
 		case demoKeyEvent := <-demoChan:
 			// Handle demo input just like real input
-			if handleKeyEvent(tui, demoKeyEvent, &filename, demoPlayer) {
-				return nil // Exit requested
+			quitType := handleKeyEvent(tui, demoKeyEvent, &filename, demoPlayer)
+			if quitType == 1 {
+				return ErrReturnToPicker // Return to picker
+			} else if quitType == 2 {
+				return nil // Exit completely
 			}
 			needsFullRedraw = true
 
@@ -560,8 +583,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 }
 
 // handleKeyEvent processes a key event from either real input or demo playback
-// Returns true if quit was requested
-func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *string, demoPlayer *demo.Player) bool {
+// Returns: 0 = no quit, 1 = quit to picker, 2 = quit completely
+func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *string, demoPlayer *demo.Player) int {
 	if keyEvent.IsSpecial() {
 		// Handle special keys (arrows, etc.)
 		switch tui.GetMode() {
@@ -580,20 +603,19 @@ func handleKeyEvent(tui *editor.TUIEditor, keyEvent editor.KeyEvent, filename *s
 		case editor.ModeJump:
 			handleJumpMode(tui, key)
 		case editor.ModeCommand:
-			if handleCommandMode(tui, key, filename) {
-				return true // Quit requested
-			}
+			return handleCommandMode(tui, key, filename)
 		case editor.ModeJSON:
 			handleJSONMode(tui, key)
 		case editor.ModeHintMenu:
 			tui.HandleHintMenuInput(key)
 		}
 	}
-	return false
+	return 0
 }
 
 // handleCommandMode processes command mode input
-func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
+// Returns: 0 = no quit, 1 = quit to picker, 2 = quit completely
+func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) int {
 	// Let TUI handle the key
 	tui.HandleKey(key)
 
@@ -620,9 +642,14 @@ func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 			executeExport(tui, format, exportFilename)
 		}
 
+		// Check for quit to picker request (markdown mode)
+		if tui.GetQuitToPickerRequest() {
+			return 1 // Signal to return to picker
+		}
+
 		// Check for quit request
 		if tui.GetQuitRequest() {
-			return true // Signal to quit
+			return 2 // Signal to quit completely
 		}
 
 		// Check for any command result message to display
@@ -632,7 +659,7 @@ func handleCommandMode(tui *editor.TUIEditor, key rune, filename *string) bool {
 		}
 	}
 
-	return false
+	return 0
 }
 
 // executeSave handles saving the diagram to a JSON file
@@ -852,6 +879,11 @@ func readSingleKey() rune {
 	var b [1]byte
 	os.Stdin.Read(b[:])
 	return rune(b[0])
+}
+
+// ReadSingleKey is the exported version of readSingleKey
+func ReadSingleKey() rune {
+	return readSingleKey()
 }
 
 // readKeyWithMode reads a key and handles escape sequences only in edit modes
@@ -1439,6 +1471,11 @@ type winsize struct {
 }
 
 func getTerminalSize() (int, int) {
+	return GetTerminalSize()
+}
+
+// GetTerminalSize is the exported version of getTerminalSize
+func GetTerminalSize() (int, int) {
 	// Use ioctl to get actual terminal size
 	ws := &winsize{}
 	retCode, _, errno := syscall.Syscall(syscall.SYS_IOCTL,

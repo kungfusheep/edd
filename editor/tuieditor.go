@@ -68,12 +68,14 @@ type TUIEditor struct {
 
 	// Command mode results
 	commandResult   string // Result message from last command
-	exportFormat    string // Export format requested
-	exportFilename  string // Export filename requested
-	saveRequested   bool   // Save was requested
-	saveFilename    string // Filename for save (optional)
-	quitRequested   bool   // Quit was requested
-	hasChanges      bool   // Track unsaved changes
+	exportFormat      string // Export format requested
+	exportFilename    string // Export filename requested
+	saveRequested     bool   // Save was requested
+	saveFilename      string // Filename for save (optional)
+	quitRequested     bool   // Quit was requested
+	quitToPicker      bool   // Quit to picker (markdown mode only)
+	markdownMode      bool   // Whether editing in markdown mode
+	hasChanges        bool   // Track unsaved changes
 }
 
 // NewTUIEditor creates a new TUI editor instance
@@ -164,6 +166,23 @@ func (e *TUIEditor) GetQuitRequest() bool {
 	requested := e.quitRequested
 	e.quitRequested = false
 	return requested
+}
+
+// GetQuitToPickerRequest returns and clears any quit to picker request
+func (e *TUIEditor) GetQuitToPickerRequest() bool {
+	requested := e.quitToPicker
+	e.quitToPicker = false
+	return requested
+}
+
+// SetMarkdownMode sets whether we're in markdown mode (affects quit behavior)
+func (e *TUIEditor) SetMarkdownMode(enabled bool) {
+	e.markdownMode = enabled
+}
+
+// IsMarkdownMode returns whether we're in markdown mode
+func (e *TUIEditor) IsMarkdownMode() bool {
+	return e.markdownMode
 }
 
 // SetHasChanges sets the hasChanges flag
@@ -2269,6 +2288,7 @@ func (e *TUIEditor) ClearCommand() {
 	e.commandResult = ""
 	e.saveRequested = false
 	e.quitRequested = false
+	e.quitToPicker = false
 	e.exportFormat = ""
 	e.exportFilename = ""
 }
@@ -2316,12 +2336,29 @@ func (e *TUIEditor) ProcessCommand() {
 			e.commandResult = "Unsaved changes! Use :q! to force quit or :wq to save and quit"
 			e.SetMode(ModeNormal)
 		} else {
-			e.quitRequested = true
+			if e.markdownMode {
+				// In markdown mode, :q returns to picker
+				e.quitToPicker = true
+			} else {
+				// Normal mode, :q exits entirely
+				e.quitRequested = true
+			}
 			e.SetMode(ModeNormal)
 		}
 
 	case "q!":
 		// Force quit without saving
+		if e.markdownMode {
+			// In markdown mode, :q! returns to picker
+			e.quitToPicker = true
+		} else {
+			// Normal mode, :q! exits entirely
+			e.quitRequested = true
+		}
+		e.SetMode(ModeNormal)
+
+	case "qq":
+		// Force quit to exit (even in markdown mode)
 		e.quitRequested = true
 		e.SetMode(ModeNormal)
 

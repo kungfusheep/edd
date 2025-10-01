@@ -433,122 +433,309 @@ func runMarkdownExtraction(filename string, blockIndex int, format string, outpu
 
 // runMarkdownMode handles editing diagram blocks within markdown files
 func runMarkdownMode(filename string, blockIndex int) error {
-	// Read the markdown file
-	content, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return fmt.Errorf("reading markdown file: %w", err)
-	}
-
-	// Scan for diagram blocks
-	scanner := markdown.NewScanner(string(content))
-	blocks := scanner.FindDiagramBlocks()
-
-	if len(blocks) == 0 {
-		return fmt.Errorf("no diagram blocks found in %s", filename)
-	}
-
-	// Determine which block to edit
-	var selectedBlock markdown.DiagramBlock
-	var selectedIndex int
-
-	if blockIndex > 0 {
-		// User specified a block index (1-based)
-		if blockIndex > len(blocks) {
-			return fmt.Errorf("block index %d is out of range (found %d blocks)", blockIndex, len(blocks))
+	// Loop to allow returning to picker after editing
+	for {
+		// Read the markdown file
+		content, err := ioutil.ReadFile(filename)
+		if err != nil {
+			return fmt.Errorf("reading markdown file: %w", err)
 		}
-		selectedBlock = blocks[blockIndex-1]
-		selectedIndex = blockIndex - 1
-	} else if len(blocks) == 1 {
-		// Only one block, select it automatically
-		selectedBlock = blocks[0]
-		selectedIndex = 0
-		fmt.Printf("Editing %s block at line %d\n", selectedBlock.Type, selectedBlock.StartLine+1)
-	} else {
-		// Multiple blocks, show picker
-		fmt.Println("Found multiple diagram blocks:")
+
+		// Scan for diagram blocks
+		scanner := markdown.NewScanner(string(content))
+		blocks := scanner.FindDiagramBlocks()
+
+		if len(blocks) == 0 {
+			return fmt.Errorf("no diagram blocks found in %s", filename)
+		}
+
+		// Determine which block to edit
+		var selectedBlock markdown.DiagramBlock
+		var selectedIndex int
+
+		if blockIndex > 0 {
+			// User specified a block index (1-based)
+			if blockIndex > len(blocks) {
+				return fmt.Errorf("block index %d is out of range (found %d blocks)", blockIndex, len(blocks))
+			}
+			selectedBlock = blocks[blockIndex-1]
+			selectedIndex = blockIndex - 1
+			// Reset blockIndex so we show the picker on next iteration
+			blockIndex = 0
+		} else if len(blocks) == 1 {
+			// Only one block, select it automatically
+			selectedBlock = blocks[0]
+			selectedIndex = 0
+			fmt.Printf("Editing %s block at line %d\n", selectedBlock.Type, selectedBlock.StartLine+1)
+		} else {
+			// Multiple blocks, show picker
+			selectedIndex, err = showMarkdownPicker(blocks)
+			if err != nil {
+				return err
+			}
+			selectedBlock = blocks[selectedIndex]
+		}
+
+		// Import the diagram from the block content
+		registry := importer.NewImporterRegistry()
+		var d *diagram.Diagram
+
+		// Try to import based on the block type
+		if selectedBlock.Type != "" {
+			d, err = registry.ImportWithFormat(selectedBlock.Content, selectedBlock.Type)
+		} else {
+			d, err = registry.Import(selectedBlock.Content)
+		}
+
+		if err != nil {
+			return fmt.Errorf("importing diagram from markdown block: %w", err)
+		}
+
+		// Ensure all connections have unique IDs
+		diagram.EnsureUniqueConnectionIDs(d)
+
+		// Default arrows to true for all connections
+		for i := range d.Connections {
+			if !d.Connections[i].Arrow {
+				d.Connections[i].Arrow = true
+			}
+		}
+
+		// Create a temporary file to store the diagram JSON
+		tempFile := fmt.Sprintf("/tmp/edd_markdown_%d.json", selectedIndex)
+		dataJSON, err := json.MarshalIndent(d, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshaling diagram to JSON: %w", err)
+		}
+		err = ioutil.WriteFile(tempFile, dataJSON, 0644)
+		if err != nil {
+			return fmt.Errorf("writing temp file: %w", err)
+		}
+
+		// Store markdown context for later (using 1-based index for consistency)
+		err = ioutil.WriteFile(tempFile+".ctx", []byte(fmt.Sprintf("%s\n%d\n%s", filename, selectedIndex+1, selectedBlock.Type)), 0644)
+		if err != nil {
+			return fmt.Errorf("writing context file: %w", err)
+		}
+
+		fmt.Printf("\n[Press :w to save back to markdown, :q to return to picker, :qq to exit]\n\n")
+
+		// Run interactive mode with the temp file
+		err = runInteractiveMode(tempFile, d.Type, nil, true) // true = markdown mode
+
+		// Clean up temp files
+		os.Remove(tempFile)
+		os.Remove(tempFile + ".ctx")
+
+		if err != nil {
+			// Check if this is a special "quit to picker" signal
+			if err.Error() == "return_to_picker" {
+				// Continue the loop to show picker again
+				continue
+			}
+			return err
+		}
+
+		// Normal quit - exit the loop
+		return nil
+	}
+}
+
+// showMarkdownPicker displays an interactive picker menu with live preview
+func showMarkdownPicker(blocks []markdown.DiagramBlock) (int, error) {
+	selected := 0
+
+	// Setup terminal for raw mode
+	if err := terminal.SetupTerminal(); err != nil {
+		return 0, fmt.Errorf("failed to setup terminal: %w", err)
+	}
+	defer terminal.RestoreTerminal()
+
+	// Enter alternate screen
+	fmt.Print("\033[?1049h\033[2J\033[H\033[?25l")
+	defer func() {
+		fmt.Print("\033[?25h\033[?1049l")
+	}()
+
+	for {
+		// Clear and render picker
+		fmt.Print("\033[H\033[2J")
+
+		// Get terminal size
+		width, height := terminal.GetTerminalSize()
+
+		// Calculate layout - split screen vertically
+		listWidth := 40
+		if width < 80 {
+			listWidth = width / 2
+		}
+		previewX := listWidth + 2
+
+		// Render list
+		fmt.Print("\033[1;1H\033[1mDiagram Blocks:\033[0m")
 		for i, block := range blocks {
-			fmt.Println(markdown.FormatBlockInfo(block, i))
+			fmt.Printf("\033[%d;1H", i+3)
+			if i == selected {
+				fmt.Printf("\033[7m") // Reverse video for selection
+			}
+			info := markdown.FormatBlockInfo(block, i)
+			if len(info) > listWidth-2 {
+				info = info[:listWidth-5] + "..."
+			}
+			fmt.Printf(" %s ", info)
+			if i == selected {
+				fmt.Print("\033[0m")
+			}
 		}
-		fmt.Print("\nSelect block to edit (1-", len(blocks), "): ")
 
-		var choice int
-		_, err := fmt.Scanln(&choice)
-		if err != nil || choice < 1 || choice > len(blocks) {
-			return fmt.Errorf("invalid selection")
+		// Draw vertical separator
+		for y := 1; y <= height; y++ {
+			fmt.Printf("\033[%d;%dH│", y, listWidth+1)
 		}
-		selectedBlock = blocks[choice-1]
-		selectedIndex = choice - 1
-	}
 
-	// Import the diagram from the block content
-	registry := importer.NewImporterRegistry()
-	var d *diagram.Diagram
+		// Render preview of selected diagram
+		if selected >= 0 && selected < len(blocks) {
+			block := blocks[selected]
 
-	// Try to import based on the block type
-	if selectedBlock.Type != "" {
-		d, err = registry.ImportWithFormat(selectedBlock.Content, selectedBlock.Type)
-	} else {
-		d, err = registry.Import(selectedBlock.Content)
-	}
+			// Import the diagram
+			registry := importer.NewImporterRegistry()
+			var d *diagram.Diagram
+			var err error
 
-	if err != nil {
-		return fmt.Errorf("importing diagram from markdown block: %w", err)
-	}
+			if block.Type != "" {
+				d, err = registry.ImportWithFormat(block.Content, block.Type)
+			} else {
+				d, err = registry.Import(block.Content)
+			}
 
-	// Ensure all connections have unique IDs
-	diagram.EnsureUniqueConnectionIDs(d)
+			if err == nil {
+				// Ensure connections have unique IDs
+				diagram.EnsureUniqueConnectionIDs(d)
 
-	// Default arrows to true for all connections
-	for i := range d.Connections {
-		if !d.Connections[i].Arrow {
-			d.Connections[i].Arrow = true
+				// Default arrows to true for all connections
+				for i := range d.Connections {
+					if !d.Connections[i].Arrow {
+						d.Connections[i].Arrow = true
+					}
+				}
+
+				// Render the diagram
+				renderer := render.NewRenderer()
+				output, err := renderer.Render(d)
+				if err == nil {
+					// Display preview
+					lines := strings.Split(output, "\n")
+					fmt.Printf("\033[1;%dH\033[1mPreview:\033[0m", previewX)
+
+					// Calculate available space for preview
+					maxLineWidth := width - previewX - 1 // Leave 1 char margin
+					maxLines := height - 5 // Leave space for header and footer
+
+					for i, line := range lines {
+						if i >= maxLines {
+							break
+						}
+
+						// Clear the line first to avoid artifacts
+						fmt.Printf("\033[%d;%dH\033[K", i+3, previewX)
+
+						// For preview, calculate visible width (excluding ANSI codes)
+						visibleWidth := 0
+						inEscape := false
+						displayLine := ""
+
+						for _, r := range line {
+							if r == '\033' {
+								inEscape = true
+								displayLine += string(r)
+							} else if inEscape {
+								displayLine += string(r)
+								if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+									inEscape = false
+								}
+							} else {
+								if visibleWidth >= maxLineWidth {
+									break // Stop once we've filled the preview width
+								}
+								displayLine += string(r)
+								visibleWidth++
+							}
+						}
+
+						fmt.Printf("\033[%d;%dH%s\033[0m", i+3, previewX, displayLine)
+					}
+				} else {
+					fmt.Printf("\033[3;%dH\033[KError rendering: %v", previewX, err)
+				}
+			} else {
+				fmt.Printf("\033[3;%dH\033[KError importing: %v", previewX, err)
+			}
+		}
+
+		// Show help at bottom
+		fmt.Printf("\033[%d;1H\033[1m↑/↓: Navigate | Enter: Select | q: Quit\033[0m", height)
+
+		// Read key (with escape sequence support)
+		var b [3]byte
+		n, _ := os.Stdin.Read(b[:1])
+		if n == 0 {
+			continue
+		}
+
+		key := b[0]
+
+		// Handle escape sequences for arrow keys
+		if key == 27 { // ESC
+			// Try to read more bytes for escape sequence
+			n, _ = os.Stdin.Read(b[1:3])
+			if n == 2 && b[1] == '[' {
+				// Arrow key
+				switch b[2] {
+				case 'A': // Up
+					if selected > 0 {
+						selected--
+					}
+					continue
+				case 'B': // Down
+					if selected < len(blocks)-1 {
+						selected++
+					}
+					continue
+				}
+			}
+			// Just ESC
+			return 0, fmt.Errorf("quit")
+		}
+
+		switch key {
+		case 'q', 'Q':
+			return 0, fmt.Errorf("quit")
+		case 13, 10: // Enter
+			return selected, nil
+		case 'j': // j for down
+			if selected < len(blocks)-1 {
+				selected++
+			}
+		case 'k': // k for up
+			if selected > 0 {
+				selected--
+			}
 		}
 	}
-
-	// Create a temporary file to store the diagram JSON
-	tempFile := fmt.Sprintf("/tmp/edd_markdown_%d.json", selectedIndex)
-	dataJSON, err := json.MarshalIndent(d, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling diagram to JSON: %w", err)
-	}
-	err = ioutil.WriteFile(tempFile, dataJSON, 0644)
-	if err != nil {
-		return fmt.Errorf("writing temp file: %w", err)
-	}
-
-	// Store markdown context for later (using 1-based index for consistency)
-	err = ioutil.WriteFile(tempFile+".ctx", []byte(fmt.Sprintf("%s\n%d\n%s", filename, selectedIndex+1, selectedBlock.Type)), 0644)
-	if err != nil {
-		return fmt.Errorf("writing context file: %w", err)
-	}
-
-	fmt.Printf("\n[Press :w to save back to markdown, :q to exit without saving]\n\n")
-
-	// Run interactive mode with the temp file
-	err = runInteractiveMode(tempFile, d.Type, nil)
-	if err != nil {
-		return err
-	}
-
-	// The save is now handled by the :w and :wq commands in the interactive mode
-	// via the saveToMarkdown function in terminal/interactive.go
-	// No automatic save on exit - user must explicitly save with :w or :wq
-
-	// Clean up temp files
-	os.Remove(tempFile)
-	os.Remove(tempFile + ".ctx")
-
-	return nil
 }
 
 // runInteractiveMode launches the TUI editor with optional demo mode
 // This is the main entry point for interactive editing
-func runInteractiveMode(filename string, diagramType string, demoSettings *terminal.DemoSettings) error {
+func runInteractiveMode(filename string, diagramType string, demoSettings *terminal.DemoSettings, markdownMode ...bool) error {
 	// Create the real renderer
 	renderer := editor.NewRealRenderer()
 
 	// Create TUI editor
 	tui := editor.NewTUIEditor(renderer)
+
+	// Set markdown mode if specified
+	isMarkdownMode := len(markdownMode) > 0 && markdownMode[0]
+	tui.SetMarkdownMode(isMarkdownMode)
 
 	// Load diagram if filename provided
 	if filename != "" {
