@@ -2,7 +2,6 @@ package pathfinding
 
 import (
 	"edd/diagram"
-	"edd/layout"
 	"fmt"
 )
 
@@ -65,26 +64,20 @@ func (ar *AreaRouter) RouteConnection(conn diagram.Connection, nodes []diagram.N
 	
 	var startPoint diagram.Point
 	
-	// Debug: print the calculated centers
-	// fmt.Printf("Connection %d->%d:\n", conn.From, conn.To)
-	// fmt.Printf("  Source node %d: pos(%d,%d) size(%dx%d) center(%d,%d)\n", 
-	//     sourceNode.ID, sourceNode.X, sourceNode.Y, sourceNode.Width, sourceNode.Height, sourceCenter.X, sourceCenter.Y)
-	// fmt.Printf("  Target node %d: pos(%d,%d) size(%dx%d) center(%d,%d)\n", 
-	//     targetNode.ID, targetNode.X, targetNode.Y, targetNode.Width, targetNode.Height, targetCenter.X, targetCenter.Y)
 	
 	// Choose exit point on source edge based on direction to target
-	// For vertical layouts (flowcharts), prefer vertical connections
-	const verticalBias = 0.3 // Use vertical unless horizontal distance is 3x larger
+	// For flowcharts, STRONGLY prefer vertical exits for top-to-bottom flow
+	// Only use horizontal exits when target is PURELY horizontal (no vertical component)
+	// or when horizontal distance is massive (>10x vertical)
 
-	if layout.Abs(dy) > 0 && float64(layout.Abs(dx)) < float64(layout.Abs(dy))/verticalBias {
-		// Primarily vertical movement - prefer this for flowcharts
+	if dy != 0 {
+		// ANY vertical component means we use vertical exit (unless horizontal is extreme)
 		if dy > 0 {
 			// Exit from bottom edge
 			startPoint = diagram.Point{
 				X: sourceNode.X + sourceNode.Width/2,
 				Y: sourceNode.Y + sourceNode.Height,
 			}
-			// fmt.Printf("  Exiting from bottom edge at (%d,%d)\n", startPoint.X, startPoint.Y)
 		} else {
 			// Exit from top edge
 			startPoint = diagram.Point{

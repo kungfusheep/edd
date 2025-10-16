@@ -250,6 +250,13 @@ func (a *AStarPathFinder) calculateGCost(current *AStarNode, next diagram.Point,
 	// Add turn cost if changing direction
 	if current.Parent != nil && current.Direction != DirNone && current.Direction != nextDir {
 		cost += a.costs.TurnCost
+
+		// Extra penalty for turning again shortly after a previous turn (jitter penalty)
+		// This prevents zigzag patterns like: down, left 1 cell, down, right 1 cell
+		if current.Parent.Parent != nil && current.Parent.Direction != current.Direction {
+			// We turned at parent, and now turning again - add extra penalty
+			cost += a.costs.TurnCost // Double the turn cost for quick direction reversals
+		}
 	}
 
 	// Apply initial direction bonus
