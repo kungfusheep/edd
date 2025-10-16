@@ -7,9 +7,85 @@ export to / plant / mermaid / text
 
 decision tree diagram graph
 
-more deterministic layouts 
+more deterministic layouts
 
-quicky annotate the diagram connections - enter in e mode takes you to the next one down in edit mode - 
+quicky annotate the diagram connections - enter in e mode takes you to the next one down in edit mode -
+
+### Protocol/Format Diagram Type
+
+A new diagram type for documenting wire formats, binary protocols, and nested message structures.
+
+**Use Cases:**
+- Network protocol documentation (TCP/IP, HTTP/2, custom RPC protocols)
+- Binary format specifications (file formats, packet structures)
+- API message structures (REST, gRPC, custom protocols)
+- Data serialization formats (Protocol Buffers, MessagePack, etc.)
+- Nested data structures with conditional sections
+
+**Key Features:**
+- **Nested containers**: Boxes within boxes for layered protocols
+- **Field tables**: Show byte layouts with field names, types, and sizes
+- **Conditional sections**: IF/ELSE blocks based on message types or flags
+- **Data flow arrows**: Show how data flows between protocol layers
+- **Inline examples**: Trace actual message examples through the structure
+- **Type annotations**: Display field types (4 bytes, string, uint16, etc.)
+
+**Example:**
+```
+Full Wire Format
+┌─────────────────────────────────────────────────────────────────┐
+│ FRAME (Transport Layer)                                         │
+│ ┌─────────┬───────┬─────────┬───────────┬─────────────────────┐ │
+│ │ Length  │ Flags │ MsgType │ StreamID  │ Payload             │ │
+│ │ 4 bytes │ 1 byte│ 1 byte  │ 4 bytes   │ Variable            │ │
+│ └─────────┴───────┴─────────┴───────────┴─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                ↓
+                   Payload decoded based on MsgType
+```
+
+**Implementation Ideas:**
+- Diagram type: `"protocol"` or `"format"`
+- Special node types: `frame`, `field`, `conditional`, `example`
+- Layout engine: Vertical stacking with automatic nesting
+- Support for annotations: field sizes, types, descriptions
+- Export to markdown tables, Protocol Buffer schemas, etc.
+
+**Text Input Format:**
+Quick, intuitive syntax for defining message formats:
+
+```
+// Bracket notation: [name:size]
+[Length:4][Flags:1][Type:1][StreamID:4][Payload:*]
+
+// Multi-level nesting with indentation
+Frame: [Length:4][Type:1][Payload:*]
+  Request: [Method:string][Args:*]
+    AddRequest: [A:int32][B:int32]
+  Response: [Result:*]
+
+// Alternative curly-brace style
+frame {
+  length:4 flags:1 type:1 stream:4
+  payload {
+    method:string args:*
+  }
+}
+
+// Or table format for complex specs
+| Field    | Size   | Type   | Description       |
+| Length   | 4      | uint32 | Total frame size  |
+| Flags    | 1      | bits   | Control flags     |
+| Payload  | *      | bytes  | Variable content  |
+```
+
+**Size Notation:**
+- Numbers: byte count (e.g., `4` = 4 bytes)
+- `*`: Variable length
+- `string`: Null-terminated or length-prefixed
+- Type names: `int32`, `uint16`, `bytes`, etc.
+
+**Priority:** Medium - Would fill a gap that existing diagram tools don't handle well 
 
 
 

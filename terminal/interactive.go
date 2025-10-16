@@ -523,23 +523,29 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 				continue
 			}
 
+			// Check if 'q' is pressed - but only quit if we're in normal mode without jump labels
+			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
+				// Don't quit if we have active jump labels (user is trying to select 'q' label)
+				if len(tui.GetJumpLabels()) == 0 && len(tui.GetConnectionLabels()) == 0 && len(tui.GetInsertionLabels()) == 0 {
+					// Check for unsaved changes
+					if tui.HasUnsavedChanges() {
+						// TODO: Show warning about unsaved changes
+					}
+					// In markdown mode, 'q' returns to picker
+					if tui.IsMarkdownMode() {
+						return ErrReturnToPicker
+					}
+					return nil // Exit requested from normal mode
+				}
+				// Otherwise fall through to handle as jump label selection
+			}
+
 			// Normal key handling
 			quitType := handleKeyEvent(tui, keyEvent, &filename, demoPlayer)
 			if quitType == 1 {
 				return ErrReturnToPicker // Return to picker
 			} else if quitType == 2 {
 				return nil // Exit completely
-			}
-			if keyEvent.Rune == 'q' && tui.GetMode() == editor.ModeNormal {
-				// Check for unsaved changes
-				if tui.HasUnsavedChanges() {
-					// TODO: Show warning about unsaved changes
-				}
-				// In markdown mode, 'q' returns to picker
-				if tui.IsMarkdownMode() {
-					return ErrReturnToPicker
-				}
-				return nil // Exit requested from normal mode
 			}
 
 			// Key press requires full redraw
