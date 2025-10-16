@@ -1,0 +1,65 @@
+{
+  "type": "flowchart",
+  "nodes": [
+    {
+      "id": 1,
+      "text": [
+        "User Browser"
+      ]
+    },
+    {
+      "id": 2,
+      "text": [
+        "Web Server"
+      ]
+    },
+    {
+      "id": 3,
+      "text": [
+        "API Gateway"
+      ],
+      "hints": {
+        "box-style": "double",
+        "color": "red",
+        "lifeline-color": "red",
+        "lifeline-style": "dashed"
+      }
+    },
+    {
+      "id": 4,
+      "text": [
+        "Auth Service"
+      ]
+    },
+    {
+      "id": 5,
+      "text": [
+        "Database"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "from": 1,
+      "to": 2,
+      "label": "GET /login"
+    },
+    {
+      "id": 2,
+      "from": 2,
+      "to": 1,
+      "label": "200 OK (login page)"
+    },
+    {
+      "id": 7,
+      "from": 5,
+      "to": 4,
+      "label": "User data",
+      "hints": {
+        "style": "dashed"
+      }
+    }
+  ],
+  "metadata": {}
+}

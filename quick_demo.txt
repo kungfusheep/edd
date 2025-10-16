@@ -1,0 +1,18 @@
+# Quick demo - create a flowchart in seconds
+iLogin
+Validate
+Authorized?
+Dashboard
+Access Denied
+
+cLogin
+Validate
+cValidate
+Authorized?
+cAuthorized?
+Dashboard
+Yes
+cAuthorized?
+Access Denied
+No
+:w

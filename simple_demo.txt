@@ -1,0 +1,23 @@
+# Simple demo showing flowchart creation
+iStart
+Check Input
+Process Data
+Store Result
+End
+
+# Connect them
+cStart
+Check Input
+
+cCheck Input
+Process Data
+
+cProcess Data
+Store Result
+
+cStore Result
+End
+
+# Save
+:w demo_flowchart.json
+:q

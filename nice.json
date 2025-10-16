@@ -1,0 +1,117 @@
+{
+  "type": "box",
+  "nodes": [
+    {
+      "id": 1,
+      "text": [
+        "client"
+      ],
+      "hints": {
+        "color": "green"
+      }
+    },
+    {
+      "id": 2,
+      "text": [
+        "load balancer"
+      ]
+    },
+    {
+      "id": 3,
+      "text": [
+        "server 1"
+      ]
+    },
+    {
+      "id": 4,
+      "text": [
+        "server 2"
+      ]
+    },
+    {
+      "id": 5,
+      "text": [
+        "server 3"
+      ]
+    },
+    {
+      "id": 6,
+      "text": [
+        "cache"
+      ],
+      "hints": {
+        "color": "yellow"
+      }
+    },
+    {
+      "id": 7,
+      "text": [
+        "database"
+      ],
+      "hints": {
+        "bold": "true",
+        "color": "red",
+        "style": "double"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": 1,
+      "to": 2,
+      "arrow": true
+    },
+    {
+      "id": 1,
+      "from": 2,
+      "to": 3,
+      "arrow": true,
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 2,
+      "from": 2,
+      "to": 4,
+      "arrow": true,
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 3,
+      "from": 2,
+      "to": 5,
+      "arrow": true,
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 4,
+      "from": 3,
+      "to": 6,
+      "arrow": true
+    },
+    {
+      "id": 5,
+      "from": 4,
+      "to": 6,
+      "arrow": true
+    },
+    {
+      "id": 6,
+      "from": 5,
+      "to": 6,
+      "arrow": true
+    },
+    {
+      "id": 7,
+      "from": 6,
+      "to": 7,
+      "arrow": true
+    }
+  ],
+  "metadata": {}
+}

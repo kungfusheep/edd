@@ -35,6 +35,11 @@ quicky annotate the diagram connections - enter in e mode takes you to the next 
 
 3. **Better Pathfinding Algorithm**
    - Current algo creates unnecessary detours
+   - **KEY INSIGHT: Exit nodes in the direction of destination**
+     - If target is below, exit from bottom (not side then down)
+     - If target is right, exit from right side
+     - Choose exit port based on target direction, not just any available port
+     - This eliminates most unnecessary turns
    - Need smarter cost function that:
      - Minimizes total path length
      - Strongly prefers straight lines (horizontal/vertical)
@@ -43,6 +48,11 @@ quicky annotate the diagram connections - enter in e mode takes you to the next 
      - Routes around nodes more cleanly
    - Consider A* with better heuristics or flow-based routing
    - Path aesthetics matter as much as correctness
+
+   **Example of current issue:**
+   - Node A directly above Node B
+   - Current: Exit A from side → go left/right → go down → arrive at B (2-3 turns)
+   - Correct: Exit A from bottom → go straight down → arrive at B (0 turns)
 
 4. **Layout Engine Improvements**
    - More deterministic node placement

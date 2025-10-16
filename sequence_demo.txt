@@ -1,0 +1,19 @@
+# Quick sequence diagram demo
+ts
+iClient
+Server
+Database
+
+cClient
+Server
+Request /api/data
+cServer
+Database
+SELECT * FROM users
+cDatabase
+Server
+Result set
+cServer
+Client
+JSON response
+:w

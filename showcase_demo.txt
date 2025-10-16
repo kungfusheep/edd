@@ -1,0 +1,52 @@
+# EDD Demo - Terminal Diagram Editor
+# Shows sequence diagram creation and editing
+
+# Switch to sequence diagram type
+ts
+
+# Add participants using insert mode
+iUser Browser
+API Gateway
+Auth Service
+Database
+
+# Create authentication flow
+cUser Browser
+API Gateway
+POST /login
+
+cAPI Gateway
+Auth Service
+Validate credentials
+
+cAuth Service
+Database
+Query user
+
+cDatabase
+Auth Service
+User record
+
+# Add style to responses - make them dashed
+jkhu
+
+cAuth Service
+API Gateway
+JWT token
+
+# Make this dashed too
+hu
+
+cAPI Gateway
+User Browser
+Set cookie + redirect
+
+# Color some nodes
+# Jump to Auth Service
+jdhug
+
+# Jump to Database
+jfhur
+
+# Save and quit
+:wq

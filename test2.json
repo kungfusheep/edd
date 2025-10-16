@@ -1,0 +1,111 @@
+{
+  "type": "sequence",
+  "nodes": [
+    {
+      "id": 1,
+      "text": [
+        "client"
+      ]
+    },
+    {
+      "id": 2,
+      "text": [
+        "server"
+      ],
+      "hints": {
+        "box-style": "double",
+        "color": "cyan"
+      }
+    },
+    {
+      "id": 3,
+      "text": [
+        "database"
+      ],
+      "hints": {
+        "color": "red"
+      }
+    },
+    {
+      "id": 4,
+      "text": [
+        "session"
+      ]
+    },
+    {
+      "id": 5,
+      "text": [
+        "auth"
+      ],
+      "hints": {
+        "box-style": "thick"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": 1,
+      "to": 2,
+      "label": "GET /homepage"
+    },
+    {
+      "id": 1,
+      "from": 2,
+      "to": 4,
+      "label": "session(token)"
+    },
+    {
+      "id": 2,
+      "from": 4,
+      "to": 2,
+      "label": "session obj",
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 3,
+      "from": 2,
+      "to": 3
+    },
+    {
+      "id": 4,
+      "from": 3,
+      "to": 2,
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 5,
+      "from": 2,
+      "to": 1
+    },
+    {
+      "id": 6,
+      "from": 1,
+      "to": 5,
+      "hints": {
+        "color": "green"
+      }
+    },
+    {
+      "id": 7,
+      "from": 5,
+      "to": 1,
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 8,
+      "from": 1,
+      "to": 2,
+      "hints": {
+        "color": "green",
+        "style": "dotted"
+      }
+    }
+  ],
+  "metadata": {}
+}

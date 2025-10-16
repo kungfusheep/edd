@@ -1,0 +1,1 @@
+- put yourself in a position where you're able to test this in a stateless way - even interactions and user input should be possible to recreate deterministically

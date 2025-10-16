@@ -1,0 +1,203 @@
+{
+  "type": "box",
+  "nodes": [
+    {
+      "id": 1,
+      "text": [
+        "User Browser"
+      ]
+    },
+    {
+      "id": 2,
+      "text": [
+        "Web Server"
+      ]
+    },
+    {
+      "id": 3,
+      "text": [
+        "API Gateway"
+      ],
+      "hints": {
+        "box-style": "double",
+        "color": "red",
+        "lifeline-color": "red",
+        "lifeline-style": "dashed"
+      }
+    },
+    {
+      "id": 4,
+      "text": [
+        "Auth Service"
+      ]
+    },
+    {
+      "id": 5,
+      "text": [
+        "Database"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "from": 1,
+      "to": 2,
+      "label": "GET /login"
+    },
+    {
+      "id": 2,
+      "from": 2,
+      "to": 1,
+      "label": "200 OK (login page)"
+    },
+    {
+      "id": 3,
+      "from": 1,
+      "to": 2,
+      "label": "POST /login"
+    },
+    {
+      "id": 4,
+      "from": 2,
+      "to": 3,
+      "label": "Forward auth request"
+    },
+    {
+      "id": 5,
+      "from": 3,
+      "to": 4,
+      "label": "Validate credentials"
+    },
+    {
+      "id": 6,
+      "from": 4,
+      "to": 5,
+      "label": "Query user"
+    },
+    {
+      "id": 7,
+      "from": 5,
+      "to": 4,
+      "label": "User data",
+      "hints": {
+        "style": "dashed"
+      }
+    },
+    {
+      "id": 8,
+      "from": 4,
+      "to": 4,
+      "label": "Generate JWT"
+    },
+    {
+      "id": 9,
+      "from": 4,
+      "to": 3,
+      "label": "Auth token"
+    },
+    {
+      "id": 10,
+      "from": 3,
+      "to": 2,
+      "label": "Auth success + token"
+    },
+    {
+      "id": 11,
+      "from": 2,
+      "to": 1,
+      "label": "302 Redirect + Cookie"
+    },
+    {
+      "id": 12,
+      "from": 1,
+      "to": 2,
+      "label": "GET /dashboard"
+    },
+    {
+      "id": 13,
+      "from": 2,
+      "to": 3,
+      "label": "Verify token"
+    },
+    {
+      "id": 14,
+      "from": 3,
+      "to": 4,
+      "label": "Validate JWT"
+    },
+    {
+      "id": 15,
+      "from": 4,
+      "to": 3,
+      "label": "Token valid"
+    },
+    {
+      "id": 16,
+      "from": 3,
+      "to": 5,
+      "label": "Fetch user data"
+    },
+    {
+      "id": 17,
+      "from": 5,
+      "to": 3,
+      "label": "User profile"
+    },
+    {
+      "id": 18,
+      "from": 3,
+      "to": 2,
+      "label": "Dashboard data"
+    },
+    {
+      "id": 19,
+      "from": 2,
+      "to": 1,
+      "label": "200 OK (dashboard)"
+    },
+    {
+      "id": 20,
+      "from": 1,
+      "to": 2,
+      "label": "POST /logout"
+    },
+    {
+      "id": 21,
+      "from": 2,
+      "to": 3,
+      "label": "Invalidate session"
+    },
+    {
+      "id": 22,
+      "from": 3,
+      "to": 4,
+      "label": "Revoke token",
+      "hints": {
+        "color": "green"
+      }
+    },
+    {
+      "id": 23,
+      "from": 4,
+      "to": 3,
+      "label": "Token revoked",
+      "hints": {
+        "color": "green"
+      }
+    },
+    {
+      "id": 24,
+      "from": 3,
+      "to": 2,
+      "label": "Logout success"
+    },
+    {
+      "id": 25,
+      "from": 2,
+      "to": 1,
+      "label": "302 Redirect to /login"
+    }
+  ],
+  "metadata": {}
+}

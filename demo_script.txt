@@ -1,0 +1,73 @@
+# Demo script for edd
+# This creates a sequence diagram showing a login flow
+# Run with: ./edd -demo < demo_script.txt
+
+# Start with sequence mode
+t
+s
+
+# Add participants
+i
+User
+System
+Database
+Cache
+
+# Exit insert mode
+# Add some connections
+c
+User
+System
+Login Request
+c
+System
+Database
+Validate User
+c
+Database
+System
+User Data
+c
+System
+Cache
+Store Session
+c
+Cache
+System
+Session ID
+c
+System
+User
+Login Success
+
+# Navigate and add some style
+j
+# Jump to connection
+h
+# Edit the label
+e
+Check credentials
+
+# Add color to a node
+j
+# Jump to Database node
+u
+# Hint mode
+g
+# Make it green
+
+# Jump to Cache node
+j
+c
+h
+u
+# Make it blue
+
+# Export to mermaid
+:export mermaid
+
+# Save the file
+:w demo_output.json
+
+# Show the final diagram
+:q

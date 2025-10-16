@@ -1,0 +1,16 @@
+{
+  "type": "flowchart",
+  "nodes": [
+    {"id": 1, "text": ["Login"]},
+    {"id": 2, "text": ["Validate", "Credentials"]},
+    {"id": 3, "text": ["Authorized?"]},
+    {"id": 4, "text": ["Dashboard"]},
+    {"id": 5, "text": ["Access", "Denied"]}
+  ],
+  "connections": [
+    {"id": 1, "from": 1, "to": 2, "label": ""},
+    {"id": 2, "from": 2, "to": 3, "label": ""},
+    {"id": 3, "from": 3, "to": 4, "label": "Yes"},
+    {"id": 4, "from": 3, "to": 5, "label": "No"}
+  ]
+}

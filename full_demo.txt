@@ -1,0 +1,62 @@
+# EDD - Terminal Diagram Editor Demo
+# This demo showcases key features
+
+# Switch to sequence diagram
+ts
+
+# Add nodes with insert mode (i)
+iUser
+API Gateway
+Database
+Cache
+
+# Exit insert mode (ESC)
+
+# Connect nodes (c for connection)
+cUser
+API Gateway
+HTTP Request
+
+# Quick connection navigation
+cAPI Gateway
+Database
+Query Data
+
+cDatabase
+API Gateway
+Return Results
+
+# Jump mode (j) - quickly navigate
+ja
+# Now at User node
+
+# Hint mode (h) to style
+hu
+# Color the node green
+g
+
+# Jump to connection
+jh
+
+# Edit connection label (e)
+e
+GET /api/users
+
+# Style connection as dashed
+hu
+
+# Jump to Database node
+jc
+hug
+
+# Export diagram
+:export mermaid
+
+# Save the diagram
+:w demo_diagram.json
+
+# Show we can also export to plantuml
+:export plantuml
+
+# Quit
+:q
