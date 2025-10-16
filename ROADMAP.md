@@ -11,6 +11,55 @@ more deterministic layouts
 
 quicky annotate the diagram connections - enter in e mode takes you to the next one down in edit mode -
 
+### CRITICAL: Layout & Pathfinding Improvements
+
+**Current Issues:**
+- Lines go "all over the place" - pathfinding doesn't choose optimal routes
+- No diagram title support
+- No centering of diagrams in the editor area
+- Unpredictable node placement
+- Complex diagrams look messy instead of fantastic
+
+**Required Improvements:**
+
+1. **Diagram Title Support**
+   - Add `title` field to diagram metadata
+   - Render title at top center of diagram
+   - Option to show/hide title
+
+2. **Diagram Centering**
+   - Calculate diagram bounds
+   - Center within available terminal space
+   - Predictable placement every time
+   - Option for alignment (center, left, top-left)
+
+3. **Better Pathfinding Algorithm**
+   - Current algo creates unnecessary detours
+   - Need smarter cost function that:
+     - Minimizes total path length
+     - Strongly prefers straight lines (horizontal/vertical)
+     - Heavily penalizes unnecessary turns
+     - Avoids crossing other paths when possible
+     - Routes around nodes more cleanly
+   - Consider A* with better heuristics or flow-based routing
+   - Path aesthetics matter as much as correctness
+
+4. **Layout Engine Improvements**
+   - More deterministic node placement
+   - Support for layers/stages (left-to-right flow)
+   - Respect node grouping hints
+   - Better handling of fan-out/fan-in patterns
+   - Swimlanes or columns for organized layouts
+
+**Goal:** Diagrams need to look FANTASTIC out of the box
+- Professional appearance
+- Clean, minimal line crossings
+- Predictable, logical layout
+- Easy to create AND beautiful to look at
+- This is how we'll stand out from other tools
+
+**Priority:** HIGH - Core to the product's value proposition
+
 ### Protocol/Format Diagram Type
 
 A new diagram type for documenting wire formats, binary protocols, and nested message structures.
