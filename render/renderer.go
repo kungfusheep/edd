@@ -75,6 +75,11 @@ func (r *Renderer) GetRouter() interface{} {
 	return nil
 }
 
+// GetFlowchartRenderer returns the flowchart renderer instance
+func (r *Renderer) GetFlowchartRenderer() *FlowchartRenderer {
+	return r.flowchartRenderer
+}
+
 // SetRouterType sets the type of router to use
 func (r *Renderer) SetRouterType(routerType interface{}) {
 	// Pass through to flowchart renderer for backward compatibility

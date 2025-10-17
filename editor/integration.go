@@ -124,24 +124,8 @@ type NodePositions struct {
 
 // Render implements the diagram.Renderer interface for TUI
 func (r *RealRenderer) Render(d *diagram.Diagram) (string, error) {
-	// If we're editing a node, we need to use RenderWithPositions to handle edit state
-	// The mainRenderer doesn't support editing text display with cursor
-	if r.editingNodeID >= 0 {
-		positions, output, err := r.RenderWithPositions(d)
-		_ = positions // Will be used by TUI for jump labels
-		return output, err
-	}
-
-	// Use the main renderer which properly handles colors and diagram types
-	// The main renderer already handles different diagram types correctly:
-	// - Flowcharts use VerticalLayout
-	// - Sequence diagrams use SequenceRenderer
-	if r.mainRenderer != nil {
-		return r.mainRenderer.Render(d)
-	}
-	// Fallback to old implementation if needed
-	positions, output, err := r.RenderWithPositions(d)
-	_ = positions // Will be used by TUI for jump labels
+	// Delegate to RenderWithPositions and discard positions
+	_, output, err := r.RenderWithPositions(d)
 	return output, err
 }
 
@@ -150,252 +134,38 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 	if d == nil || len(d.Nodes) == 0 {
 		return &NodePositions{Positions: make(map[int]diagram.Point)}, "", nil
 	}
-	
-	// Check if this is a sequence diagram
+
+	// Check if this is a sequence diagram - use old rendering path for now
 	if d.Type == "sequence" {
 		return r.renderSequenceWithPositions(d)
 	}
-	
-	// Calculate node dimensions
-	nodes := calculateNodeDimensions(d.Nodes)
 
-	// Choose layout based on diagram hints or type
-	var layoutEngine diagram.LayoutEngine
-
-	// Check for layout hint first
-	if d.Hints != nil && d.Hints["layout"] == "horizontal" {
-		layoutEngine = layout.NewHorizontalLayout()
-	} else if d.Type == "flowchart" || d.Type == "" || d.Type == "box" {
-		// Use vertical layout for flowcharts and box diagrams
-		layoutEngine = layout.NewVerticalLayout()
-	} else {
-		// Use horizontal layout for other diagram types (system topologies, etc.)
-		layoutEngine = layout.NewSimpleLayout()
+	// For flowcharts/box diagrams, delegate to the main renderer
+	// Get the flowchart renderer from the main renderer
+	flowchartRenderer := r.mainRenderer.GetFlowchartRenderer()
+	if flowchartRenderer == nil {
+		return &NodePositions{Positions: make(map[int]diagram.Point)}, "", fmt.Errorf("no flowchart renderer available")
 	}
 
-	// Layout
-	layoutNodes, err := layoutEngine.Layout(nodes, d.Connections)
+	// Set edit state
+	flowchartRenderer.SetEditState(r.editingNodeID, r.editText, r.cursorPos)
+
+	// Render and get positions
+	positions, paths, output, err := flowchartRenderer.RenderWithPositions(d)
 	if err != nil {
-		return nil, "", fmt.Errorf("layout failed: %w", err)
+		return nil, "", err
 	}
 
-	// Set flow direction on router based on layout choice
-	if areaRouter := r.router.GetAreaRouter(); areaRouter != nil {
-		if d.Hints != nil && d.Hints["layout"] == "horizontal" {
-			areaRouter.SetFlowDirection(pathfinding.FlowHorizontal)
-		} else {
-			areaRouter.SetFlowDirection(pathfinding.FlowVertical)
-		}
+	// Convert to NodePositions format
+	nodePos := &NodePositions{
+		Positions:       positions,
+		ConnectionPaths: paths,
+		Offset:          diagram.Point{X: 0, Y: 0},
 	}
 
-	// After layout, adjust dimensions for editing node if needed
-	if r.editingNodeID >= 0 {
-		for i := range layoutNodes {
-			if layoutNodes[i].ID == r.editingNodeID {
-				// Split edit text into lines for multi-line support
-				lines := strings.Split(r.editText, "\n")
-				
-				// Recalculate width - find the longest line
-				maxWidth := 0
-				for _, line := range lines {
-					lineWidth := len([]rune(line))
-					if lineWidth > maxWidth {
-						maxWidth = lineWidth
-					}
-				}
-				minWidth := maxWidth + 4  // text + padding
-				if minWidth < 8 {
-					minWidth = 8
-				}
-				layoutNodes[i].Width = minWidth
-				
-				// Recalculate height for multi-line text
-				layoutNodes[i].Height = len(lines) + 2  // lines + borders
-				
-				break
-			}
-		}
-	}
-
-	// Route connections
-	paths, err := r.router.RouteConnections(d.Connections, layoutNodes)
-	if err != nil {
-		return nil, "", fmt.Errorf("routing failed: %w", err)
-	}
-	
-	// Calculate bounds
-	bounds := calculateBounds(layoutNodes, paths)
-	
-	// Check if any nodes or connections have color or style hints
-	hasColors := false
-	for _, node := range layoutNodes {
-		if node.Hints != nil {
-			if _, hasColor := node.Hints["color"]; hasColor {
-				hasColors = true
-				break
-			}
-			if _, hasBold := node.Hints["bold"]; hasBold {
-				hasColors = true  // We use the colored canvas for styles too
-				break
-			}
-		}
-	}
-	if !hasColors {
-		for _, conn := range d.Connections {
-			if conn.Hints != nil {
-				if _, hasColor := conn.Hints["color"]; hasColor {
-					hasColors = true
-					break
-				}
-				if _, hasBold := conn.Hints["bold"]; hasBold {
-					hasColors = true  // We use the colored canvas for styles too
-					break
-				}
-			}
-		}
-	}
-	
-	// Create appropriate canvas type
-	var c render.Canvas
-	var coloredCanvas *render.ColoredMatrixCanvas
-	if hasColors {
-		coloredCanvas = render.NewColoredMatrixCanvas(bounds.Width(), bounds.Height())
-		c = coloredCanvas
-	} else {
-		c = render.NewMatrixCanvas(bounds.Width(), bounds.Height())
-	}
-	
-	// Create offset canvas for negative coordinates
-	offsetCanvas := newOffsetCanvas(c, bounds.Min)
-	
-	// Track node positions and connection paths (adjusted for canvas offset)
-	positions := &NodePositions{
-		Positions:       make(map[int]diagram.Point),
-		ConnectionPaths: make(map[int]diagram.Path),
-		Offset:          bounds.Min,
-	}
-	for _, node := range layoutNodes {
-		// Store the canvas-relative position (after offset adjustment)
-		positions.Positions[node.ID] = diagram.Point{
-			X: node.X - bounds.Min.X,
-			Y: node.Y - bounds.Min.Y,
-		}
-	}
-	
-	// Store connection paths (adjusted for offset)
-	for i, path := range paths {
-		adjustedPath := diagram.Path{
-			Points: make([]diagram.Point, len(path.Points)),
-		}
-		for j, point := range path.Points {
-			adjustedPath.Points[j] = diagram.Point{
-				X: point.X - bounds.Min.X,
-				Y: point.Y - bounds.Min.Y,
-			}
-		}
-		positions.ConnectionPaths[i] = adjustedPath
-	}
-	
-	// Render shadows first (so connections can overwrite them)
-	for _, node := range layoutNodes {
-		r.nodeRenderer.RenderShadowOnly(offsetCanvas, node)
-	}
-	
-	// Render nodes
-	for _, node := range layoutNodes {
-		// Check if this node is being edited
-		isEditing := node.ID == r.editingNodeID
-		var editText string
-		var cursorPos int
-		if isEditing {
-			editText = r.editText
-			cursorPos = r.cursorPos
-		}
-		renderNodeWithEdit(offsetCanvas, node, r.nodeRenderer, isEditing, editText, cursorPos)
-	}
-	
-	// Apply arrows to connections
-	arrowConfig := pathfinding.NewArrowConfig()
-	connectionsWithArrows := pathfinding.ApplyArrowConfig(d.Connections, paths, arrowConfig)
-	
-	// Debug log the editing state
-	if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		fmt.Fprintf(f, "=== Rendering connections ===\n")
-		fmt.Fprintf(f, "EditingConnectionID: %d\n", r.EditingConnectionID)
-		fmt.Fprintf(f, "EditConnectionText: '%s'\n", r.EditConnectionText)
-		fmt.Fprintf(f, "EditConnectionCursorPos: %d\n", r.EditConnectionCursorPos)
-		fmt.Fprintf(f, "Total connections: %d\n", len(d.Connections))
-		fmt.Fprintf(f, "Total connectionsWithArrows: %d\n", len(connectionsWithArrows))
-		f.Close()
-	}
-
-	// Render connections with hints
-	for i, cwa := range connectionsWithArrows {
-		hasArrow := cwa.ArrowType == pathfinding.ArrowEnd || cwa.ArrowType == pathfinding.ArrowBoth
-
-		// Check if this connection has hints
-		if i < len(d.Connections) && d.Connections[i].Hints != nil && len(d.Connections[i].Hints) > 0 {
-			// Use RenderPathWithHints to apply visual hints
-			r.pathRenderer.RenderPathWithHints(offsetCanvas, cwa.Path, hasArrow, d.Connections[i].Hints)
-		} else {
-			// Render normally
-			r.pathRenderer.RenderPathWithOptions(offsetCanvas, cwa.Path, hasArrow, true)
-		}
-	}
-	
-	// Render labels (with editing support)
-	for i, conn := range d.Connections {
-		labelText := conn.Label
-		isEditingThisConnection := r.EditingConnectionID == i
-
-		// Debug log each connection
-		if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			fmt.Fprintf(f, "Connection %d: label='%s', isEditing=%v\n", i, conn.Label, isEditingThisConnection)
-			f.Close()
-		}
-
-		// If editing this connection, use edit text
-		if isEditingThisConnection {
-			labelText = r.EditConnectionText
-			// More debug logging
-			if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-				fmt.Fprintf(f, "  -> Using edit text: '%s' with cursor at %d\n", labelText, r.EditConnectionCursorPos)
-				f.Close()
-			}
-		}
-
-		// Render label if it has text or is being edited
-		if (labelText != "" || isEditingThisConnection) && i < len(connectionsWithArrows) {
-			if isEditingThisConnection {
-				// Render with cursor
-				if f, err := os.OpenFile("/tmp/edd_edit_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-					fmt.Fprintf(f, "  -> Calling renderLabelWithCursor\n")
-					f.Close()
-				}
-				renderLabelWithCursor(r.labelRenderer, offsetCanvas, connectionsWithArrows[i].Path, labelText, r.EditConnectionCursorPos)
-			} else {
-				// Normal label render
-				r.labelRenderer.RenderLabel(offsetCanvas, connectionsWithArrows[i].Path, labelText, render.LabelMiddle)
-			}
-		}
-	}
-	
-	// Get the output string
-	var output string
-	if coloredCanvas != nil {
-		// Use colored output if we have a colored canvas
-		output = coloredCanvas.ColoredString()
-	} else {
-		// Regular output
-		if mc, ok := c.(*render.MatrixCanvas); ok {
-			output = mc.String()
-		} else {
-			output = c.String()
-		}
-	}
-	
-	return positions, output, nil
+	return nodePos, output, nil
 }
+
 
 // renderSequenceWithPositions renders a sequence diagram and returns positions
 func (r *RealRenderer) renderSequenceWithPositions(d *diagram.Diagram) (*NodePositions, string, error) {

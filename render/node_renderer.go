@@ -2,6 +2,7 @@ package render
 
 import (
 	"edd/diagram"
+	"strings"
 )
 
 // NodeRenderer handles rendering of nodes with various styles and hints
@@ -21,6 +22,24 @@ func NewNodeRenderer(caps TerminalCapabilities) *NodeRenderer {
 // RenderNode draws a node on the canvas using default style
 func (r *NodeRenderer) RenderNode(canvas Canvas, node diagram.Node) error {
 	return r.RenderNodeWithHints(canvas, node, node.Hints)
+}
+
+// RenderNodeWithEdit draws a node with optional edit state (cursor display)
+func (r *NodeRenderer) RenderNodeWithEdit(canvas Canvas, node diagram.Node, isEditing bool, editText string, cursorPos int) error {
+	if !isEditing {
+		return r.RenderNode(canvas, node)
+	}
+
+	// When editing, draw a simple box and the edit text with cursor
+	style := NodeStyles["sharp"] // Use sharp style for editing
+
+	// Draw the box border
+	if err := r.drawBox(canvas, node, style, ""); err != nil {
+		return err
+	}
+
+	// Draw the edit text with cursor
+	return r.drawEditText(canvas, node, editText, cursorPos)
 }
 
 // RenderNodeWithHints draws a node with visual hints applied
@@ -164,6 +183,31 @@ func (r *NodeRenderer) drawText(canvas Canvas, node diagram.Node, hints map[stri
 		}
 	}
 	
+	return nil
+}
+
+// drawEditText draws text with cursor display for editing mode
+func (r *NodeRenderer) drawEditText(canvas Canvas, node diagram.Node, editText string, cursorPos int) error {
+	// Split text by newlines for multi-line editing
+	lines := strings.Split(editText, "\n")
+
+	for lineIdx, line := range lines {
+		y := node.Y + 1 + lineIdx
+		x := node.X + 2 // Left padding
+
+		// Don't draw lines outside the box
+		if y >= node.Y+node.Height-1 {
+			break
+		}
+
+		// Draw each character of this line
+		for i, ch := range line {
+			if x+i < node.X+node.Width-2 {
+				canvas.Set(diagram.Point{X: x + i, Y: y}, ch)
+			}
+		}
+	}
+
 	return nil
 }
 

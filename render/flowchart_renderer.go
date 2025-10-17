@@ -18,6 +18,11 @@ type FlowchartRenderer struct {
 	labelRenderer *LabelRenderer
 	debugMode     bool
 	showObstacles bool
+
+	// Edit state for cursor display
+	editingNodeID int
+	editText      string
+	cursorPos     int
 }
 
 // NewFlowchartRenderer creates a new flowchart diagram renderer
@@ -142,6 +147,69 @@ func (r *FlowchartRenderer) Render(d *diagram.Diagram) (string, error) {
 	return output, nil
 }
 
+// RenderWithPositions renders the diagram and returns node positions and connection paths
+// This is needed by the TUI for jump label positioning
+func (r *FlowchartRenderer) RenderWithPositions(d *diagram.Diagram) (map[int]diagram.Point, map[int]diagram.Path, string, error) {
+	// Use the same rendering logic as Render()
+	output, err := r.Render(d)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	// We need to re-layout to get positions (TODO: optimize by caching)
+	nodes := CalculateNodeDimensions(d.Nodes)
+
+	// Choose layout based on hints
+	var layoutEngine diagram.LayoutEngine
+	if d.Hints != nil && d.Hints["layout"] == "horizontal" {
+		layoutEngine = layout.NewHorizontalLayout()
+	} else {
+		layoutEngine = r.layout
+	}
+
+	layoutNodes, err := layoutEngine.Layout(nodes, d.Connections)
+	if err != nil {
+		return nil, nil, output, nil // Return output even if we can't get positions
+	}
+
+	// Route connections to get paths
+	paths, err := r.router.RouteConnections(d.Connections, layoutNodes)
+	if err != nil {
+		return nil, nil, output, nil // Return output even if routing fails
+	}
+
+	// Calculate bounds to get the offset
+	bounds := CalculateBounds(layoutNodes, paths)
+
+	// Build position maps with offset applied (to match rendered coordinates)
+	positions := make(map[int]diagram.Point)
+	for _, node := range layoutNodes {
+		positions[node.ID] = diagram.Point{
+			X: node.X - bounds.Min.X,
+			Y: node.Y - bounds.Min.Y,
+		}
+	}
+
+	// Adjust paths to account for offset as well
+	adjustedPaths := make(map[int]diagram.Path)
+	for i, path := range paths {
+		adjustedPath := diagram.Path{
+			Points:   make([]diagram.Point, len(path.Points)),
+			Cost:     path.Cost,
+			Metadata: path.Metadata,
+		}
+		for j, point := range path.Points {
+			adjustedPath.Points[j] = diagram.Point{
+				X: point.X - bounds.Min.X,
+				Y: point.Y - bounds.Min.Y,
+			}
+		}
+		adjustedPaths[i] = adjustedPath
+	}
+
+	return positions, adjustedPaths, output, nil
+}
+
 // GetBounds returns the required canvas size for the diagram
 func (r *FlowchartRenderer) GetBounds(d *diagram.Diagram) (width, height int) {
 	// Calculate node dimensions
@@ -177,8 +245,16 @@ func (r *FlowchartRenderer) renderToCanvas(d *diagram.Diagram, layoutNodes []dia
 	// Step 2: Render nodes (boxes and text) before connections
 	// This allows connections to properly connect to node edges
 	for _, node := range layoutNodes {
-		if err := r.nodeRenderer.RenderNode(offsetCanvas, node); err != nil {
-			return fmt.Errorf("failed to render node %d: %w", node.ID, err)
+		// Check if this node is being edited
+		isEditing := node.ID == r.editingNodeID
+		if isEditing {
+			if err := r.nodeRenderer.RenderNodeWithEdit(offsetCanvas, node, true, r.editText, r.cursorPos); err != nil {
+				return fmt.Errorf("failed to render node %d: %w", node.ID, err)
+			}
+		} else {
+			if err := r.nodeRenderer.RenderNode(offsetCanvas, node); err != nil {
+				return fmt.Errorf("failed to render node %d: %w", node.ID, err)
+			}
 		}
 	}
 	
@@ -239,6 +315,13 @@ func (r *FlowchartRenderer) GetRouter() *pathfinding.Router {
 // SetRouterType sets the type of router to use
 func (r *FlowchartRenderer) SetRouterType(routerType pathfinding.RouterType) {
 	r.router.SetRouterType(routerType)
+}
+
+// SetEditState sets the editing state for cursor display
+func (r *FlowchartRenderer) SetEditState(nodeID int, text string, cursorPos int) {
+	r.editingNodeID = nodeID
+	r.editText = text
+	r.cursorPos = cursorPos
 }
 
 // renderDebugObstacles creates a debug visualization showing obstacles and paths.
