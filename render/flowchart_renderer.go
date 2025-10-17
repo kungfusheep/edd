@@ -65,14 +65,30 @@ func (r *FlowchartRenderer) Render(d *diagram.Diagram) (string, error) {
 	if d == nil {
 		return "", fmt.Errorf("diagram is nil")
 	}
-	
+
 	// Step 1: Calculate node dimensions from their text content
 	nodes := CalculateNodeDimensions(d.Nodes)
-	
-	// Step 2: Run layout algorithm to position nodes
-	layoutNodes, err := r.layout.Layout(nodes, d.Connections)
+
+	// Step 2: Choose layout based on diagram hints
+	layoutEngine := r.layout // Default to vertical
+	flowDirection := pathfinding.FlowVertical
+
+	if d.Hints != nil {
+		if layoutHint := d.Hints["layout"]; layoutHint == "horizontal" {
+			layoutEngine = layout.NewHorizontalLayout()
+			flowDirection = pathfinding.FlowHorizontal
+		}
+	}
+
+	// Step 3: Run layout algorithm to position nodes
+	layoutNodes, err := layoutEngine.Layout(nodes, d.Connections)
 	if err != nil {
 		return "", fmt.Errorf("layout failed: %w", err)
+	}
+
+	// Step 3.1: Set flow direction on the router
+	if areaRouter := r.router.GetAreaRouter(); areaRouter != nil {
+		areaRouter.SetFlowDirection(flowDirection)
 	}
 	
 	// Step 3: Set up port manager (after layout is complete)

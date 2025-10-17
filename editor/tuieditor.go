@@ -2374,10 +2374,74 @@ func (e *TUIEditor) ProcessCommand() {
 		}
 		e.SetMode(ModeNormal)
 
+	case "set":
+		// Set diagram-level hints/properties
+		if len(parts) < 3 {
+			e.commandResult = "Usage: :set <property> <value>"
+		} else {
+			property := parts[1]
+			value := parts[2]
+			e.SetDiagramHint(property, value)
+			e.commandResult = fmt.Sprintf("Set %s = %s", property, value)
+			e.hasChanges = true
+		}
+		e.SetMode(ModeNormal)
+
+	case "unset":
+		// Remove a diagram-level hint
+		if len(parts) < 2 {
+			e.commandResult = "Usage: :unset <property>"
+		} else {
+			property := parts[1]
+			e.UnsetDiagramHint(property)
+			e.commandResult = fmt.Sprintf("Unset %s", property)
+			e.hasChanges = true
+		}
+		e.SetMode(ModeNormal)
+
 	default:
 		e.commandResult = "Unknown command: " + parts[0]
 		e.SetMode(ModeNormal)
 	}
+}
+
+// SetDiagramHint sets a diagram-level hint
+func (e *TUIEditor) SetDiagramHint(key, value string) {
+	if e.diagram.Hints == nil {
+		e.diagram.Hints = make(map[string]string)
+	}
+	e.diagram.Hints[key] = value
+	e.hasChanges = true
+
+	// Clear cached positions to force re-render with new settings
+	e.nodePositions = nil
+	e.connectionPaths = nil
+
+	// Mark diagram as changed to trigger re-render
+	e.diagramChanged = true
+}
+
+// UnsetDiagramHint removes a diagram-level hint
+func (e *TUIEditor) UnsetDiagramHint(key string) {
+	if e.diagram.Hints != nil {
+		delete(e.diagram.Hints, key)
+		e.hasChanges = true
+
+		// Clear cached positions to force re-render
+		e.nodePositions = nil
+		e.connectionPaths = nil
+
+		// Mark diagram as changed to trigger re-render
+		e.diagramChanged = true
+	}
+}
+
+// GetDiagramHint gets a diagram-level hint value
+func (e *TUIEditor) GetDiagramHint(key string) string {
+	if e.diagram.Hints == nil {
+		return ""
+	}
+	return e.diagram.Hints[key]
 }
 
 // HasUnsavedChanges returns whether there are unsaved changes

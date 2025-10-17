@@ -159,9 +159,13 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 	// Calculate node dimensions
 	nodes := calculateNodeDimensions(d.Nodes)
 
-	// Choose layout based on diagram type
+	// Choose layout based on diagram hints or type
 	var layoutEngine diagram.LayoutEngine
-	if d.Type == "flowchart" || d.Type == "" || d.Type == "box" {
+
+	// Check for layout hint first
+	if d.Hints != nil && d.Hints["layout"] == "horizontal" {
+		layoutEngine = layout.NewHorizontalLayout()
+	} else if d.Type == "flowchart" || d.Type == "" || d.Type == "box" {
 		// Use vertical layout for flowcharts and box diagrams
 		layoutEngine = layout.NewVerticalLayout()
 	} else {
@@ -171,7 +175,19 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 
 	// Layout
 	layoutNodes, err := layoutEngine.Layout(nodes, d.Connections)
-	
+	if err != nil {
+		return nil, "", fmt.Errorf("layout failed: %w", err)
+	}
+
+	// Set flow direction on router based on layout choice
+	if areaRouter := r.router.GetAreaRouter(); areaRouter != nil {
+		if d.Hints != nil && d.Hints["layout"] == "horizontal" {
+			areaRouter.SetFlowDirection(pathfinding.FlowHorizontal)
+		} else {
+			areaRouter.SetFlowDirection(pathfinding.FlowVertical)
+		}
+	}
+
 	// After layout, adjust dimensions for editing node if needed
 	if r.editingNodeID >= 0 {
 		for i := range layoutNodes {
@@ -200,10 +216,7 @@ func (r *RealRenderer) RenderWithPositions(d *diagram.Diagram) (*NodePositions, 
 			}
 		}
 	}
-	if err != nil {
-		return nil, "", fmt.Errorf("layout failed: %w", err)
-	}
-	
+
 	// Route connections
 	paths, err := r.router.RouteConnections(d.Connections, layoutNodes)
 	if err != nil {

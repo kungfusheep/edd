@@ -94,10 +94,11 @@ const (
 
 // Diagram represents a complete diagram with nodes and pathfinding.
 type Diagram struct {
-	Type        string       `json:"type,omitempty"`      // Diagram type: "sequence", "flowchart", etc.
-	Nodes       []Node       `json:"nodes"`
-	Connections []Connection `json:"connections"`
-	Metadata    Metadata     `json:"metadata,omitempty"`
+	Type        string            `json:"type,omitempty"`      // Diagram type: "sequence", "flowchart", etc.
+	Nodes       []Node            `json:"nodes"`
+	Connections []Connection      `json:"connections"`
+	Metadata    Metadata          `json:"metadata,omitempty"`
+	Hints       map[string]string `json:"hints,omitempty"`     // Diagram-level hints (layout, title, etc.)
 }
 
 // GetType returns the diagram type as a DiagramType constant

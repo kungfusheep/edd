@@ -75,6 +75,11 @@ func (r *Router) SetRouterType(routerType RouterType) {
 	r.routerType = routerType
 }
 
+// GetAreaRouter returns the area router if available
+func (r *Router) GetAreaRouter() *AreaRouter {
+	return r.areaRouter
+}
+
 // RouteConnection finds the best path for a connection between two nodes.
 // It returns a Path that avoids obstacles and creates clean routes.
 func (r *Router) RouteConnection(conn diagram.Connection, nodes []diagram.Node) (diagram.Path, error) {
