@@ -5,6 +5,7 @@ import (
 	"edd/layout"
 	"edd/pathfinding"
 	"fmt"
+	"strings"
 )
 
 // FlowchartRenderer handles rendering of flowchart diagrams
@@ -91,7 +92,41 @@ func (r *FlowchartRenderer) Render(d *diagram.Diagram) (string, error) {
 		return "", fmt.Errorf("layout failed: %w", err)
 	}
 
-	// Step 3.1: Set flow direction on the router
+	// Step 3.1: Adjust dimensions for node being edited (so box grows in real-time)
+	if r.editingNodeID >= 0 {
+		for i := range layoutNodes {
+			if layoutNodes[i].ID == r.editingNodeID {
+				// Split edit text into lines
+				lines := strings.Split(r.editText, "\n")
+
+				// Recalculate width - find the longest line
+				maxWidth := 0
+				for _, line := range lines {
+					lineWidth := len([]rune(line)) + 1 // +1 for cursor character
+					if lineWidth > maxWidth {
+						maxWidth = lineWidth
+					}
+				}
+				minWidth := maxWidth + 4 // text + padding
+				if minWidth < 8 {
+					minWidth = 8
+				}
+				if minWidth > layoutNodes[i].Width {
+					layoutNodes[i].Width = minWidth
+				}
+
+				// Recalculate height for multi-line text
+				minHeight := len(lines) + 2 // lines + borders
+				if minHeight > layoutNodes[i].Height {
+					layoutNodes[i].Height = minHeight
+				}
+
+				break
+			}
+		}
+	}
+
+	// Step 3.2: Set flow direction on the router
 	if areaRouter := r.router.GetAreaRouter(); areaRouter != nil {
 		areaRouter.SetFlowDirection(flowDirection)
 	}
@@ -171,6 +206,9 @@ func (r *FlowchartRenderer) RenderWithPositions(d *diagram.Diagram) (map[int]dia
 	if err != nil {
 		return nil, nil, output, nil // Return output even if we can't get positions
 	}
+
+	// Note: Dimension adjustment for editing happens in Render() now
+	// so we don't need to duplicate it here
 
 	// Route connections to get paths
 	paths, err := r.router.RouteConnections(d.Connections, layoutNodes)

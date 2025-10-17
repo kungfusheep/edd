@@ -481,13 +481,8 @@ func runInteractiveLoop(tui *editor.TUIEditor, filename string, demoSettings *De
 			drawEd(tui)
 		}
 
-		// Position cursor if in edit mode
-		if tui.GetMode() == editor.ModeEdit || tui.GetMode() == editor.ModeInsert {
-			positionCursor(tui)
-		} else {
-			// Hide cursor when not editing
-			fmt.Print("\033[?25l")
-		}
+		// Hide terminal cursor - we draw our own cursor character in the diagram
+		fmt.Print("\033[?25l")
 
 		needsFullRedraw = false
 	}
@@ -991,30 +986,10 @@ func positionCursor(tui *editor.TUIEditor) {
 		return
 	}
 
-	// Get the node being edited
-	selectedNode := tui.GetSelectedNode()
-	if selectedNode < 0 {
-		return
-	}
-
-	// Get node positions
-	positions := tui.GetNodePositions()
-	pos, ok := positions[selectedNode]
-	if !ok {
-		return
-	}
-
-	// Get cursor position in text
-	state := tui.GetState()
-
-	// Calculate actual cursor position on screen using line and column
-	// Node text starts at X+2, Y+1 (inside the box)
-	cursorX := pos.X + 2 + state.CursorCol + 1  // +1 for terminal indexing
-	cursorY := pos.Y + 1 + state.CursorLine + 1 // +1 for terminal indexing
-
-	// Move cursor to position and show it
-	fmt.Printf("\033[%d;%dH", cursorY, cursorX)
-	fmt.Print("\033[?25h") // Show cursor
+	// NOTE: This function is no longer used since we draw the cursor character (█)
+	// directly in the diagram instead of using terminal cursor positioning.
+	// The cursor is rendered as part of the node text in NodeRenderer.drawEditText()
+	// We always hide the terminal cursor in fullRedraw()
 }
 
 func drawJumpLabels(tui *editor.TUIEditor, output string) {
@@ -1261,8 +1236,11 @@ func drawEd(tui *editor.TUIEditor) {
 	}
 	reset := "\033[0m"
 
-	// Save cursor position
-	fmt.Print("\033[s")
+	// In edit mode, don't save/restore cursor - let positionCursor handle it
+	// In other modes, save cursor before drawing Ed so we don't affect other overlays
+	if mode != editor.ModeEdit && mode != editor.ModeInsert {
+		fmt.Print("\033[s")
+	}
 
 	// Draw Ed's box - position above status line
 	// We need to position Ed carefully to avoid the status line
@@ -1285,8 +1263,10 @@ func drawEd(tui *editor.TUIEditor) {
 	fmt.Print("\033[20D")      // Move left 20 chars from right edge
 	fmt.Printf("%s╰────╯%s", color, reset)
 
-	// Restore cursor position
-	fmt.Print("\033[u")
+	// Restore cursor position (but not in edit mode - positionCursor will set it)
+	if mode != editor.ModeEdit && mode != editor.ModeInsert {
+		fmt.Print("\033[u")
+	}
 }
 
 func showStatusLine(tui *editor.TUIEditor, filename string, demoPlayer *demo.Player) {

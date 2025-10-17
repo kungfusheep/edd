@@ -191,6 +191,20 @@ func (r *NodeRenderer) drawEditText(canvas Canvas, node diagram.Node, editText s
 	// Split text by newlines for multi-line editing
 	lines := strings.Split(editText, "\n")
 
+	// Calculate which line and column the cursor is on
+	currentPos := 0
+	cursorLine := 0
+	cursorCol := 0
+	for i, line := range lines {
+		lineLen := len([]rune(line))
+		if currentPos+lineLen >= cursorPos {
+			cursorLine = i
+			cursorCol = cursorPos - currentPos
+			break
+		}
+		currentPos += lineLen + 1 // +1 for newline
+	}
+
 	for lineIdx, line := range lines {
 		y := node.Y + 1 + lineIdx
 		x := node.X + 2 // Left padding
@@ -200,10 +214,29 @@ func (r *NodeRenderer) drawEditText(canvas Canvas, node diagram.Node, editText s
 			break
 		}
 
-		// Draw each character of this line
-		for i, ch := range line {
-			if x+i < node.X+node.Width-2 {
-				canvas.Set(diagram.Point{X: x + i, Y: y}, ch)
+		// Convert line to runes for proper cursor insertion
+		runes := []rune(line)
+
+		// Insert cursor character if this is the cursor line
+		if lineIdx == cursorLine {
+			// Insert █ at cursor position
+			before := runes[:cursorCol]
+			after := runes[cursorCol:]
+			displayRunes := append(before, '█')
+			displayRunes = append(displayRunes, after...)
+
+			// Draw the line with cursor
+			for i, ch := range displayRunes {
+				if x+i < node.X+node.Width-2 {
+					canvas.Set(diagram.Point{X: x + i, Y: y}, ch)
+				}
+			}
+		} else {
+			// Draw normal line without cursor
+			for i, ch := range runes {
+				if x+i < node.X+node.Width-2 {
+					canvas.Set(diagram.Point{X: x + i, Y: y}, ch)
+				}
 			}
 		}
 	}
