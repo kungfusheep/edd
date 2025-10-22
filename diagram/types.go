@@ -131,6 +131,14 @@ func (d *Diagram) Clone() *Diagram {
 		Connections: make([]Connection, len(d.Connections)),
 		Metadata:    d.Metadata, // Metadata is a simple struct, can be copied directly
 	}
+
+	// Deep copy diagram-level hints map if it exists
+	if d.Hints != nil {
+		clone.Hints = make(map[string]string)
+		for k, v := range d.Hints {
+			clone.Hints[k] = v
+		}
+	}
 	
 	// Deep copy nodes (need to copy the Text slice and Hints map)
 	for i, node := range d.Nodes {
