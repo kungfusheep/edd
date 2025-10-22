@@ -330,9 +330,48 @@ func (r *FlowchartRenderer) renderToCanvas(d *diagram.Diagram, layoutNodes []dia
 	
 	// Step 6: Render connection labels after all paths are drawn
 	// This ensures labels are placed on top of the lines
+	// Track rendered labels to avoid overlaps (simple collision detection)
+	type labelBounds struct {
+		minX, maxX, minY, maxY int
+	}
+	renderedLabels := []labelBounds{}
+
 	for _, cwa := range connectionsWithArrows {
 		if cwa.Connection.Label != "" {
-			r.labelRenderer.RenderLabel(offsetCanvas, cwa.Path, cwa.Connection.Label, LabelMiddle)
+			// Estimate label bounds for collision detection
+			labelText := cwa.Connection.Label
+			if len(labelText) > 40 {
+				labelText = labelText[:38] + ".."
+			}
+			labelLen := len(labelText) + 2 // +2 for brackets
+
+			// Estimate position (middle of path)
+			if len(cwa.Path.Points) >= 2 {
+				midIdx := len(cwa.Path.Points) / 2
+				labelY := cwa.Path.Points[midIdx].Y
+				labelX := cwa.Path.Points[midIdx].X - labelLen/2
+
+				// Check for overlap with existing labels
+				overlaps := false
+				for _, existing := range renderedLabels {
+					if labelY >= existing.minY-1 && labelY <= existing.maxY+1 {
+						if labelX+labelLen > existing.minX-2 && labelX < existing.maxX+2 {
+							overlaps = true
+							break
+						}
+					}
+				}
+
+				if !overlaps {
+					r.labelRenderer.RenderLabel(offsetCanvas, cwa.Path, cwa.Connection.Label, LabelMiddle)
+					renderedLabels = append(renderedLabels, labelBounds{
+						minX: labelX,
+						maxX: labelX + labelLen,
+						minY: labelY,
+						maxY: labelY,
+					})
+				}
+			}
 		}
 	}
 	
