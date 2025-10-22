@@ -14,7 +14,7 @@ type LabelRenderer struct {
 // NewLabelRenderer creates a new label renderer
 func NewLabelRenderer() *LabelRenderer {
 	return &LabelRenderer{
-		maxLabelLength: 10, // Default max length
+		maxLabelLength: 40, // Allow longer labels for better readability
 	}
 }
 
@@ -279,42 +279,28 @@ func (lr *LabelRenderer) formatLabel(label string) string {
 	return "[" + label + "]"
 }
 
-// renderVerticalInlineLabel renders a label inline on a vertical segment
+// renderVerticalInlineLabel renders a label on a vertical segment
+// Labels on vertical segments are rendered HORIZONTALLY next to the path, not vertically along it
 func (lr *LabelRenderer) renderVerticalInlineLabel(c Canvas, segment *Segment, label string) {
-	// For vertical segments, we'll render the label vertically
-	labelLen := len(label)
 	segmentLen := layout.Abs(segment.End.Y - segment.Start.Y)
-	
-	// Calculate where to place the label (centered on the segment)
+
+	// Calculate Y position (centered on the segment)
 	minY := min(segment.Start.Y, segment.End.Y)
-	maxY := max(segment.Start.Y, segment.End.Y)
-	labelStart := minY + (segmentLen - labelLen) / 2
-	
-	// Ensure label fits within segment
-	if labelStart < minY {
-		labelStart = minY + 1 // Leave space at the start
-	}
-	if labelStart + labelLen > maxY {
-		labelStart = maxY - labelLen - 1 // Leave space at the end
-	}
-	
-	// If the segment is too short for the label, just place it at the start
-	if segmentLen < labelLen + 2 {
-		labelStart = minY + 1
-	}
-	
-	// The label itself (rendered vertically) - use direct matrix access
-	x := segment.Start.X
-	
-	// Try to get direct matrix access
+	labelY := minY + segmentLen/2
+
+	// Try to get direct matrix access to check bounds and render
 	var matrix [][]rune
 	var xOffset, yOffset int
-	
+	var canvasWidth int
+
 	// Check if we can access the canvas as a MatrixCanvas for direct access
 	if mc, ok := c.(*MatrixCanvas); ok {
 		matrix = mc.Matrix()
 		xOffset = 0
 		yOffset = 0
+		if len(matrix) > 0 {
+			canvasWidth = len(matrix[0])
+		}
 	} else if oc, ok := c.(interface{
 		Matrix() [][]rune
 		Offset() diagram.Point
@@ -324,26 +310,40 @@ func (lr *LabelRenderer) renderVerticalInlineLabel(c Canvas, segment *Segment, l
 		offset := oc.Offset()
 		xOffset = -offset.X
 		yOffset = -offset.Y
+		if len(matrix) > 0 {
+			canvasWidth = len(matrix[0])
+		}
 	}
-	
+
+	// Calculate label position - try right of path first, then left if no room
+	labelX := segment.Start.X + 2 // Try 2 chars to the right
+	labelEndX := labelX + len(label)
+
+	// Check if label fits to the right
+	if matrix != nil && labelEndX+xOffset >= canvasWidth {
+		// No room on right, try left instead
+		labelX = segment.Start.X - len(label) - 2
+		if labelX < 0 {
+			labelX = 0 // Clamp to left edge
+		}
+	}
+
 	if matrix != nil && len(matrix) > 0 {
-		// Direct matrix access to force overwrite
-		actualX := x + xOffset
-		if actualX >= 0 && actualX < len(matrix[0]) {
+		// Direct matrix access - render label horizontally
+		actualY := labelY + yOffset
+		if actualY >= 0 && actualY < len(matrix) {
 			for i, ch := range label {
-				actualY := labelStart + i + yOffset
-				if actualY >= 0 && actualY < len(matrix) {
+				actualX := labelX + i + xOffset
+				if actualX >= 0 && actualX < len(matrix[actualY]) {
 					matrix[actualY][actualX] = ch
 				}
 			}
 		}
 	} else {
-		// Fallback to normal Set (won't work properly with lines)
+		// Fallback to normal Set - render horizontally
 		for i, ch := range label {
-			pos := diagram.Point{X: x, Y: labelStart + i}
-			if pos.Y >= minY && pos.Y <= maxY {
-				c.Set(pos, ch)
-			}
+			pos := diagram.Point{X: labelX + i, Y: labelY}
+			c.Set(pos, ch)
 		}
 	}
 }

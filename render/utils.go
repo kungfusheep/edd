@@ -69,12 +69,13 @@ func CalculateBounds(nodes []diagram.Node, paths map[int]diagram.Path) diagram.B
 		}
 	}
 	
-	// Add some margin
-	minX -= 1
-	minY -= 1
-	maxX += 1
-	maxY += 1
-	
+	// Add margin for labels and visual breathing room
+	// Vertical path labels can be up to 40 chars to the right of the path
+	minX -= 2
+	minY -= 2
+	maxX += 45 // Extra room for vertical path labels (40 chars + spacing)
+	maxY += 2
+
 	return diagram.Bounds{
 		Min: diagram.Point{X: minX, Y: minY},
 		Max: diagram.Point{X: maxX, Y: maxY},
