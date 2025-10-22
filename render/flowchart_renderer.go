@@ -196,15 +196,24 @@ func (r *FlowchartRenderer) RenderWithPositions(d *diagram.Diagram) (map[int]dia
 
 	// Choose layout based on hints
 	var layoutEngine diagram.LayoutEngine
+	var flowDirection pathfinding.FlowDirection
+
 	if d.Hints != nil && d.Hints["layout"] == "horizontal" {
 		layoutEngine = layout.NewHorizontalLayout()
+		flowDirection = pathfinding.FlowHorizontal
 	} else {
 		layoutEngine = r.layout
+		flowDirection = pathfinding.FlowVertical
 	}
 
 	layoutNodes, err := layoutEngine.Layout(nodes, d.Connections)
 	if err != nil {
 		return nil, nil, output, nil // Return output even if we can't get positions
+	}
+
+	// Set flow direction on router for proper pathfinding
+	if areaRouter := r.router.GetAreaRouter(); areaRouter != nil {
+		areaRouter.SetFlowDirection(flowDirection)
 	}
 
 	// Note: Dimension adjustment for editing happens in Render() now
