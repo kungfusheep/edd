@@ -2419,6 +2419,9 @@ func (e *TUIEditor) SetDiagramHint(key, value string) {
 
 	// Mark diagram as changed to trigger re-render
 	e.diagramChanged = true
+
+	// Save to history after modification
+	e.SaveHistory()
 }
 
 // UnsetDiagramHint removes a diagram-level hint
@@ -2433,6 +2436,9 @@ func (e *TUIEditor) UnsetDiagramHint(key string) {
 
 		// Mark diagram as changed to trigger re-render
 		e.diagramChanged = true
+
+		// Save to history after modification
+		e.SaveHistory()
 	}
 }
 
