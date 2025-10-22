@@ -197,33 +197,30 @@ func (lr *LabelRenderer) renderInlineLabel(c Canvas, segment *Segment, label str
 	}
 }
 
-// renderHorizontalInlineLabel renders a label inline on a horizontal segment
+// renderHorizontalInlineLabel renders a label on a horizontal segment
+// For long segments: render inline on the path
+// For short segments: render above the path to avoid overlap
 func (lr *LabelRenderer) renderHorizontalInlineLabel(c Canvas, segment *Segment, label string) {
 	labelLen := len(label)
 	segmentLen := layout.Abs(segment.End.X - segment.Start.X)
-	
-	// Calculate where to place the label (centered on the segment)
+
+	// Calculate center of segment
 	minX := min(segment.Start.X, segment.End.X)
-	maxX := max(segment.Start.X, segment.End.X)
-	labelStart := minX + (segmentLen - labelLen) / 2
-	
-	// Ensure label fits within segment
-	if labelStart < minX {
-		labelStart = minX + 1 // Leave space at the start
+	centerX := minX + segmentLen/2
+
+	var labelStartX, labelY int
+
+	// If segment is long enough, render inline. Otherwise render above.
+	if segmentLen >= labelLen + 4 {
+		// Long segment - render inline, centered, replacing the line
+		labelStartX = centerX - labelLen/2
+		labelY = segment.Start.Y
+	} else {
+		// Short segment - render above the path to avoid truncation
+		labelStartX = centerX - labelLen/2
+		labelY = segment.Start.Y - 1
 	}
-	if labelStart + labelLen > maxX {
-		labelStart = maxX - labelLen - 1 // Leave space at the end
-	}
-	
-	// If the segment is too short for the label, just place it at the start
-	if segmentLen < labelLen + 2 {
-		labelStart = minX + 1
-	}
-	
-	// The label itself - use direct matrix access to overwrite the line
-	// We can't use c.Set because it merges characters and won't overwrite lines with text
-	y := segment.Start.Y
-	
+
 	// Try to get direct matrix access
 	var matrix [][]rune
 	var xOffset, yOffset int
@@ -246,22 +243,20 @@ func (lr *LabelRenderer) renderHorizontalInlineLabel(c Canvas, segment *Segment,
 	
 	if matrix != nil {
 		// Direct matrix access to force overwrite
-		actualY := y + yOffset
+		actualY := labelY + yOffset
 		if actualY >= 0 && actualY < len(matrix) {
 			for i, ch := range label {
-				actualX := labelStart + i + xOffset
+				actualX := labelStartX + i + xOffset
 				if actualX >= 0 && actualX < len(matrix[actualY]) {
 					matrix[actualY][actualX] = ch
 				}
 			}
 		}
 	} else {
-		// Fallback to normal Set (won't work properly with lines)
+		// Fallback to normal Set
 		for i, ch := range label {
-			pos := diagram.Point{X: labelStart + i, Y: y}
-			if pos.X >= minX && pos.X <= maxX {
-				c.Set(pos, ch)
-			}
+			pos := diagram.Point{X: labelStartX + i, Y: labelY}
+			c.Set(pos, ch)
 		}
 	}
 }

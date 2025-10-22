@@ -61,6 +61,14 @@ quicky annotate the diagram connections - enter in e mode takes you to the next 
    - Better handling of fan-out/fan-in patterns
    - Swimlanes or columns for organized layouts
 
+5. **Port-Based Routing for Fan-Out** ⚠️
+   - **Current Issue**: Multiple connections from same node exit at same point
+   - Results in overlapping paths and colliding labels (especially in horizontal layout)
+   - **Example**: Public Internet → 3 VIPs all exit center-right, labels overlap
+   - **Need**: Integrate port manager into area router exit point selection
+   - Spread connections across edge using different ports (top, middle, bottom)
+   - Essential for clean horizontal layouts with complex fan-out
+
 **Goal:** Diagrams need to look FANTASTIC out of the box
 - Professional appearance
 - Clean, minimal line crossings
@@ -69,6 +77,11 @@ quicky annotate the diagram connections - enter in e mode takes you to the next 
 - This is how we'll stand out from other tools
 
 **Priority:** HIGH - Core to the product's value proposition
+
+**Known Limitations (until fan-out routing is fixed):**
+- Horizontal layout works great for simple pipelines
+- Complex fan-out in horizontal mode may have overlapping labels
+- Workaround: Use vertical layout for complex branching diagrams
 
 ### Protocol/Format Diagram Type
 

@@ -18,8 +18,8 @@ type HorizontalLayout struct {
 // NewHorizontalLayout creates a HorizontalLayout with default settings.
 func NewHorizontalLayout() *HorizontalLayout {
 	return &HorizontalLayout{
-		horizontalSpacing: 8,
-		verticalSpacing:   4,
+		horizontalSpacing: 30, // Wide spacing for connection labels between columns
+		verticalSpacing:   8,  // Extra vertical spacing to separate fan-out paths
 		minNodeWidth:      3,
 		minNodeHeight:     3,
 		maxNodeWidth:      50,

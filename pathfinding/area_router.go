@@ -116,17 +116,29 @@ func (ar *AreaRouter) RouteConnection(conn diagram.Connection, nodes []diagram.N
 		// Horizontal flow (left-to-right): prefer horizontal exits
 		if dx != 0 {
 			// ANY horizontal component means we use horizontal exit
+			// For horizontal exits, bias Y position toward target to spread fan-out connections
+			exitY := sourceNode.Y + sourceNode.Height/2 // Default to center
+
+			// If target is significantly above or below, adjust exit Y to spread connections
+			if dy > sourceNode.Height/4 {
+				// Target is below - exit from lower part of edge
+				exitY = sourceNode.Y + (sourceNode.Height * 2 / 3)
+			} else if dy < -sourceNode.Height/4 {
+				// Target is above - exit from upper part of edge
+				exitY = sourceNode.Y + (sourceNode.Height / 3)
+			}
+
 			if dx > 0 {
 				// Exit from right edge
 				startPoint = diagram.Point{
 					X: sourceNode.X + sourceNode.Width,
-					Y: sourceNode.Y + sourceNode.Height/2,
+					Y: exitY,
 				}
 			} else {
 				// Exit from left edge
 				startPoint = diagram.Point{
 					X: sourceNode.X - 1,
-					Y: sourceNode.Y + sourceNode.Height/2,
+					Y: exitY,
 				}
 			}
 		} else {
